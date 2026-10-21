@@ -9,7 +9,7 @@ from ai_diffusion.backend.api import ConditioningInput, RegionInput, WorkflowKin
 from ai_diffusion.backend.client import CheckpointInfo, ClientModels
 from ai_diffusion.backend.comfy_client import ComfyClient
 from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo
-from ai_diffusion.backend.resources import ResourceKind, resource_id
+from ai_diffusion.backend.resources import ResourceKind, UpscalerName, resource_id
 from ai_diffusion.files import FileCollection, FileLibrary
 from ai_diffusion.image import Bounds, Extent, Image
 from ai_diffusion.settings import PerformanceSettings
@@ -52,6 +52,8 @@ def client_models(arch: Arch, clip_types: list[str] | None = None):
     te_file = "qwen3.5_9b_bf16.safetensors" if arch is Arch.moss else "qwen3vl_4b_bf16.safetensors"
     models.resources[resource_id(ResourceKind.text_encoder, Arch.all, te)] = te_file
     models.resources[resource_id(ResourceKind.vae, arch, "default")] = "flux2-vae.safetensors"
+    for upscaler in UpscalerName:
+        models.resources[resource_id(ResourceKind.upscaler, Arch.all, upscaler)] = upscaler.value
     return models
 
 
@@ -178,3 +180,31 @@ def test_moss_regions_layout():
     latent = find(nodes, "EmptyFlux2LatentImage")[0]["inputs"]
     w, h = latent["width"], latent["height"]
     assert fox["bbox"] == [-(h // 2), -(w // 2), h - h // 2, 0]
+
+
+@pytest.mark.parametrize("arch", [Arch.fibo2, Arch.fibo2_e])
+def test_fibo2_large_canvas_generates_at_trained_resolution(arch: Arch):
+    from ai_diffusion.backend.resolution import prepare_diffusion_input
+
+    style = Style(Path("default.json"))
+    perf = PerformanceSettings()
+    image = Image.create(Extent(2048, 2048))
+    scaled, image, _ = prepare_diffusion_input(Extent(2048, 2048), image, arch, style, perf)
+    assert scaled.initial.pixel_count <= 1088**2 and scaled.initial.pixel_count >= 832**2
+    assert scaled.target == Extent(2048, 2048)
+    if arch.is_edit:  # single pass, input image is scaled down, result scaled up to the canvas
+        assert scaled.desired == scaled.initial and image and image.extent == scaled.initial
+
+
+def test_fibo2_edit_large_canvas_workflow():
+    cond = ConditioningInput("make the jacket red")
+    cond.edit_reference = True
+    nodes = create(Arch.fibo2_e, WorkflowKind.refine, Image.create(Extent(2048, 2048)), cond)
+    encoded = find(nodes, "VAEEncode")
+    assert len(encoded) == 1
+    decoded = find(nodes, "VAEDecode")[0]
+    scales = [
+        n for n in nodes.values() if "Scale" in n["class_type"] or "Upscale" in n["class_type"]
+    ]
+    assert scales, "result should be scaled back up to the canvas"
+    assert decoded
