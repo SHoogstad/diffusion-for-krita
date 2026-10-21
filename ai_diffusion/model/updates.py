@@ -12,6 +12,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from .. import __release__, eventloop
 from ..backend.network import RequestManager
 from ..platform_tools import ZipFile
+from ..settings import settings
 from ..util import client_logger as log
 from .properties import ObservableProperties, Property
 
@@ -62,11 +63,13 @@ class AutoUpdate(QObject, ObservableProperties):
         plugin_dir: Path | None = None,
         current_version: str | None = None,
         api_url: str | None = None,
+        include_prereleases: bool | None = None,
     ):
         super().__init__()
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent.parent
         self.current_version = current_version or __release__
         self.api_url = api_url or self.default_api_url
+        self._include_prereleases = include_prereleases
         self._package: UpdatePackage | None = None
         self._temp_dir: TemporaryDirectory | None = None
         self._request_manager: RequestManager | None = None
@@ -84,7 +87,12 @@ class AutoUpdate(QObject, ObservableProperties):
 
         self.state = UpdateState.checking
         log.info(f"Checking for latest plugin version at {self.api_url}")
-        result = await self._net.get(f"{self.api_url}/releases/latest", timeout=10)
+        if self.include_prereleases:
+            releases = await self._net.get(f"{self.api_url}/releases?per_page=30", timeout=10)
+            releases = [r for r in releases if parse_release_tag(r.get("tag_name", ""))]
+            result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]), default={})
+        else:
+            result = await self._net.get(f"{self.api_url}/releases/latest", timeout=10)
         tag = result.get("tag_name", "")
         latest = parse_release_tag(tag)
         current = parse_release_tag(self.current_version)
@@ -145,6 +153,12 @@ class AutoUpdate(QObject, ObservableProperties):
         shutil.copytree(source_dir, self.plugin_dir, dirs_exist_ok=True)
         self.current_version = self.latest_version
         self.state = UpdateState.restart_required
+
+    @property
+    def include_prereleases(self):
+        if self._include_prereleases is None:
+            return settings.auto_update_prerelease
+        return self._include_prereleases
 
     @property
     def is_available(self):
