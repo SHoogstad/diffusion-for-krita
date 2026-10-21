@@ -175,6 +175,11 @@ class Settings(QObject):
         _("Enable Automatic Updates"), True, _("Check for new versions of the plugin on startup")
     )
 
+    auto_update_prerelease: bool
+    _auto_update_prerelease = Setting(
+        _("Include Pre-releases"), False, _("Also offer pre-release versions as plugin updates")
+    )
+
     server_mode: ServerMode
     _server_mode = Setting(
         _("Server Management"),

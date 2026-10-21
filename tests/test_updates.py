@@ -34,22 +34,21 @@ def http_session(service_url: str):
 
 
 class FakeGithub:
-    """Serves /releases/latest and the release zip, like the GitHub API does."""
+    """Serves /releases, /releases/latest and the release zip, like the GitHub API does."""
 
     def __init__(self):
-        self.tag = ""
+        self.releases: list[dict] = []
         self.archive = b""
-        self.digest = ""
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                url = f"http://127.0.0.1:{fake.port}"
                 if self.path == "/releases/latest":
-                    asset = {"name": "plugin.zip", "browser_download_url": f"{url}/plugin.zip"}
-                    if fake.digest:
-                        asset["digest"] = fake.digest
-                    body = json.dumps({"tag_name": fake.tag, "assets": [asset]}).encode()
+                    stable = [r for r in fake.releases if not r["prerelease"]]
+                    body = json.dumps(stable[-1] if stable else {}).encode()
+                    ctype = "application/json; charset=utf-8"
+                elif self.path.startswith("/releases?"):
+                    body = json.dumps(list(reversed(fake.releases))).encode()
                     ctype = "application/json; charset=utf-8"
                 elif self.path == "/plugin.zip":
                     body = fake.archive
@@ -71,10 +70,13 @@ class FakeGithub:
         self.url = f"http://127.0.0.1:{self.port}"
         Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def publish(self, tag: str, archive: bytes, digest: str | None = None):
-        self.tag = tag
+    def publish(self, tag: str, archive: bytes, digest: str | None = None, prerelease=False):
         self.archive = archive
-        self.digest = f"sha256:{hashlib.sha256(archive).hexdigest()}" if digest is None else digest
+        digest = f"sha256:{hashlib.sha256(archive).hexdigest()}" if digest is None else digest
+        asset = {"name": "plugin.zip", "browser_download_url": f"{self.url}/plugin.zip"}
+        if digest:
+            asset["digest"] = digest
+        self.releases.append({"tag_name": tag, "prerelease": prerelease, "assets": [asset]})
 
 
 @pytest.fixture()
@@ -154,6 +156,46 @@ async def test_auto_update_bad_hash(github: FakeGithub, tmp_path: Path):
     await updater.run()
     assert updater.state is UpdateState.failed_update
     assert "corrupted" in updater.error
+
+
+@qtapp
+async def test_auto_update_prerelease(github: FakeGithub, tmp_path: Path):
+    github.publish("v1.54.1-krita5.3", b"stable")
+    github.publish("v1.55.0-krita5.3", b"preview", prerelease=True)
+
+    stable = AutoUpdate(
+        current_version="v1.54.1-krita5.3",
+        plugin_dir=tmp_path,
+        api_url=github.url,
+        include_prereleases=False,
+    )
+    await stable.check()
+    assert stable.state is UpdateState.latest
+
+    preview = AutoUpdate(
+        current_version="v1.54.1-krita5.3",
+        plugin_dir=tmp_path,
+        api_url=github.url,
+        include_prereleases=True,
+    )
+    await preview.check()
+    assert preview.state is UpdateState.available
+    assert preview.latest_version == "v1.55.0-krita5.3"
+
+    # A newer stable release wins over an older pre-release
+    github.publish("v1.55.1-krita5.3", b"stable 2")
+    await preview.check()
+    assert preview.latest_version == "v1.55.1-krita5.3"
+
+    # Running a pre-release with the option off doesn't downgrade to the latest stable release
+    on_preview = AutoUpdate(
+        current_version="v1.56.0-krita5.3",
+        plugin_dir=tmp_path,
+        api_url=github.url,
+        include_prereleases=False,
+    )
+    await on_preview.check()
+    assert on_preview.state is UpdateState.latest
 
 
 async def test_authorization(cloud_service: CloudService):

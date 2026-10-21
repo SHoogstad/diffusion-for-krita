@@ -993,6 +993,11 @@ class AboutSettings(SettingsTab):
         self._update_checkbox.setChecked(settings.auto_update)
         self._update_checkbox.stateChanged.connect(self.write)
 
+        self._prerelease_checkbox = QCheckBox(_("Include pre-releases"), self)
+        self._prerelease_checkbox.setToolTip(Settings._auto_update_prerelease.desc)
+        self._prerelease_checkbox.setChecked(settings.auto_update_prerelease)
+        self._prerelease_checkbox.stateChanged.connect(self.write)
+
         self._check_button = QPushButton(_("Check for Updates"), self)
         self._check_button.setMinimumWidth(font_height * 6)
         self._check_button.clicked.connect(self._check_updates)
@@ -1035,6 +1040,7 @@ class AboutSettings(SettingsTab):
         self._layout.addLayout(latest_version_layout)
         self._layout.addWidget(self._update_error)
         self._layout.addWidget(self._update_checkbox)
+        self._layout.addWidget(self._prerelease_checkbox)
         update_layout = QHBoxLayout()
         update_layout.addWidget(self._check_button)
         update_layout.addWidget(self._update_button)
@@ -1104,9 +1110,11 @@ class AboutSettings(SettingsTab):
 
     def _read(self):
         self._update_checkbox.setChecked(settings.auto_update)
+        self._prerelease_checkbox.setChecked(settings.auto_update_prerelease)
 
     def _write(self):
         settings.auto_update = self._update_checkbox.isChecked()
+        settings.auto_update_prerelease = self._prerelease_checkbox.isChecked()
 
     def _collect_diagnostics(self):
         diagnostics = collect_diagnostics()
