@@ -54,6 +54,9 @@ class AutoUpdate(QObject, ObservableProperties):
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent.parent
         self.current_version = current_version or __version__
         self.api_url = api_url or self.default_api_url
+        # Upstream packages target Krita 6 (or are older), so this Krita 5 fork doesn't update
+        # from the default server. An explicit api_url or INTERSTICE_URL still enables it.
+        self.enabled = api_url is not None or "INTERSTICE_URL" in os.environ
         self._package: UpdatePackage | None = None
         self._temp_dir: TemporaryDirectory | None = None
         self._request_manager: RequestManager | None = None
@@ -67,6 +70,10 @@ class AutoUpdate(QObject, ObservableProperties):
 
     async def _check(self):
         if self.state is UpdateState.restart_required:
+            return
+        if not self.enabled:
+            log.info("Plugin update check is disabled for the Krita 5 build")
+            self.state = UpdateState.latest
             return
 
         self.state = UpdateState.checking
