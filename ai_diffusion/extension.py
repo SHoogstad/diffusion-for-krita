@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from krita import DockWidgetFactory, DockWidgetFactoryBase, Extension, Krita, Window  # type: ignore
-from PyQt6.QtGui import QAction
+from PyQt5.QtWidgets import QAction
 
 from . import __version__, eventloop
 from .model.model import Workspace

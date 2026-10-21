@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from krita import Krita
-from PyQt6.QtCore import QMetaObject, QPoint, QSize, Qt, QUrl, QUuid, pyqtSignal
-from PyQt6.QtGui import QAction, QDesktopServices, QFontMetrics, QIcon, QPalette
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QMetaObject, QPoint, QSize, Qt, QUrl, QUuid, pyqtSignal
+from PyQt5.QtGui import QDesktopServices, QFontMetrics, QIcon, QPalette
+from PyQt5.QtWidgets import (
+    QAction,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,

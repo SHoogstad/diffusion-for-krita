@@ -6,9 +6,9 @@ Methods return simple default values unless a test needs to configure specific b
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QByteArray, QObject, QRect, Qt, QUuid, pyqtSignal
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QDockWidget, QDoubleSpinBox, QHBoxLayout, QSlider, QWidget
+from PyQt5.QtCore import QByteArray, QObject, QRect, Qt, QUuid, pyqtSignal
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QDockWidget, QDoubleSpinBox, QHBoxLayout, QSlider, QWidget
 
 IS_MOCK = True
 
@@ -351,7 +351,7 @@ class Node(QObject):
         return QByteArray(bytes(w * h * 4))
 
     def thumbnail(self, w: int, h: int):
-        from PyQt6.QtGui import QImage
+        from PyQt5.QtGui import QImage
 
         return QImage(w, h, QImage.Format.Format_ARGB32)
 

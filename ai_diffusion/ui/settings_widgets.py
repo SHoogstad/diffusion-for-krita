@@ -3,10 +3,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from krita import DoubleSliderSpinBox
-from PyQt6.QtCore import QAbstractItemModel, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QAbstractItemModel, QSize, Qt, pyqtSignal
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
@@ -23,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from ..localization import translate as _
 from ..settings import Setting, settings
+from .slider_spinbox import DoubleSliderSpinBox
 from .switch import SwitchWidget
 from .theme import add_header, icon
 

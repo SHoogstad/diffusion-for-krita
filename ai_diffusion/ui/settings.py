@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import cast
 
 from krita import Krita
-from PyQt6.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import (
+from PyQt5.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from PyQt5.QtGui import (
     QColor,
     QCursor,
     QDesktopServices,
@@ -13,7 +13,7 @@ from PyQt6.QtGui import (
     QGuiApplication,
     QPainter,
 )
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,

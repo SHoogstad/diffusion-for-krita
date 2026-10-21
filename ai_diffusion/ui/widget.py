@@ -4,10 +4,9 @@ from collections.abc import Callable
 from itertools import chain
 from typing import Any, ClassVar, cast
 
-from krita import DoubleSliderSpinBox, Krita
-from PyQt6.QtCore import QEvent, QMetaObject, QSize, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import (
-    QAction,
+from krita import Krita
+from PyQt5.QtCore import QEvent, QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from PyQt5.QtGui import (
     QCloseEvent,
     QColor,
     QDesktopServices,
@@ -26,7 +25,8 @@ from PyQt6.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
+    QAction,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -82,6 +82,7 @@ from ..text import (
 from ..util import ensure
 from . import actions, theme
 from .autocomplete import PromptAutoComplete
+from .slider_spinbox import DoubleSliderSpinBox
 from .theme import SignalBlocker
 
 

@@ -1,7 +1,7 @@
 from enum import Enum
 
 import pytest
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal
 
 from ai_diffusion.model.properties import (
     ObservableProperties,

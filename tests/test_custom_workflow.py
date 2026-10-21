@@ -5,7 +5,7 @@ from copy import copy
 from pathlib import Path
 
 import pytest
-from PyQt6.QtCore import Qt
+from PyQt5.QtCore import Qt
 
 from ai_diffusion.backend import workflow
 from ai_diffusion.backend.api import (

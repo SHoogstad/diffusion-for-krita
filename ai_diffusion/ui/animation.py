@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QMetaObject, Qt
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QMetaObject, Qt
+from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,

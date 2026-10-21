@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from PyQt6.QtCore import QObject, Qt, QUuid, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt5.QtCore import QObject, Qt, QUuid, pyqtSignal
+from PyQt5.QtGui import QColor
 
 from .. import util
 from ..backend import resources
