@@ -12,8 +12,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Any, TypeVar
 
-from PyQt6 import sip
-from PyQt6.QtCore import QObject, QStandardPaths
+from PyQt5 import sip
+from PyQt5.QtCore import QObject, QStandardPaths
 
 T = TypeVar("T")
 R = TypeVar("R")

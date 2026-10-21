@@ -2,9 +2,9 @@
 from https://stackoverflow.com/a/51825815
 """
 
-from PyQt6.QtCore import QPropertyAnimation, QSize, Qt, pyqtProperty  # type: ignore
-from PyQt6.QtGui import QPainter
-from PyQt6.QtWidgets import QAbstractButton, QSizePolicy
+from PyQt5.QtCore import QPropertyAnimation, QSize, Qt, pyqtProperty  # type: ignore
+from PyQt5.QtGui import QPainter
+from PyQt5.QtWidgets import QAbstractButton, QSizePolicy
 
 
 class SwitchWidget(QAbstractButton):

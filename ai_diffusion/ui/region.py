@@ -3,8 +3,8 @@ from __future__ import annotations
 from enum import Enum
 from functools import partial
 
-from PyQt6.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import (
+from PyQt5.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, pyqtSignal
+from PyQt5.QtGui import (
     QFontMetrics,
     QGuiApplication,
     QIcon,
@@ -14,7 +14,7 @@ from PyQt6.QtGui import (
     QPixmap,
     QResizeEvent,
 )
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget
 
 from ..backend.client import Client
 from ..document import LayerType

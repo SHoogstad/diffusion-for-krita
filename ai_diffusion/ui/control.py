@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QMetaObject, Qt, pyqtSignal
-from PyQt6.QtGui import QResizeEvent
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QMetaObject, Qt, pyqtSignal
+from PyQt5.QtGui import QResizeEvent
+from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,

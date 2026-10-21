@@ -4,7 +4,7 @@ import json
 from textwrap import wrap as wrap_text
 from typing import ClassVar, cast
 
-from PyQt6.QtCore import (
+from PyQt5.QtCore import (
     QEvent,
     QItemSelectionModel,
     QMetaObject,
@@ -15,8 +15,7 @@ from PyQt6.QtCore import (
     QUuid,
     pyqtSignal,
 )
-from PyQt6.QtGui import (
-    QAction,
+from PyQt5.QtGui import (
     QColor,
     QGuiApplication,
     QIcon,
@@ -25,7 +24,8 @@ from PyQt6.QtGui import (
     QMouseEvent,
     QPalette,
 )
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
+    QAction,
     QCheckBox,
     QComboBox,
     QFrame,

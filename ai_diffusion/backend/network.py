@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-from PyQt6.QtCore import QBuffer, QByteArray, QFile, QUrl
-from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest, QSslError
+from PyQt5.QtCore import QBuffer, QByteArray, QFile, QUrl
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest, QSslError
 
 from ..localization import translate as _
 from ..util import client_logger as log

@@ -4,8 +4,8 @@ import zlib
 import numpy as np
 import pytest
 from PIL import Image as PILImage
-from PyQt6.QtCore import QByteArray, Qt
-from PyQt6.QtGui import QImage, qRgba
+from PyQt5.QtCore import QByteArray, Qt
+from PyQt5.QtGui import QImage, qRgba
 
 from ai_diffusion.backend.api import WorkflowKind
 from ai_diffusion.image import Bounds, Extent, Image, ImageCollection, ImageFileFormat, Mask
@@ -142,8 +142,8 @@ def test_image_from_packed_bytes():
 def test_image_compress_speed():
     from timeit import default_timer
 
-    from PyQt6.QtCore import QBuffer, QByteArray, QFile, QIODevice
-    from PyQt6.QtGui import QImageWriter
+    from PyQt5.QtCore import QBuffer, QByteArray, QFile, QIODevice
+    from PyQt5.QtGui import QImageWriter
 
     img = Image.load("tests/images/beach_1536x1024.webp")
 

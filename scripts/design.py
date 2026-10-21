@@ -10,9 +10,9 @@ import sys
 from collections.abc import Generator
 from pathlib import Path
 
-from PyQt6.QtCore import QByteArray, Qt, QTimer
-from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QByteArray, Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
     QGroupBox,

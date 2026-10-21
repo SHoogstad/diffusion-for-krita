@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QMetaObject, QRectF, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QMetaObject, QRectF, Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QPainter, QPen
+from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,

@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from PyQt6.QtCore import (
+from PyQt5.QtCore import (
     QAbstractListModel,
     QMetaObject,
     QModelIndex,

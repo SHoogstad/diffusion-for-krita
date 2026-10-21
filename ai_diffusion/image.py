@@ -8,8 +8,8 @@ from math import sqrt
 from pathlib import Path
 from typing import NamedTuple, SupportsIndex
 
-from PyQt6.QtCore import QBuffer, QByteArray, QFile, QIODevice, QRect, QSize, Qt
-from PyQt6.QtGui import (
+from PyQt5.QtCore import QBuffer, QByteArray, QFile, QIODevice, QRect, QSize, Qt
+from PyQt5.QtGui import (
     QColorSpace,
     QIcon,
     QImage,
@@ -628,7 +628,7 @@ class Image:
             info = f"[{self.width}x{self.height} format={self._qimage.format()}] -> {format_str}@{quality}"
             if is_linux and format_str == "webp":
                 log.warning(
-                    "To enable support for writing webp images, you may need to install the 'qt6-imageformats' package."
+                    "To enable support for writing webp images, you may need to install the 'qt5-imageformats' package."
                 )
                 global _qt_supports_webp
                 _qt_supports_webp = False

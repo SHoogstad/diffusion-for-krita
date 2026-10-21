@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QSize, Qt
-from PyQt6.QtGui import QFontMetrics, QGuiApplication, QIcon, QPalette, QPixmap
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PyQt5.QtCore import QObject, QSize, Qt
+from PyQt5.QtGui import QFontMetrics, QGuiApplication, QIcon, QPalette, QPixmap
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from ..backend.client import Client
 from ..files import FileFormat
