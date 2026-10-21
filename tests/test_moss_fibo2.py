@@ -1,18 +1,20 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from ai_diffusion.backend import workflow
-from ai_diffusion.backend.api import ConditioningInput, WorkflowKind
+from ai_diffusion.backend.api import ConditioningInput, RegionInput, WorkflowKind
 from ai_diffusion.backend.client import CheckpointInfo, ClientModels
 from ai_diffusion.backend.comfy_client import ComfyClient
 from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo
 from ai_diffusion.backend.resources import ResourceKind, resource_id
 from ai_diffusion.files import FileCollection, FileLibrary
-from ai_diffusion.image import Extent, Image
+from ai_diffusion.image import Bounds, Extent, Image
 from ai_diffusion.settings import PerformanceSettings
 from ai_diffusion.style import Arch, Style
+from ai_diffusion.util import ensure
 
 checkpoints = {
     Arch.moss: "moss_image_sft_bf16.safetensors",
@@ -111,3 +113,68 @@ def test_fibo2_edit():
     assert "images.image_1" in encode[0]["inputs"]  # text encoder sees the input image
     # reference latent of the input image for positive and negative
     assert len(find(nodes, "ReferenceLatent")) == 2
+
+
+def rect_mask(extent: Extent, rect: tuple[int, int, int, int]):
+    from PyQt5.QtGui import QColor, QPainter
+
+    mask = Image.create(extent, fill=0)
+    mask._qimage = mask._qimage.convertToFormat(mask._qimage.Format.Format_Grayscale8)
+    painter = QPainter(mask._qimage)
+    painter.fillRect(*rect, QColor(255, 255, 255))
+    painter.end()
+    assert mask.is_mask
+    return mask
+
+
+def test_mask_bounds():
+    mask = rect_mask(Extent(400, 200), (100, 50, 200, 100))  # x, y, w, h
+    x0, y0, x1, y1 = ensure(workflow.mask_bounds(mask))
+    assert x0 == pytest.approx(0.25, abs=0.01) and x1 == pytest.approx(0.75, abs=0.01)
+    assert y0 == pytest.approx(0.25, abs=0.01) and y1 == pytest.approx(0.75, abs=0.01)
+    assert workflow.mask_bounds(rect_mask(Extent(64, 64), (0, 0, 0, 0))) is None
+
+
+def test_layout_prompt():
+    boxes = [
+        ("a red fox", (0.0, 0.5, 0.5, 1.0)),
+        ('a neon sign saying "OPEN 24/7"', (0.5, 0.0, 1.0, 0.25)),
+    ]
+    layout = json.loads(workflow.layout_prompt(" forest at night ", boxes, Extent(1024, 768)))
+    assert layout["summary"] == {"caption": "forest at night"}
+    assert layout["bbox_coord_space"] == "abs_centralized" and layout["bbox_format"] == "yxyx"
+    fox, sign = layout["items"]
+    assert fox == {"label": "object", "caption": "a red fox", "bbox": [0, -512, 384, 0]}
+    assert sign["label"] == "text" and sign["text"] == "OPEN 24/7"
+    assert sign["bbox"] == [-384, 0, -192, 512]
+
+
+def test_moss_regions_layout():
+    canvas = Extent(1024, 1024)
+    left = rect_mask(canvas, (0, 0, 512, 1024))
+    sign = rect_mask(canvas, (600, 100, 300, 200))
+    background = rect_mask(canvas, (512, 0, 512, 1024))
+    cond = ConditioningInput("a cozy street, night")
+    cond.regions = [
+        RegionInput(background, Bounds(0, 0, 1024, 1024), "a cozy street, night"),
+        RegionInput(left, Bounds(0, 0, 512, 1024), "a red fox, a cozy street", caption="a red fox"),
+        RegionInput(
+            sign,
+            Bounds(600, 100, 300, 200),
+            'neon sign "OPEN", a cozy street',
+            caption='neon sign "OPEN"',
+        ),
+    ]
+    nodes = create(Arch.moss, WorkflowKind.generate, canvas, cond)
+    assert not any(
+        "Attention" in n["class_type"] or "Region" in n["class_type"] for n in nodes.values()
+    )
+    texts = [n["inputs"]["text"] for n in find(nodes, "CLIPTextEncode")]
+    layout = json.loads(next(t for t in texts if t.startswith("{")))
+    assert layout["summary"]["caption"] == "a cozy street, night"
+    fox, neon = layout["items"]
+    assert fox["caption"] == "a red fox" and fox["label"] == "object"
+    assert neon["label"] == "text" and neon["text"] == "OPEN"
+    latent = find(nodes, "EmptyFlux2LatentImage")[0]["inputs"]
+    w, h = latent["width"], latent["height"]
+    assert fox["bbox"] == [-(h // 2), -(w // 2), h - h // 2, 0]

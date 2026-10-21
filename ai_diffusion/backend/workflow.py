@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 import math
 import random
+import re
 from copy import copy
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
+
+from PyQt5.QtGui import QImage
 
 from ..files import FileFormat, FileLibrary
 from ..image import Bounds, Extent, Image, ImageCollection, Mask, multiple_of
@@ -382,6 +386,7 @@ class Region:
     loras: list[LoraInput] = field(default_factory=list)
     is_background: bool = False
     clip: Clip | None = None
+    caption: str = ""
 
     @staticmethod
     def from_input(i: RegionInput, index: int, language: str):
@@ -394,6 +399,7 @@ class Region:
             control,
             i.loras,
             is_background=index == 0,
+            caption=i.caption,
         )
 
     def patch_clip(self, w: ComfyWorkflow, clip: Clip):
@@ -411,7 +417,14 @@ class Region:
         control = [copy(c) for c in self.control]
         loras = copy(self.loras)
         return Region(
-            self.mask, self.bounds, self.positive, control, loras, self.is_background, self.clip
+            self.mask,
+            self.bounds,
+            self.positive,
+            control,
+            loras,
+            self.is_background,
+            self.clip,
+            self.caption,
         )
 
 
@@ -588,6 +601,10 @@ def apply_attention_mask(
     if len(cond.regions) == 0:
         return model, None
 
+    if clip.arch is Arch.moss:
+        apply_layout_prompt(cond, shape)
+        return model, None
+
     if len(cond.regions) == 1:
         region = cond.regions[0]
         cond.positive = region.positive
@@ -609,6 +626,80 @@ def apply_attention_mask(
 
     model = w.attention_mask(model, regions)
     return model, regions
+
+
+def mask_bounds(mask: Image, threshold=128, resolution=128):
+    """Bounding box (x0, y0, x1, y1) of the mask's covered area, relative to its size (0..1)."""
+    assert mask.is_mask
+    extent = mask.extent
+    if max(extent.width, extent.height) > resolution:
+        small = extent.scale_keep_aspect(Extent(resolution, resolution))
+        scaled = Image.scale(mask, Extent(max(small.width, 1), max(small.height, 1)))
+        mask = Image(scaled._qimage.convertToFormat(QImage.Format.Format_Grayscale8))
+    w, h = mask.extent
+    data = mask.data.data()
+    rows = [y for y in range(h) if max(data[y * w : (y + 1) * w]) >= threshold]
+    if not rows:
+        return None
+    cols = [x for x in range(w) if max(data[x : h * w : w]) >= threshold]
+    return (cols[0] / w, rows[0] / h, (cols[-1] + 1) / w, (rows[-1] + 1) / h)
+
+
+_quoted_text = re.compile(r'"([^"]+)"|\u201c([^\u201d]+)\u201d')
+
+
+def layout_prompt(
+    summary: str, boxes: list[tuple[str, tuple[float, float, float, float]]], extent: Extent
+):
+    """Build a MOSS-Image layout prompt. Boxes are (caption, relative bounds) pairs.
+    Captions with quoted text become text boxes which render the quoted text."""
+    width, height = extent.width, extent.height
+    items = []
+    for caption, (x0, y0, x1, y1) in boxes:
+        texts = [a or b for a, b in _quoted_text.findall(caption)]
+        item: dict[str, Any] = {"label": "text" if texts else "object", "caption": caption}
+        if texts:
+            item["text"] = " ".join(texts)
+        # [y0, x0, y1, x1] pixel edges enclosing the box, origin at the image center
+        item["bbox"] = [
+            math.floor(y0 * height) - height // 2,
+            math.floor(x0 * width) - width // 2,
+            math.ceil(y1 * height) - height // 2,
+            math.ceil(x1 * width) - width // 2,
+        ]
+        items.append(item)
+    layout = {
+        "summary": {"caption": summary.strip()},
+        "items": items,
+        "bbox_coord_space": "abs_centralized",
+        "bbox_format": "yxyx",
+    }
+    return json.dumps(layout, ensure_ascii=False, separators=(",", ":"))
+
+
+def apply_layout_prompt(cond: Conditioning, shape: Extent | ImageReshape):
+    """MOSS-Image is steered by a layout prompt with boxes instead of attention masks.
+    Each region becomes a box around its mask with the region prompt as caption."""
+    regions, cond.regions = cond.regions, []
+    for region in regions:
+        cond.control += region.control
+
+    extent = shape if isinstance(shape, Extent) else shape.target_extent
+    if extent is None or (isinstance(shape, ImageReshape) and shape.crop is not None):
+        return  # tiles and cropped passes refine an existing image, use the plain prompt
+
+    boxes = []
+    for region in regions:
+        if region.is_background or region.mask.image is None:
+            continue
+        if bounds := mask_bounds(region.mask.image):
+            boxes.append((region.caption or region.positive.text, bounds))
+    if len(boxes) == 0:
+        return
+
+    summary = merge_prompt(cond.positive.text, cond.style_prompt)
+    cond.positive = TextPrompt(layout_prompt(summary, boxes, extent), language="")
+    cond.style_prompt = ""
 
 
 def apply_control(
@@ -1634,6 +1725,11 @@ def prepare_prompts(
         region.positive, region.loras = extract_loras(region.positive, files.loras)
         region.loras = [l for l in region.loras if l not in extra_loras]
         region.positive = replace_layers(region.positive, ref_layers, layer_replace)
+        if region.caption:
+            region.caption = strip_prompt_comments(region.caption)
+            region.caption = eval_wildcards(region.caption, seed)
+            region.caption, _ = extract_loras(region.caption, files.loras)
+            region.caption = replace_layers(region.caption, ref_layers, layer_replace)
         meta["regions"].append(region_meta)
 
     if len(cond.regions) == 1:
