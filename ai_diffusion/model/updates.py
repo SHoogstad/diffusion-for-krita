@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import shutil
 from enum import Enum
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import NamedTuple
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
-from .. import __version__, eventloop
+from .. import __release__, eventloop
 from ..backend.network import RequestManager
 from ..platform_tools import ZipFile
 from ..util import client_logger as log
@@ -33,8 +34,19 @@ class UpdatePackage(NamedTuple):
     sha256: str
 
 
+def parse_release_tag(tag: str) -> tuple[int, ...] | None:
+    """Parse "v1.54.0-krita5.2" into (1, 54, 0, 2). The build number defaults to 0."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)-krita5(?:\.(\d+))?", tag.strip())
+    if m is None:
+        return None
+    return tuple(int(x or 0) for x in m.groups())
+
+
 class AutoUpdate(QObject, ObservableProperties):
-    default_api_url = os.getenv("INTERSTICE_URL", "https://api.interstice.cloud")
+    # Updates come from GitHub releases of the Krita 5 fork. Upstream packages target Krita 6.
+    default_api_url = os.getenv(
+        "KRITA5_UPDATE_URL", "https://api.github.com/repos/SHoogstad/krita-ai-diffusion-qt5"
+    )
 
     state = Property(UpdateState.unknown)
     latest_version = Property("")
@@ -52,11 +64,8 @@ class AutoUpdate(QObject, ObservableProperties):
     ):
         super().__init__()
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent.parent
-        self.current_version = current_version or __version__
+        self.current_version = current_version or __release__
         self.api_url = api_url or self.default_api_url
-        # Upstream packages target Krita 6 (or are older), so this Krita 5 fork doesn't update
-        # from the default server. An explicit api_url or INTERSTICE_URL still enables it.
-        self.enabled = api_url is not None or "INTERSTICE_URL" in os.environ
         self._package: UpdatePackage | None = None
         self._temp_dir: TemporaryDirectory | None = None
         self._request_manager: RequestManager | None = None
@@ -71,34 +80,37 @@ class AutoUpdate(QObject, ObservableProperties):
     async def _check(self):
         if self.state is UpdateState.restart_required:
             return
-        if not self.enabled:
-            log.info("Plugin update check is disabled for the Krita 5 build")
-            self.state = UpdateState.latest
-            return
 
         self.state = UpdateState.checking
         log.info(f"Checking for latest plugin version at {self.api_url}")
-        result = await self._net.get(
-            f"{self.api_url}/plugin/latest?version={self.current_version}", timeout=10
+        result = await self._net.get(f"{self.api_url}/releases/latest", timeout=10)
+        tag = result.get("tag_name", "")
+        latest = parse_release_tag(tag)
+        current = parse_release_tag(self.current_version)
+        asset = next(
+            (a for a in result.get("assets", []) if a.get("name", "").endswith(".zip")), None
         )
-        self.latest_version = result.get("version")
-        if not self.latest_version:
-            log.error(f"Invalid plugin update information: {result}")
+        digest = (asset.get("digest") or "") if asset else ""
+        if latest is None:
+            log.error(f"Invalid plugin update information: {tag}")
             self.state = UpdateState.failed_check
             self.error = "Failed to retrieve plugin update information"
-        elif self.latest_version == self.current_version:
+            return
+
+        self.latest_version = tag
+        if current is not None and latest <= current:
             log.info("Plugin is up to date!")
             self.state = UpdateState.latest
-        elif "url" not in result or "sha256" not in result:
+        elif asset is None or not digest.startswith("sha256:"):
             log.error(f"Invalid plugin update information: {result}")
             self.state = UpdateState.failed_check
             self.error = "Plugin update package is incomplete"
         else:
-            log.info(f"New plugin version available: {self.latest_version}")
+            log.info(f"New plugin version available: {tag}")
             self._package = UpdatePackage(
-                version=self.latest_version,
-                url=result["url"],
-                sha256=result["sha256"],
+                version=tag,
+                url=asset["browser_download_url"],
+                sha256=digest.removeprefix("sha256:"),
             )
             self.state = UpdateState.available
 

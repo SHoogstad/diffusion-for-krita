@@ -1,6 +1,8 @@
 """Generative AI plugin for Krita"""
 
 __version__ = "1.54.0"
+# Release tag of this Krita 5 build on GitHub, used by the auto-updater: v<version>-krita5[.N]
+__release__ = "v1.54.0-krita5.1"
 
 import importlib.util
 
