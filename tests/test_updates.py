@@ -85,12 +85,12 @@ def github():
 
 
 def test_parse_release_tag():
-    assert parse_release_tag("v1.54.0-krita5") == (1, 54, 0, 0)
-    assert parse_release_tag("v1.54.0-krita5.3") == (1, 54, 0, 3)
-    assert parse_release_tag("1.55.1-krita5.1") == (1, 55, 1, 1)
+    assert parse_release_tag("v1.54.0-krita5") == (1, 54, 0)
+    assert parse_release_tag("v1.54.1-krita5.3") == (1, 54, 1)
+    assert parse_release_tag("1.55.1-krita5.2") == (1, 55, 1)
     assert parse_release_tag("v1.54.0") is None
     assert parse_release_tag("v2.0.0-krita6") is None
-    assert parse_release_tag("v1.54.0-krita5.1") < parse_release_tag("v1.55.0-krita5")  # type: ignore
+    assert parse_release_tag("v1.54.0-krita5") < parse_release_tag("v1.54.1-krita5.3")  # type: ignore
 
 
 @qtapp
@@ -111,28 +111,28 @@ async def test_auto_update(github: FakeGithub, tmp_path: Path):
     archive = build_archive.read_bytes()
 
     updater = AutoUpdate(
-        current_version="v1.54.0-krita5.1", plugin_dir=install_dir, api_url=github.url
+        current_version="v1.54.1-krita5.3", plugin_dir=install_dir, api_url=github.url
     )
     state_changes = SignalObserver(updater.state_changed)
 
     # Same and older releases are not offered
-    for tag in ["v1.54.0-krita5.1", "v1.53.0-krita5.4"]:
+    for tag in ["v1.54.1-krita5.3", "v1.54.0-krita5.4"]:
         github.publish(tag, archive)
         state_changes.reset()
         await updater.check()
         assert state_changes.events == [UpdateState.checking, UpdateState.latest]
 
     # Release without a digest can't be verified
-    github.publish("v1.54.0-krita5.2", archive, digest="")
+    github.publish("v1.54.2-krita5.3", archive, digest="")
     await updater.check()
     assert updater.state is UpdateState.failed_check
 
     # Newer release is offered, downloaded and installed
-    github.publish("v1.54.0-krita5.2", archive)
+    github.publish("v1.54.2-krita5.3", archive)
     state_changes.reset()
     await updater.check()
     assert state_changes.events == [UpdateState.checking, UpdateState.available]
-    assert updater.latest_version == "v1.54.0-krita5.2"
+    assert updater.latest_version == "v1.54.2-krita5.3"
 
     state_changes.reset()
     await updater.run()

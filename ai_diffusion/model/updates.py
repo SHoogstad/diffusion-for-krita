@@ -35,11 +35,12 @@ class UpdatePackage(NamedTuple):
 
 
 def parse_release_tag(tag: str) -> tuple[int, ...] | None:
-    """Parse "v1.54.0-krita5.2" into (1, 54, 0, 2). The build number defaults to 0."""
-    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)-krita5(?:\.(\d+))?", tag.strip())
+    """Parse "v1.54.1-krita5.3" into the plugin version (1, 54, 1). The suffix is the Krita
+    version the build targets, which must be 5.x."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)-krita5(?:\.\d+)?", tag.strip())
     if m is None:
         return None
-    return tuple(int(x or 0) for x in m.groups())
+    return tuple(int(x) for x in m.groups())
 
 
 class AutoUpdate(QObject, ObservableProperties):
