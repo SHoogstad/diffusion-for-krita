@@ -165,6 +165,10 @@ def load_checkpoint_with_lora(w: ComfyWorkflow, checkpoint: CheckpointInput, mod
                 clip = w.load_clip(te["qwen_3vl_4b"], type="krea2")
             case Arch.qwen2:
                 clip = w.load_clip(te["qwen_3vl_8b"], type="qwen_image")
+            case Arch.moss:
+                clip = w.load_clip(te["qwen_3_5_9b"], type="moss_image")
+            case Arch.fibo2 | Arch.fibo2_e:
+                clip = w.load_clip(te["qwen_3vl_4b"], type="fibo2")
             case _:
                 raise RuntimeError(f"No text encoder for model architecture {arch.name}")
 
@@ -499,7 +503,7 @@ def apply_reference_conditioning(
         )
 
     match arch:
-        case Arch.flux2_4b | Arch.flux2_9b | Arch.qwen_e_p:
+        case Arch.flux2_4b | Arch.flux2_9b | Arch.qwen_e_p | Arch.fibo2 | Arch.fibo2_e:
             if cond.edit_reference and input_image:
                 input_latent = vae_encode(w, vae, input_image, tiled_vae)
                 prompt = add_ref(prompt, input_latent)
@@ -542,6 +546,11 @@ def encode_prompt(
             negative = cond.negative.prepare(w) if cond.negative else ""
             prompt = w.text_encode_qwen2(clip.model, vae, ref_images, positive, negative)
             return prompt, None  # note: latent returned by this node is always noise/empty
+        elif arch.is_fibo2:
+            positive = cond.positive.prepare(w, cond.style_prompt)
+            negative = cond.negative.prepare(w) if cond.negative else ""
+            prompt = w.text_encode_fibo2(clip.model, ref_images, positive, negative)
+            return apply_reference_conditioning(w, prompt, image, cond, vae, arch, tiled_vae)
         else:
             positive = cond.positive.encode(w, clip, cond.style_prompt, ref_images)
             negative = cond.negative.encode(w, clip) if cond.negative else positive
@@ -1519,6 +1528,8 @@ _layer_replace = {
     Arch.flux2_9b: "image {}",
     Arch.qwen_e_p: "Picture {}",
     Arch.qwen2: "<image{}>",
+    Arch.fibo2: "<image_{}>",
+    Arch.fibo2_e: "<image_{}>",
 }
 _control_instructions = {
     ControlMode.style: "Apply the style from {}.",
