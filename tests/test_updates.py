@@ -198,6 +198,34 @@ async def test_auto_update_prerelease(github: FakeGithub, tmp_path: Path):
     assert on_preview.state is UpdateState.latest
 
 
+@qtapp
+async def test_auto_update_from_prerelease(github: FakeGithub, tmp_path: Path):
+    github.publish("v1.54.1-krita5.3", b"stable")
+    github.publish("v1.55.0-krita5.3", b"preview", prerelease=True)
+    github.publish("v1.55.1-krita5.3", b"preview 2", prerelease=True)
+
+    # Installed version is a pre-release: newer pre-releases are offered with the option off
+    updater = AutoUpdate(
+        current_version="v1.55.0-krita5.3",
+        plugin_dir=tmp_path,
+        api_url=github.url,
+        include_prereleases=False,
+    )
+    await updater.check()
+    assert updater.state is UpdateState.available
+    assert updater.latest_version == "v1.55.1-krita5.3"
+
+    # Stable installs still ignore them
+    stable = AutoUpdate(
+        current_version="v1.54.1-krita5.3",
+        plugin_dir=tmp_path,
+        api_url=github.url,
+        include_prereleases=False,
+    )
+    await stable.check()
+    assert stable.state is UpdateState.latest
+
+
 async def test_authorization(cloud_service: CloudService):
     if not cloud_service.enabled:
         pytest.skip("Cloud service not running")

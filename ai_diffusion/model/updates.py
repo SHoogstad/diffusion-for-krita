@@ -87,12 +87,19 @@ class AutoUpdate(QObject, ObservableProperties):
 
         self.state = UpdateState.checking
         log.info(f"Checking for latest plugin version at {self.api_url}")
-        if self.include_prereleases:
-            releases = await self._net.get(f"{self.api_url}/releases?per_page=30", timeout=10)
-            releases = [r for r in releases if parse_release_tag(r.get("tag_name", ""))]
-            result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]), default={})
-        else:
-            result = await self._net.get(f"{self.api_url}/releases/latest", timeout=10)
+        releases = await self._net.get(f"{self.api_url}/releases?per_page=30", timeout=10)
+        releases = [
+            r
+            for r in releases
+            if not r.get("draft") and parse_release_tag(r.get("tag_name", "")) is not None
+        ]
+        # Installs of a pre-release keep following pre-releases, even with the option off
+        on_prerelease = any(
+            r["tag_name"] == self.current_version and r.get("prerelease") for r in releases
+        )
+        if not (self.include_prereleases or on_prerelease):
+            releases = [r for r in releases if not r.get("prerelease")]
+        result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]), default={})
         tag = result.get("tag_name", "")
         latest = parse_release_tag(tag)
         current = parse_release_tag(self.current_version)
