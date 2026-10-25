@@ -16,8 +16,8 @@
 
 ### Krita 5 port
 * PyQt6 → PyQt5 (`QAction` back in `QtWidgets`, etc.), and the version check accepts Krita 5.x.
-* `DoubleSliderSpinBox` falls back to a plain `QDoubleSpinBox` on Krita builds that don't expose
-  the wrapper (before 5.3), so 5.2 should work too. **Krita 5.3 is the target and the tested version.**
+* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so the plugin has its own version for
+  the strength and settings sliders: drag the bar to change the value, or double-click it to type one. **Krita 5.3 is the target and the tested version.**
 * Otherwise the code stays as close to upstream as possible. New upstream releases are merged and
   ported again.
 
