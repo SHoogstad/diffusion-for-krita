@@ -442,6 +442,7 @@ def process_regions(
             layer_bounds,
             workflow.merge_prompt(region.positive, root.positive),
             control=region.control.to_api(bounds, time),
+            caption=region.positive,
         )
         job_params = JobRegion(layer.id_string, region.positive, layer_bounds)
         result_regions.append((region_result, job_params))

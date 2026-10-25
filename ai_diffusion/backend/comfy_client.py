@@ -660,6 +660,11 @@ class ComfyClient(Client):
             has_checkpoint = any(cp.arch is Arch.sdxl for cp in models.checkpoints.values())
         if not has_checkpoint:
             missing.append(ResourceId(ResourceKind.checkpoint, sdver, "model"))
+        clip_type = sdver.comfy_clip_type
+        if clip_type and clip_type not in models.node_inputs.options("CLIPLoader", "type"):
+            missing.append(
+                ResourceId(ResourceKind.node, sdver, f"(update ComfyUI for {clip_type})")
+            )
         if len(missing) > 0:
             log.info(f"{sdver.value}: missing {len(missing)} models")
         return missing
@@ -756,6 +761,7 @@ def _find_text_encoder_models(model_list: Sequence[str]):
         "qwen_3_8b",
         "qwen_3vl_4b",
         "qwen_3vl_8b",
+        "qwen_3_5_9b",
         "ministral",
     ]
     return {
