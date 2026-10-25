@@ -45,9 +45,10 @@ follows upstream (fork-only features bump the minor version, as in 1.55), and th
 
 | Release | Based on | Channel |
 |---|---|---|
-| `v1.55.2-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | stable (latest) |
+| `v1.55.3-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2, slider fix | stable (latest) |
+| `v1.55.2-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | previous stable |
 | `v1.55.0`, `v1.55.1` | same, earlier builds | pre-release |
-| `v1.54.1-krita5.3` | upstream 1.54 | previous stable |
+| `v1.54.1-krita5.3` | upstream 1.54 | older stable |
 
 ---
 
