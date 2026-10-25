@@ -101,6 +101,7 @@ class RegionInput:
     positive: str
     control: list[ControlInput] = field(default_factory=list)
     loras: list[LoraInput] = field(default_factory=list)
+    caption: str = ""  # region's own prompt, without the root prompt merged in
 
 
 @dataclass

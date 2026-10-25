@@ -155,6 +155,9 @@ class CheckpointResolution(NamedTuple):
                 Arch.sd15: (512, 768, 512**2, 512 * 768),
                 Arch.sdxl: (640, 1280, 800**2, 1024**2),
                 Arch.sd3: (512, 1536, 512**2, 1536**2),
+                Arch.moss: (512, 2048, 1024**2, 1448**2),  # 1-2 MP
+                Arch.fibo2: (512, 1536, 832**2, 1088**2),  # trained at ~1 MP
+                Arch.fibo2_e: (512, 1536, 832**2, 1088**2),
             }
             default = (256, 2048, 512**2, 2048**2)
             if inpaint:
@@ -209,6 +212,11 @@ def prepare_diffusion_input(
         # Input images are scaled down here for the initial pass directly to avoid encoding
         # and processing large images in subsequent steps.
         image = Image.scale(image, initial) if image else None
+
+    elif arch.is_fibo2 and max_scale < 0.9 and any(x > max_size for x in desired):
+        # Fibo 2 falls apart well above its training resolution (duplicated limbs etc.), and edits
+        # don't use 2 passes. Generate at checkpoint resolution and scale up the result.
+        initial = desired = (desired * max_scale).multiple_of(mult)
 
     elif min_scale > 1 and all(x < min_size for x in desired):
         # Desired resolution is smaller than the minimum size. Do 1 pass at checkpoint resolution.

@@ -93,6 +93,9 @@ class Arch(Enum):
     zimage = "Z-Image"
     ernie = "ERNIE Image"
     krea2 = "Krea 2"
+    moss = "MOSS-Image"
+    fibo2 = "Fibo 2"
+    fibo2_e = "Fibo 2 Edit"
 
     auto = "Automatic"
     all = "All"
@@ -141,6 +144,11 @@ class Arch(Enum):
             return Arch.ernie
         if string == "krea2":
             return Arch.krea2
+        # Model inspection may not know these yet and report "unknown", fall back to filename
+        if string in {"moss-image", "moss_image"} or (string == "unknown" and "moss" in filename):
+            return Arch.moss
+        if string in {"fibo2", "fibo-2"} or (string == "unknown" and "fibo" in filename):
+            return Arch.fibo2_e if "edit" in filename else Arch.fibo2
         return None
 
     @staticmethod
@@ -204,11 +212,11 @@ class Arch(Enum):
 
     @property
     def is_edit(self):  # edit models make changes to input images
-        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l]
+        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.fibo2_e]
 
     @property
     def supports_edit(self):  # includes text-to-image models that can also edit
-        return self.is_edit or self.is_flux2 or self is Arch.qwen2
+        return self.is_edit or self.is_flux2 or self in [Arch.qwen2, Arch.fibo2]
 
     @property
     def is_sdxl_like(self):
@@ -222,6 +230,21 @@ class Arch(Enum):
     @property
     def is_flux2(self):
         return self in [Arch.flux2_4b, Arch.flux2_9b]
+
+    @property
+    def is_fibo2(self):
+        return self in [Arch.fibo2, Arch.fibo2_e]
+
+    @property
+    def comfy_clip_type(self) -> str | None:
+        """Text encoder type for CLIPLoader, if the arch needs a recent ComfyUI version.
+        The arch is only supported if the server's CLIPLoader offers this type."""
+        match self:
+            case Arch.moss:
+                return "moss_image"
+            case Arch.fibo2 | Arch.fibo2_e:
+                return "fibo2"
+        return None
 
     @property
     def is_qwen_like(self):
@@ -254,8 +277,10 @@ class Arch(Enum):
                 return ["qwen_3_4b"]
             case Arch.ernie:
                 return ["ministral"]
-            case Arch.krea2:
+            case Arch.krea2 | Arch.fibo2 | Arch.fibo2_e:
                 return ["qwen_3vl_4b"]
+            case Arch.moss:
+                return ["qwen_3_5_9b"]
             case _:
                 raise ValueError(f"Unsupported architecture: {self}")
 
@@ -281,6 +306,9 @@ class Arch(Enum):
             Arch.zimage,
             Arch.ernie,
             Arch.krea2,
+            Arch.moss,
+            Arch.fibo2,
+            Arch.fibo2_e,
         ]
 
 
@@ -424,7 +452,7 @@ class ControlMode(Enum):
 
     def can_substitute_instruction(self, arch: Arch):
         """True if this control mode is covered by instruction-following edit models."""
-        if arch.is_flux2 or arch is Arch.qwen2:
+        if arch.is_flux2 or arch.is_fibo2 or arch is Arch.qwen2:
             return self in [
                 ControlMode.style,
                 ControlMode.composition,
@@ -829,6 +857,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.text_encoder, Arch.all, "ministral"): ["ministral-3-3b", "ministral"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_4b"): ["qwen3vl_4b", "qwen_3vl_4b", "qwen3-vl-4b"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_8b"): ["qwen3vl_8b", "qwen_3vl_8b", "qwen3-vl-8b"],
+    resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3_5_9b"): ["qwen3.5_9b", "qwen_3.5_9b", "qwen3.5-9b", "qwen35_9b"],
     resource_id(ResourceKind.vae, Arch.sd15, "default"): ["vae-ft-mse-840000-ema"],
     resource_id(ResourceKind.vae, Arch.sdxl, "default"): ["sdxl_vae"],
     resource_id(ResourceKind.vae, Arch.illu, "default"): ["sdxl_vae"],
@@ -848,6 +877,9 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.vae, Arch.zimage, "default"): ["z-image", "flux-", "flux_", "flux/", "flux1", "ae.s"],
     resource_id(ResourceKind.vae, Arch.ernie, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.krea2, "default"): ["qwen_image"],
+    resource_id(ResourceKind.vae, Arch.moss, "default"): ["flux2"],
+    resource_id(ResourceKind.vae, Arch.fibo2, "default"): ["flux2"],
+    resource_id(ResourceKind.vae, Arch.fibo2_e, "default"): ["flux2"],
 }
 # fmt: on
 
@@ -887,6 +919,12 @@ required_resource_ids = {
     ResourceId(ResourceKind.vae, Arch.ernie, "default"),
     ResourceId(ResourceKind.text_encoder, Arch.krea2, "qwen_3vl_4b"),
     ResourceId(ResourceKind.vae, Arch.krea2, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.moss, "qwen_3_5_9b"),
+    ResourceId(ResourceKind.vae, Arch.moss, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.fibo2, "qwen_3vl_4b"),
+    ResourceId(ResourceKind.vae, Arch.fibo2, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.fibo2_e, "qwen_3vl_4b"),
+    ResourceId(ResourceKind.vae, Arch.fibo2_e, "default"),
 }
 
 recommended_resource_ids = [

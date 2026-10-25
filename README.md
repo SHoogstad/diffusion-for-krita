@@ -24,12 +24,11 @@
 ### Updates come from this fork
 * The built-in updater checks **this repository's** GitHub releases, not upstream's, so it never
   offers you a Qt6-only build. Downloads are verified against the SHA-256 digest that GitHub publishes.
-* **Configure ▸ About ▸ Include Pre-releases** opts in to pre-release builds. If you installed a
+* **Configure ▸ Plugin ▸ Include Pre-releases** opts in to pre-release builds. If you installed a
   pre-release, you keep getting newer pre-releases.
 
-### Extra models (pre-release, 1.55.x)
-Not available upstream (yet). These live on the
-[`1.55.0-moss-fibio2.0`](https://github.com/SHoogstad/krita-ai-diffusion-qt5/tree/1.55.0-moss-fibio2.0) branch:
+### Extra models (1.55)
+Not available upstream (yet), included since 1.55:
 * **MOSS-Image**: text-to-image with a Qwen3.5-9B text encoder. **Regions** are converted to
   MOSS's JSON layout boxes (bounding box + caption per region), and region prompts with quoted text
   (e.g. a neon sign saying `"OPEN"`) become text boxes. Needs ComfyUI 0.42 or newer.
@@ -42,12 +41,13 @@ Not available upstream (yet). These live on the
 
 ### Versioning
 Release tags look like `v<plugin version>-krita5.3`, for example `v1.54.1-krita5.3`. The plugin version
-follows upstream (with fork patch bumps), and the suffix names the **target Krita version**, not a build number.
+follows upstream (fork-only features bump the minor version, as in 1.55), and the suffix names the **target Krita version**, not a build number.
 
 | Release | Based on | Channel |
 |---|---|---|
-| `v1.55.1-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | pre-release |
-| `v1.54.1-krita5.3` | upstream 1.54 | stable |
+| `v1.55.2-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | stable (latest) |
+| `v1.55.0`, `v1.55.1` | same, earlier builds | pre-release |
+| `v1.54.1-krita5.3` | upstream 1.54 | previous stable |
 
 ---
 
