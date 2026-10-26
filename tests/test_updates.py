@@ -7,10 +7,10 @@ from threading import Thread
 
 import pytest
 from aiohttp import ClientSession
-from PyQt5.QtCore import pyqtBoundSignal
 
 from ai_diffusion.model.updates import AutoUpdate, UpdateState, parse_release_tag
 from ai_diffusion.platform_tools import ZipFile
+from ai_diffusion.qt.QtCore import pyqtBoundSignal
 
 from .conftest import CloudService, qtapp
 
@@ -90,9 +90,11 @@ def test_parse_release_tag():
     assert parse_release_tag("v1.54.0-krita5") == (1, 54, 0)
     assert parse_release_tag("v1.54.1-krita5.3") == (1, 54, 1)
     assert parse_release_tag("1.55.1-krita5.2") == (1, 55, 1)
-    assert parse_release_tag("v1.54.0") is None
+    assert parse_release_tag("v1.56.0") == (1, 56, 0)
     assert parse_release_tag("v2.0.0-krita6") is None
+    assert parse_release_tag("v1.54.0-pre") is None
     assert parse_release_tag("v1.54.0-krita5") < parse_release_tag("v1.54.1-krita5.3")  # type: ignore
+    assert parse_release_tag("v1.55.3-krita5.3") < parse_release_tag("v1.56.0")  # type: ignore
 
 
 @qtapp
@@ -156,6 +158,18 @@ async def test_auto_update_bad_hash(github: FakeGithub, tmp_path: Path):
     await updater.run()
     assert updater.state is UpdateState.failed_update
     assert "corrupted" in updater.error
+
+
+@qtapp
+async def test_auto_update_from_krita5_tag(github: FakeGithub, tmp_path: Path):
+    github.publish("v1.55.3-krita5.3", b"old")
+    github.publish("v1.56.0", b"new")
+    updater = AutoUpdate(
+        current_version="v1.55.3-krita5.3", plugin_dir=tmp_path, api_url=github.url
+    )
+    await updater.check()
+    assert updater.state is UpdateState.available
+    assert updater.latest_version == "v1.56.0"
 
 
 @qtapp

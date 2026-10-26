@@ -4,7 +4,17 @@ import json
 from textwrap import wrap as wrap_text
 from typing import ClassVar, cast
 
-from PyQt5.QtCore import (
+from ..backend.api import InpaintContext
+from ..backend.resources import Arch
+from ..backend.workflow import FillMode, InpaintMode
+from ..image import Bounds, Extent, Image
+from ..localization import translate as _
+from ..model.jobs import Job, JobKind, JobParams, JobQueue, JobState
+from ..model.model import DocumentModel, ProgressKind, Workspace
+from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
+from ..model.region import RootRegion
+from ..model.root import root
+from ..qt.QtCore import (
     QEvent,
     QItemSelectionModel,
     QMetaObject,
@@ -15,7 +25,7 @@ from PyQt5.QtCore import (
     QUuid,
     pyqtSignal,
 )
-from PyQt5.QtGui import (
+from ..qt.QtGui import (
     QColor,
     QGuiApplication,
     QIcon,
@@ -24,7 +34,7 @@ from PyQt5.QtGui import (
     QMouseEvent,
     QPalette,
 )
-from PyQt5.QtWidgets import (
+from ..qt.QtWidgets import (
     QAction,
     QCheckBox,
     QComboBox,
@@ -42,17 +52,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..backend.api import InpaintContext
-from ..backend.resources import Arch
-from ..backend.workflow import FillMode, InpaintMode
-from ..image import Bounds, Extent, Image
-from ..localization import translate as _
-from ..model.jobs import Job, JobKind, JobParams, JobQueue, JobState
-from ..model.model import DocumentModel, ProgressKind, Workspace
-from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
-from ..model.region import RootRegion
-from ..model.root import root
 from ..settings import settings
 from ..style import Styles
 from ..util import ensure, flatten, is_one, sequence_equal

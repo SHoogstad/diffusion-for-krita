@@ -4,9 +4,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from PyQt5.QtCore import QObject, Qt, QUuid, pyqtSignal
-from PyQt5.QtGui import QColor
-
 from .. import util
 from ..backend import resources
 from ..backend.api import ControlInput
@@ -14,6 +11,8 @@ from ..backend.resources import Arch, ControlMode, ResourceKind, resource_id
 from ..image import BlendMode, Bounds, Extent, Image
 from ..layer import Layer, LayerType
 from ..localization import translate as _
+from ..qt.QtCore import QObject, Qt, QUuid, pyqtSignal
+from ..qt.QtGui import QColor
 from ..util import PluginError
 from ..util import client_logger as log
 from . import jobs

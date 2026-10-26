@@ -1,34 +1,34 @@
-<h1><img width="64px" src="ai_diffusion/icons/logo-128.png"> Generative AI <i>for Krita 5</i></h1>
+<h1><img width="64px" src="ai_diffusion/icons/logo-128.png"> Diffusion <i>for Krita</i></h1>
 
-> [!IMPORTANT]
-> **This is an unofficial port** of [**Acly/krita-ai-diffusion**](https://github.com/Acly/krita-ai-diffusion)
-> back to **Krita 5.x (PyQt5)**, with a few additions of my own.
-> All credit for the plugin goes to [Acly](https://github.com/Acly) and the upstream contributors.
-> Upstream moved to Qt6 / Krita 6 starting with version 1.54; this fork keeps new upstream
-> releases running on **Krita 5.3** stable.
->
-> Please report problems with this build [**here**](https://github.com/SHoogstad/krita-ai-diffusion-qt5/issues),
-> not upstream. If you're on Krita 6, use the [original plugin](https://github.com/Acly/krita-ai-diffusion) instead.
+Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
+regions, control layers and upscaling, with ComfyUI as the backend.
 
-⭳ [Download (this fork)](https://github.com/SHoogstad/krita-ai-diffusion-qt5/releases) | 🔀 [What's different](#fork) | ✨[Features](#features) | 🖼️[Gallery](#gallery) | 📖[User Guide (upstream)](https://docs.interstice.cloud) | 🏠 [Original project](https://github.com/Acly/krita-ai-diffusion)
+> [!NOTE]
+> Diffusion for Krita is an independent project **based on [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
+> by [Acly](https://github.com/Acly)**. Most of the plugin is their work, and the credit for it goes to them and
+> the upstream contributors. It started as a port of upstream 1.54 back to Krita 5 and now follows its own
+> path with its own models and releases. It is not affiliated with or endorsed by the upstream project or Interstice.
 
-## <a name="fork"></a> What's different in this fork
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | 🔀 [Differences from upstream](#fork) | ✨[Features](#features) | 🖼️[Gallery](#gallery) | 📖[User Guide (upstream)](https://docs.interstice.cloud) | 🏠 [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
 
-### Krita 5 port
-* PyQt6 → PyQt5 (`QAction` back in `QtWidgets`, etc.), and the version check accepts Krita 5.x.
-* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so the plugin has its own version for
-  the strength and settings sliders: drag the bar to change the value, or double-click it to type one. **Krita 5.3 is the target and the tested version.**
-* Otherwise the code stays as close to upstream as possible. New upstream releases are merged and
-  ported again.
+## <a name="fork"></a> Differences from Krita AI Diffusion
 
-### Updates come from this fork
-* The built-in updater checks **this repository's** GitHub releases, not upstream's, so it never
-  offers you a Qt6-only build. Downloads are verified against the SHA-256 digest that GitHub publishes.
+### Runs on Krita 5 and Krita 6
+* One download for both. At startup the plugin uses the Qt binding Krita was built with: PyQt5 on
+  Krita 5, PyQt6 on Krita 6. All Qt imports go through `ai_diffusion/qt`.
+* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so on Krita 5 the plugin has its own version
+  for the strength and settings sliders: drag the bar to change the value, or double-click it to type one.
+  Krita 6 uses the native slider.
+* Useful upstream changes are still merged when they come.
+
+### Own releases and updates
+* The built-in updater checks **this repository's** GitHub releases. Downloads are verified against
+  the SHA-256 digest that GitHub publishes.
 * **Configure ▸ Plugin ▸ Include Pre-releases** opts in to pre-release builds. If you installed a
   pre-release, you keep getting newer pre-releases.
 
 ### Extra models (1.55)
-Not available upstream (yet), included since 1.55:
+Not in Krita AI Diffusion, included since 1.55:
 * **MOSS-Image**: text-to-image with a Qwen3.5-9B text encoder. **Regions** are converted to
   MOSS's JSON layout boxes (bounding box + caption per region), and region prompts with quoted text
   (e.g. a neon sign saying `"OPEN"`) become text boxes. Needs ComfyUI 0.42 or newer.
@@ -40,24 +40,20 @@ Not available upstream (yet), included since 1.55:
   supports them; otherwise you get an "update ComfyUI" hint.
 
 ### Versioning
-Release tags look like `v<plugin version>-krita5.3`, for example `v1.54.1-krita5.3`. The plugin version
-follows upstream (fork-only features bump the minor version, as in 1.55), and the suffix names the **target Krita version**, not a build number.
-
-| Release | Based on | Channel |
-|---|---|---|
-| `v1.55.3-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2, slider fix | stable (latest) |
-| `v1.55.2-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | previous stable |
-| `v1.55.0`, `v1.55.1` | same, earlier builds | pre-release |
-| `v1.54.1-krita5.3` | upstream 1.54 | older stable |
+Release tags look like `v<plugin version>`, for example `v1.56.0`. The plugin version follows upstream
+(own features bump the minor version). **1.56.0 is the first Diffusion for Krita release.** Before that, the
+project was the Krita 5 only port [krita-ai-diffusion-qt5](https://github.com/SHoogstad/krita-ai-diffusion-qt5)
+(1.54.1 to 1.55.3, tagged `v<version>-krita5.3`). The updater still understands those tags, so those installs
+update to newer releases.
 
 ---
 
-## About the plugin (from upstream)
+## About the plugin
 
 This is a plugin to use generative AI in image painting and editing workflows
 from within Krita. Visit
 [**www.interstice.cloud**](https://www.interstice.cloud) for an introduction. Learn how to use it on
-[**docs.interstice.cloud**](https://docs.interstice.cloud). The guides apply to this port as well,
+[**docs.interstice.cloud**](https://docs.interstice.cloud). The guides apply to Diffusion for Krita as well,
 except for installation and updates (see below).
 
 The main goals of this project are:
@@ -117,22 +113,21 @@ insufficient memory!
 
 ### Installation
 
-1. Install [Krita](https://krita.org/) **5.3** (5.2 may work; on Krita 6 use [upstream](https://github.com/Acly/krita-ai-diffusion/releases/latest) instead).
-1. Download `krita_ai_diffusion-<version>-krita5.3.zip` from [this fork's releases](https://github.com/SHoogstad/krita-ai-diffusion-qt5/releases).
-   It replaces the upstream plugin if that's installed (same `ai_diffusion` folder). Your settings and server stay.
+1. Install [Krita](https://krita.org/) **5.3** or **6** (5.2 may work).
+1. Download `diffusion_for_krita-<version>.zip` from the [releases](https://github.com/SHoogstad/diffusion-for-krita/releases).
+   It replaces Krita AI Diffusion if that's installed (same `ai_diffusion` folder). Your settings and server stay.
 2. Start Krita and install the plugin via Tools ▸ Scripts ▸ Import Python Plugin from File...
     * Point it to the ZIP archive you downloaded in the previous step.
     * Check [Krita's official documentation](https://docs.krita.org/en/user_manual/python_scripting/install_custom_python_plugin.html) for more options.
 3. Restart Krita and create a new document or open an existing image.
-4. To show the plugin docker: Settings ‣ Dockers ‣ AI Image Generation.
+4. To show the plugin docker: Settings ‣ Dockers ‣ Diffusion for Krita.
 5. In the plugin docker, click "Configure" to start local server installation or connect.
 
 > [!NOTE]
 > If you encounter problems please check the [FAQ / list of common issues](https://docs.interstice.cloud/common-issues) for solutions.
 >
-> If an issue is specific to this Krita 5 build (Qt errors, updater, MOSS-Image / Fibo 2), report it
-> [on this fork](https://github.com/SHoogstad/krita-ai-diffusion-qt5/issues). Before opening an issue upstream,
-> check that it also happens with the original plugin on Krita 6. Please note that official Krita channels are **not** the right place to seek help with
+> Report problems with Diffusion for Krita [here](https://github.com/SHoogstad/diffusion-for-krita/issues), not to the Krita AI Diffusion project.
+> Please note that official Krita channels are **not** the right place to seek help with
 > issues related to this extension!
 
 ### _Optional:_ Custom ComfyUI Server
@@ -154,9 +149,7 @@ which adds AI segmentation tools.
 
 ## Contributing
 
-Fixes for the Krita 5 port are welcome here. Make feature work against
-[upstream](https://github.com/Acly/krita-ai-diffusion) where possible, and it will reach this fork with the next merge.
-See the [contributing guide](CONTRIBUTING.md).
+Contributions are welcome. See the [contributing guide](CONTRIBUTING.md), which is inherited from upstream.
 
 ## <a name="gallery"></a> Gallery
 
@@ -190,4 +183,5 @@ _Control layers: Scribble, Line art, Depth map, Pose_
 ## License & credits
 
 Original plugin © [Acly](https://github.com/Acly) and contributors, licensed under [GPL-3.0](LICENSE).
-This port is distributed under the same license. It is not affiliated with or endorsed by the upstream project or Interstice.
+Diffusion for Krita is distributed under the same license, with its own changes since 2026-10-21 (see the git history).
+It is not affiliated with or endorsed by the upstream project or Interstice.

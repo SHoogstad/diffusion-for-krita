@@ -5,9 +5,9 @@ dragged to change the value. Double-click to type a value."""
 try:
     from krita import DoubleSliderSpinBox
 except ImportError:
-    from PyQt5.QtCore import QEvent, QObject, QRectF, Qt, pyqtSignal
-    from PyQt5.QtGui import QColor, QPainter, QPalette
-    from PyQt5.QtWidgets import QDoubleSpinBox
+    from ..qt.QtCore import QEvent, QObject, QRectF, Qt, pyqtSignal
+    from ..qt.QtGui import QColor, QPainter, QPalette
+    from ..qt.QtWidgets import QDoubleSpinBox
 
     class _SliderSpinBox(QDoubleSpinBox):
         drag_finished = pyqtSignal()

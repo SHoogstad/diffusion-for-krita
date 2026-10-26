@@ -19,7 +19,7 @@ import translation
 root = Path(__file__).parent.parent
 package_dir = root / "scripts" / ".package"
 version = ai_diffusion.__version__
-package_name = f"krita_ai_diffusion-{version}"
+package_name = f"diffusion_for_krita-{version}"
 
 
 def convert_markdown_to_html(markdown_file: Path, html_file: Path):

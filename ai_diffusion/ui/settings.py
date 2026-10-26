@@ -3,8 +3,21 @@ from __future__ import annotations
 from typing import cast
 
 from krita import Krita
-from PyQt5.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import (
+
+from .. import __release__, eventloop, util
+from ..backend import resources
+from ..backend.client import Client, MissingResources, User
+from ..backend.cloud_client import CloudClient
+from ..backend.resources import Arch, ResourceId
+from ..backend.server import Server, ServerState
+from ..localization import Localization
+from ..localization import translate as _
+from ..model.connection import ConnectionState, apply_performance_preset
+from ..model.properties import Binding
+from ..model.root import collect_diagnostics, root
+from ..model.updates import UpdateState
+from ..qt.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtGui import (
     QColor,
     QCursor,
     QDesktopServices,
@@ -13,7 +26,7 @@ from PyQt5.QtGui import (
     QGuiApplication,
     QPainter,
 )
-from PyQt5.QtWidgets import (
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -33,19 +46,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from .. import __release__, eventloop, util
-from ..backend import resources
-from ..backend.client import Client, MissingResources, User
-from ..backend.cloud_client import CloudClient
-from ..backend.resources import Arch, ResourceId
-from ..backend.server import Server, ServerState
-from ..localization import Localization
-from ..localization import translate as _
-from ..model.connection import ConnectionState, apply_performance_preset
-from ..model.properties import Binding
-from ..model.root import collect_diagnostics, root
-from ..model.updates import UpdateState
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
 from ..style import Style
 from .server import ServerWidget
@@ -1143,15 +1143,13 @@ class AboutSettings(SettingsTab):
 
 
 _links_text = """
-<a href='https://www.interstice.cloud'>Website</a><br><br>
-<a href='https://docs.interstice.cloud'>Handbook: Guides and Tips</a><br><br>
-<a href='https://github.com/Acly/krita-ai-diffusion'>GitHub</a>
+<a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub</a><br><br>
+<a href='https://docs.interstice.cloud'>Handbook: Guides and Tips (upstream)</a><br><br>
+<a href='https://github.com/Acly/krita-ai-diffusion'>Based on Krita AI Diffusion by Acly</a>
 """
 
 _contact_text = """
-<a href='https://github.com/Acly/krita-ai-diffusion/issues'>Issues</a><br><br>
-<a href='https://github.com/Acly/krita-ai-diffusion/discussions'>Discussions</a><br><br>
-<a href='https://discord.gg/pWyzHfHHhU'>Discord</a>
+<a href='https://github.com/SHoogstad/diffusion-for-krita/issues'>Issues</a>
 """
 
 
@@ -1167,7 +1165,7 @@ class SettingsDialog(QDialog):
         super().__init__()
         type(self)._instance = self
 
-        self.setWindowTitle(_("Configure Image Diffusion"))
+        self.setWindowTitle(_("Configure Diffusion for Krita"))
         self.setMinimumSize(QSize(960, 480))
         if screen := QGuiApplication.screenAt(QCursor.pos()):
             size = screen.availableSize()

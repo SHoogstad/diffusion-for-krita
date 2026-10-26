@@ -5,9 +5,23 @@ from pathlib import Path
 from typing import Any
 
 from krita import Krita
-from PyQt5.QtCore import QMetaObject, QPoint, QSize, Qt, QUrl, QUuid, pyqtSignal
-from PyQt5.QtGui import QDesktopServices, QFontMetrics, QIcon, QPalette
-from PyQt5.QtWidgets import (
+
+from ..backend.client import TextOutput
+from ..localization import translate as _
+from ..model.custom_workflow import (
+    CustomGenerationMode,
+    CustomParam,
+    ParamKind,
+    SortedWorkflows,
+    WorkflowSource,
+)
+from ..model.jobs import JobKind
+from ..model.model import DocumentModel
+from ..model.properties import Bind, Binding, bind, bind_combo
+from ..model.root import root
+from ..qt.QtCore import QMetaObject, QPoint, QSize, Qt, QUrl, QUuid, pyqtSignal
+from ..qt.QtGui import QDesktopServices, QFontMetrics, QIcon, QPalette
+from ..qt.QtWidgets import (
     QAction,
     QComboBox,
     QDoubleSpinBox,
@@ -29,20 +43,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..backend.client import TextOutput
-from ..localization import translate as _
-from ..model.custom_workflow import (
-    CustomGenerationMode,
-    CustomParam,
-    ParamKind,
-    SortedWorkflows,
-    WorkflowSource,
-)
-from ..model.jobs import JobKind
-from ..model.model import DocumentModel
-from ..model.properties import Bind, Binding, bind, bind_combo
-from ..model.root import root
 from ..settings import settings
 from ..style import Styles
 from ..util import base_type_match, clamp, ensure

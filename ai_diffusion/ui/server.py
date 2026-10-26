@@ -7,9 +7,20 @@ from enum import Enum
 from pathlib import Path
 
 from krita import Krita
-from PyQt5.QtCore import Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtWidgets import (
+
+from .. import eventloop, util
+from ..backend import resources, server
+from ..backend.comfy_client import ComfyClient
+from ..backend.network import DownloadProgress
+from ..backend.resources import CustomNode, ModelResource, ResourceId
+from ..backend.server import Server, ServerBackend, ServerState
+from ..localization import translate as _
+from ..model.connection import ConnectionState
+from ..model.root import root
+from ..platform_tools import get_cuda_devices
+from ..qt.QtCore import Qt, QUrl, pyqtSignal
+from ..qt.QtGui import QDesktopServices
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -28,17 +39,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from .. import eventloop, util
-from ..backend import resources, server
-from ..backend.comfy_client import ComfyClient
-from ..backend.network import DownloadProgress
-from ..backend.resources import CustomNode, ModelResource, ResourceId
-from ..backend.server import Server, ServerBackend, ServerState
-from ..localization import translate as _
-from ..model.connection import ConnectionState
-from ..model.root import root
-from ..platform_tools import get_cuda_devices
 from ..settings import Settings, settings
 from ..style import Arch
 from ..util import ensure

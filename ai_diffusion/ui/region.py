@@ -3,8 +3,15 @@ from __future__ import annotations
 from enum import Enum
 from functools import partial
 
-from PyQt5.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import (
+from ..backend.client import Client
+from ..document import LayerType
+from ..image import Bounds
+from ..localization import translate as _
+from ..model.properties import Binding, bind
+from ..model.region import Region, RegionLink, RootRegion, translate_prompt
+from ..model.root import root
+from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, pyqtSignal
+from ..qt.QtGui import (
     QFontMetrics,
     QGuiApplication,
     QIcon,
@@ -14,15 +21,7 @@ from PyQt5.QtGui import (
     QPixmap,
     QResizeEvent,
 )
-from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget
-
-from ..backend.client import Client
-from ..document import LayerType
-from ..image import Bounds
-from ..localization import translate as _
-from ..model.properties import Binding, bind
-from ..model.region import Region, RegionLink, RootRegion, translate_prompt
-from ..model.root import root
+from ..qt.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget
 from ..util import ensure
 from . import theme
 from .control import ControlListWidget

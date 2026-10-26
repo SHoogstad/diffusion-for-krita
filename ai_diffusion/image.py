@@ -8,8 +8,10 @@ from math import sqrt
 from pathlib import Path
 from typing import NamedTuple, SupportsIndex
 
-from PyQt5.QtCore import QBuffer, QByteArray, QFile, QIODevice, QRect, QSize, Qt
-from PyQt5.QtGui import (
+from .platform_tools import is_linux
+from .qt import QT6
+from .qt.QtCore import QBuffer, QByteArray, QFile, QIODevice, QRect, QSize, Qt
+from .qt.QtGui import (
     QColorSpace,
     QIcon,
     QImage,
@@ -24,8 +26,6 @@ from PyQt5.QtGui import (
     qRed,
     qRgba,
 )
-
-from .platform_tools import is_linux
 from .settings import ImageFileFormat, settings
 from .util import clamp, ensure
 from .util import client_logger as log
@@ -628,7 +628,8 @@ class Image:
             info = f"[{self.width}x{self.height} format={self._qimage.format()}] -> {format_str}@{quality}"
             if is_linux and format_str == "webp":
                 log.warning(
-                    "To enable support for writing webp images, you may need to install the 'qt5-imageformats' package."
+                    "To enable support for writing webp images, you may need to install the"
+                    f" 'qt{6 if QT6 else 5}-imageformats' package."
                 )
                 global _qt_supports_webp
                 _qt_supports_webp = False

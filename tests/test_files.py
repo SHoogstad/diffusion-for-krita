@@ -1,9 +1,8 @@
 from pathlib import Path
 
-from PyQt5.QtCore import QModelIndex, Qt
-from PyQt5.QtGui import QIcon
-
 from ai_diffusion.files import File, FileCollection, FileFilter, FileSource
+from ai_diffusion.qt.QtCore import QModelIndex, Qt
+from ai_diffusion.qt.QtGui import QIcon
 
 
 class EventHandler:

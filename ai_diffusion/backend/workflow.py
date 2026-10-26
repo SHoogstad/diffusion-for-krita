@@ -8,11 +8,10 @@ from copy import copy
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
-from PyQt5.QtGui import QImage
-
 from ..files import FileFormat, FileLibrary
 from ..image import Bounds, Extent, Image, ImageCollection, Mask, multiple_of
 from ..localization import translate as _
+from ..qt.QtGui import QImage
 from ..settings import PerformanceSettings, settings
 from ..style import SamplerPresets, Style, StyleSettings
 from ..text import (

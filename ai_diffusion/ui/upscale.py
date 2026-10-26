@@ -1,6 +1,12 @@
-from PyQt5.QtCore import QEvent, QMetaObject, Qt, pyqtSignal
-from PyQt5.QtGui import QCursor, QEnterEvent
-from PyQt5.QtWidgets import (
+from ..backend.resources import ControlMode, UpscalerName
+from ..localization import translate as _
+from ..model.jobs import JobKind
+from ..model.model import DocumentModel, TileOverlapMode
+from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
+from ..model.root import root
+from ..qt.QtCore import QEvent, QMetaObject, Qt, pyqtSignal
+from ..qt.QtGui import QCursor, QEnterEvent
+from ..qt.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QGroupBox,
@@ -12,13 +18,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..backend.resources import ControlMode, UpscalerName
-from ..localization import translate as _
-from ..model.jobs import JobKind
-from ..model.model import DocumentModel, TileOverlapMode
-from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
-from ..model.root import root
 from . import theme
 from .settings_widgets import WarningIcon
 from .switch import SwitchWidget

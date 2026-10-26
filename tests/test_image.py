@@ -4,11 +4,11 @@ import zlib
 import numpy as np
 import pytest
 from PIL import Image as PILImage
-from PyQt5.QtCore import QByteArray, Qt
-from PyQt5.QtGui import QImage, qRgba
 
 from ai_diffusion.backend.api import WorkflowKind
 from ai_diffusion.image import Bounds, Extent, Image, ImageCollection, ImageFileFormat, Mask
+from ai_diffusion.qt.QtCore import QByteArray, Qt
+from ai_diffusion.qt.QtGui import QImage, qRgba
 from ai_diffusion.text import create_ai_generated_xmp
 
 from .config import image_dir, reference_dir, result_dir
@@ -142,8 +142,8 @@ def test_image_from_packed_bytes():
 def test_image_compress_speed():
     from timeit import default_timer
 
-    from PyQt5.QtCore import QBuffer, QByteArray, QFile, QIODevice
-    from PyQt5.QtGui import QImageWriter
+    from ai_diffusion.qt.QtCore import QBuffer, QByteArray, QFile, QIODevice
+    from ai_diffusion.qt.QtGui import QImageWriter
 
     img = Image.load("tests/images/beach_1536x1024.webp")
 

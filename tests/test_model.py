@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 from krita import Document as MockKritaDocument
 from krita import Krita, Selection
-from PyQt5.QtCore import QByteArray, Qt
 
 from ai_diffusion.backend.api import WorkflowInput, WorkflowKind
 from ai_diffusion.backend.client import CheckpointInfo, ClientEvent, ClientMessage
@@ -23,6 +22,7 @@ from ai_diffusion.model.connection import Connection, ConnectionState
 from ai_diffusion.model.custom_workflow import WorkflowCollection
 from ai_diffusion.model.jobs import Job, JobKind, JobParams, JobRegion, JobState
 from ai_diffusion.model.model import DocumentModel, ErrorKind, ProgressKind, no_error
+from ai_diffusion.qt.QtCore import QByteArray, Qt
 from ai_diffusion.settings import ApplyBehavior, ApplyRegionBehavior
 from ai_diffusion.style import Style
 

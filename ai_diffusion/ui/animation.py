@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QMetaObject, Qt
-from PyQt5.QtWidgets import (
+from ..image import Extent, Image
+from ..localization import translate as _
+from ..model.model import DocumentModel
+from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
+from ..model.root import root
+from ..qt.QtCore import QMetaObject, Qt
+from ..qt.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -12,12 +17,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..image import Extent, Image
-from ..localization import translate as _
-from ..model.model import DocumentModel
-from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
-from ..model.root import root
 from ..settings import settings
 from . import theme
 from .control import ControlListWidget

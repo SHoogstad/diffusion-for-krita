@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QMetaObject, Qt, pyqtSignal
-from PyQt5.QtGui import QResizeEvent
-from PyQt5.QtWidgets import (
+from ..backend.resources import ControlMode
+from ..localization import translate as _
+from ..model.control import ControlLayer, ControlLayerList
+from ..model.properties import Binding, bind, bind_combo, bind_toggle
+from ..model.root import root
+from ..qt.QtCore import QMetaObject, Qt, pyqtSignal
+from ..qt.QtGui import QResizeEvent
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
@@ -14,12 +19,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..backend.resources import ControlMode
-from ..localization import translate as _
-from ..model.control import ControlLayer, ControlLayerList
-from ..model.properties import Binding, bind, bind_combo, bind_toggle
-from ..model.root import root
 from . import theme
 from .interval_slider import IntervalSlider
 from .theme import SignalBlocker

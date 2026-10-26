@@ -2,9 +2,8 @@ import operator
 from functools import reduce
 from typing import NamedTuple
 
-from PyQt5.QtCore import QPointF
-
 from .image import Extent
+from .qt.QtCore import QPointF
 from .util import batched
 
 
