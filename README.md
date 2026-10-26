@@ -1,187 +1,147 @@
 <h1><img width="64px" src="ai_diffusion/icons/logo-128.png"> Diffusion <i>for Krita</i></h1>
 
 Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
-regions, control layers and upscaling, with ComfyUI as the backend.
+regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the backend.
 
-> [!NOTE]
-> Diffusion for Krita is an independent project **based on [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
-> by [Acly](https://github.com/Acly)**. Most of the plugin is their work, and the credit for it goes to them and
-> the upstream contributors. It started as a port of upstream 1.54 back to Krita 5 and now follows its own
-> path with its own models and releases. It is not affiliated with or endorsed by the upstream project or Interstice.
-
-⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | 🔀 [Differences from upstream](#fork) | ✨[Features](#features) | 🖼️[Gallery](#gallery) | 📖[User Guide (upstream)](https://docs.interstice.cloud) | 🏠 [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
-
-## <a name="fork"></a> Differences from Krita AI Diffusion
-
-### Runs on Krita 5 and Krita 6
-* One download for both. At startup the plugin uses the Qt binding Krita was built with: PyQt5 on
-  Krita 5, PyQt6 on Krita 6. All Qt imports go through `ai_diffusion/qt`.
-* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so on Krita 5 the plugin has its own version
-  for the strength and settings sliders: drag the bar to change the value, or double-click it to type one.
-  Krita 6 uses the native slider.
-* Useful upstream changes are still merged when they come.
-
-### Own releases and updates
-* The built-in updater checks **this repository's** GitHub releases. Downloads are verified against
-  the SHA-256 digest that GitHub publishes.
-* **Configure ▸ Plugin ▸ Include Pre-releases** opts in to pre-release builds. If you installed a
-  pre-release, you keep getting newer pre-releases.
-
-### Extra models (1.55)
-Not in Krita AI Diffusion, included since 1.55:
-* **MOSS-Image**: text-to-image with a Qwen3.5-9B text encoder. **Regions** are converted to
-  MOSS's JSON layout boxes (bounding box + caption per region), and region prompts with quoted text
-  (e.g. a neon sign saying `"OPEN"`) become text boxes. Needs ComfyUI 0.42 or newer.
-* **Fibo 2** (Dev, generate + edit) and **Fibo 2 Edit** (Edit Turbo, 4 steps). Prompts go through
-  `TextEncodeFibo2`, so the text encoder also sees the edit and reference images. Reference images are
-  called `<image_N>` in instructions. Large canvases are generated at about 1 MP (the training resolution)
-  and then upscaled, which avoids duplicated limbs. Needs ComfyUI master.
-* Both use the Flux 2 VAE and are detected by filename. They only show up if the connected ComfyUI
-  supports them; otherwise you get an "update ComfyUI" hint.
-
-### Versioning
-Release tags look like `v<plugin version>`, for example `v1.56.0`. The plugin version follows upstream
-(own features bump the minor version). **1.56.0 is the first Diffusion for Krita release.** Before that, the
-project was the Krita 5 only port [krita-ai-diffusion-qt5](https://github.com/SHoogstad/krita-ai-diffusion-qt5)
-(1.54.1 to 1.55.3, tagged `v<version>-krita5.3`). The updater still understands those tags, so those installs
-update to newer releases.
-
----
-
-## About the plugin
-
-This is a plugin to use generative AI in image painting and editing workflows
-from within Krita. Visit
-[**www.interstice.cloud**](https://www.interstice.cloud) for an introduction. Learn how to use it on
-[**docs.interstice.cloud**](https://docs.interstice.cloud). The guides apply to Diffusion for Krita as well,
-except for installation and updates (see below).
-
-The main goals of this project are:
-* **Precision and Control.** Creating entire images from text can be unpredictable.
-  To get the result you envision, you can restrict generation to selections,
-  refine existing content with a variable degree of strength, focus text on image
-  regions, and guide generation with reference images, sketches, line art,
-  depth maps, and more.
-* **Workflow Integration.** Most image generation tools focus heavily on AI parameters.
-  This project aims to be an unobtrusive tool that integrates and synergizes
-  with image editing workflows in Krita. Draw, paint, edit and generate seamlessly without worrying about resolution and technical details.
-* **Local, Open, Free.** We are committed to open source models. Customize presets, bring your
-  own models, and run everything local on your hardware. Cloud generation is also available
-  to get started quickly without heavy investment.  
-
-[![Watch video demo](media/screenshot-video-preview.webp)](https://youtu.be/Ly6USRwTHe0 "Watch video demo")
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | ❓ [Common issues](#common-issues)
 
 ## <a name="features"></a> Features
 
-* **Inpainting**: Use selections for generative fill, expand, to add or remove objects
-* **Live Painting**: Let AI interpret your canvas in real time for immediate feedback. [Watch Video](https://youtu.be/AF2VyqSApjA?si=Ve5uQJWcNOATtABU)
-* **Upscaling**: Upscale and enrich images to 4k, 8k and beyond without running out of memory.
-* **Diffusion Models**: Flux 2, Z-Image, Stable Diffusion 1.5, XL, Illustrious
-* **Edit Models**: Make modifications to images via text instructions
-* **ControlNet**: Scribble, Line art, Canny edge, Pose, Depth, Normals, Segmentation, +more
-* **IP-Adapter**: Reference images, Style and composition transfer, Face swap
-* **Regions**: Assign individual text descriptions to image areas defined by layers.
-* **Job Queue**: Queue and cancel generation jobs while working on your image.
-* **History**: Preview results and browse previous generations and prompts at any time.
-* **Strong Defaults**: Versatile default style presets allow for a streamlined UI.
-* **Customization**: Create your own presets - custom checkpoints, LoRA, samplers and more.
+* **Inpainting**: use selections for generative fill, expand the canvas, add or remove objects.
+* **Live painting**: the AI interprets your canvas in real time while you paint.
+* **Upscaling**: upscale and enrich images to 4k, 8k and beyond without running out of memory.
+* **Diffusion models**: Flux 2, Z-Image, Qwen Image, MOSS-Image, Fibo 2, Anima, Stable Diffusion 1.5 / XL, Illustrious and more.
+* **Edit models**: change images with text instructions.
+* **Control layers**: scribble, line art, canny edge, pose, depth, normals, segmentation and more.
+* **Reference images**: style and composition transfer, face swap.
+* **Regions**: give image areas defined by layers their own text descriptions.
+* **Job queue and history**: queue and cancel jobs, browse earlier results and prompts.
+* **Styles**: presets with your own checkpoints, LoRA, samplers and more.
+* **Krita 5 and Krita 6**: one download for both.
 
-## <a name="installation"></a> Getting Started
+### MOSS-Image and Fibo 2
+* **MOSS-Image**: text-to-image with a Qwen3.5-9B text encoder. **Regions** become MOSS layout boxes
+  (bounding box + caption per region), and region prompts with quoted text (e.g. a neon sign saying `"OPEN"`)
+  become text boxes. Needs ComfyUI 0.42 or newer.
+* **Fibo 2** (Dev, generate + edit) and **Fibo 2 Edit** (Edit Turbo, 4 steps). The text encoder also sees the
+  edit and reference images; reference images are called `<image_N>` in instructions. Large canvases are
+  generated at about 1 MP (the training resolution) and then upscaled. Needs ComfyUI master.
+* Both use the Flux 2 VAE and are detected by filename. They only show up if the connected ComfyUI
+  supports them; otherwise you get an "update ComfyUI" hint.
 
-See the [Plugin Installation Guide](https://docs.interstice.cloud/installation) for instructions.
-
-A concise (more technical) version is below:
-
-### Operating System
-
-Windows, Linux, MacOS
-
-#### Hardware support
-
-To run locally a powerful graphics card with at least 6 GB VRAM (NVIDIA) is
-recommended. Otherwise generating images will take very long or may fail due to
-insufficient memory!
-
-<table>
-<tr><td>NVIDIA GPU</td><td>supported via CUDA (Windows/Linux)</td></tr>
-<tr><td>AMD GPU</td><td>supported via ROCm (Windows/Linux)</td></tr>
-<tr><td>Intel GPU</td><td>supported via XPU (Windows/Linux)</td></tr>
-<tr><td>Apple Silicon</td><td>MPS on macOS 14+</td></tr>
-<tr><td>CPU</td><td>supported, but very slow</td></tr>
-</table>
-
-
-### Installation
+## <a name="installation"></a> Installation
 
 1. Install [Krita](https://krita.org/) **5.3** or **6** (5.2 may work).
-1. Download `diffusion_for_krita-<version>.zip` from the [releases](https://github.com/SHoogstad/diffusion-for-krita/releases).
-   It replaces Krita AI Diffusion if that's installed (same `ai_diffusion` folder). Your settings and server stay.
-2. Start Krita and install the plugin via Tools ▸ Scripts ▸ Import Python Plugin from File...
-    * Point it to the ZIP archive you downloaded in the previous step.
-    * Check [Krita's official documentation](https://docs.krita.org/en/user_manual/python_scripting/install_custom_python_plugin.html) for more options.
-3. Restart Krita and create a new document or open an existing image.
-4. To show the plugin docker: Settings ‣ Dockers ‣ Diffusion for Krita.
-5. In the plugin docker, click "Configure" to start local server installation or connect.
+2. Download `diffusion_for_krita-<version>.zip` from the [releases](https://github.com/SHoogstad/diffusion-for-krita/releases).
+   Don't use GitHub's "Source code" archives, because they don't include the bundled `websockets` module.
+3. In Krita, open *Tools ▸ Scripts ▸ Import Python Plugin from File...* and select the zip.
+   It replaces Krita AI Diffusion if that's installed (same `ai_diffusion` folder). Your settings stay.
+4. Restart Krita and create a new document or open an image.
+5. Show the docker with *Settings ▸ Dockers ▸ Diffusion for Krita*.
+6. Click **Configure** in the docker to install a local server or connect to one.
 
-> [!NOTE]
-> If you encounter problems please check the [FAQ / list of common issues](https://docs.interstice.cloud/common-issues) for solutions.
->
-> Report problems with Diffusion for Krita [here](https://github.com/SHoogstad/diffusion-for-krita/issues), not to the Krita AI Diffusion project.
-> Please note that official Krita channels are **not** the right place to seek help with
-> issues related to this extension!
+**Updates:** the plugin checks this repository's releases on startup and verifies each download against the
+SHA-256 digest that GitHub publishes. *Configure ▸ Plugin ▸ Include Pre-releases* also offers pre-releases.
 
-### _Optional:_ Custom ComfyUI Server
+### Hardware
+Windows, Linux and macOS. To run locally, a graphics card with at least 6 GB VRAM is recommended.
 
-The plugin uses [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as backend.
-As an alternative to the automatic installation, you can install it manually or
-use an existing installation. If the server is already running locally before
-starting Krita, the plugin will automatically try to connect. Using a remote
-server is also possible this way.
+| Hardware | Support |
+|---|---|
+| NVIDIA GPU | CUDA (Windows/Linux) |
+| AMD GPU | ROCm (Windows/Linux) |
+| Intel GPU | XPU (Windows/Linux) |
+| Apple Silicon | MPS on macOS 14+ |
+| CPU | works, but very slow |
 
-Please check the list of [required extensions and models](https://docs.interstice.cloud/comfyui-setup) to make sure your installation is compatible.
+## <a name="comfyui-setup"></a> ComfyUI setup
 
-### _Optional:_ Object selection tools (Segmentation)
+The plugin uses ComfyUI as its backend. The **Local Managed Server** option installs and runs ComfyUI for you.
+With **Custom Server** you connect to your own ComfyUI, locally or remote. If it's already running when Krita
+starts, the plugin connects automatically.
 
-If you're looking for a way to easily select objects or remove background in the
-image, there is a [separate plugin](https://github.com/Acly/krita-ai-tools)
-which adds AI segmentation tools.
+A custom ComfyUI needs these custom nodes (install them with
+[ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager) or by hand):
+* ControlNet preprocessors: [Fannovel16/comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux)
+* IP-Adapter: [cubiq/ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus)
+* Inpaint nodes: [Acly/comfyui-inpaint-nodes](https://github.com/Acly/comfyui-inpaint-nodes)
+* Tooling nodes: [Acly/comfyui-tooling-nodes](https://github.com/Acly/comfyui-tooling-nodes)
 
+Optional: [city96/ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) to load `.gguf` models.
+
+**Models.** Some models are required, and you can't connect until they're found. You also need at least one
+diffusion model (checkpoint) of a [supported base model](#base-models). The easiest way to get the right files
+with the right names is the download script in the plugin folder (`ai_diffusion`):
+```bash
+python -m pip install aiohttp tqdm
+python download_models.py --minimal /path/to/ComfyUI   # required models only
+python download_models.py --all /path/to/ComfyUI       # everything the plugin supports
+python download_models.py --help
+```
+It only downloads models; it doesn't install or change ComfyUI or custom nodes. Paths from
+`extra_model_paths.yaml` work too, because the plugin asks ComfyUI which models it has.
+
+**Missing models?** Open *Configure ▸ Connection ▸ View log files* and check `client.log`. It lists the models
+that were found and the filename patterns the plugin searches for. Filenames must contain one of the patterns;
+subfolders are fine, and files in a `krita` subfolder win when there are several matches.
+
+## <a name="base-models"></a> Base models
+
+A base model (architecture) and everything built on it, such as LoRA, ControlNet and IP-Adapter, must match.
+**Extensions for one base model don't work with another.** You can install several base models side by side.
+The style list shows each style's base model as an icon, and any LoRA you add must match it.
+
+| Base model | Notes |
+|---|---|
+| Stable Diffusion 1.5, SDXL, Illustrious / NoobAI | Widest support for control layers and reference images |
+| Flux, Flux Kontext, Flux 2 (Klein 4B / 9B) | Flux 2 also edits images |
+| Z-Image, Qwen Image (incl. Edit), Chroma, Anima | |
+| MOSS-Image, Fibo 2, Fibo 2 Edit | See [MOSS-Image and Fibo 2](#moss-image-and-fibo-2) |
+
+When you install the managed server you choose "workloads": the minimal set of models a base model needs.
+
+### <a name="custom-sampler-presets"></a> Custom sampler presets
+Add your own sampler presets in `presets/samplers.json` in the plugin's settings folder (the file has examples).
+Restart Krita for changes to take effect.
+
+## <a name="common-issues"></a> Common issues
+
+**Plugin is grayed out in the Python Plugin Manager.** Usually a "Source code" zip was installed instead of a
+release zip. Hover over the entry to see the error.
+
+**<a name="bind-address"></a>"Could not bind on address" when the server starts.** Another process is using
+the port (8188): a ComfyUI you started yourself, a server from an earlier Krita session that didn't shut down,
+or another program. Close that process, or log off / reboot. To use another port, close Krita, open
+`settings.json` in the settings folder (`%APPDATA%\krita\ai_diffusion` on Windows) and set
+`"server_arguments": "--port 25608"` (any free port).
+
+**Updating on Windows fails with `PermissionError: [WinError 32] ... ai_diffusion`.** Close Krita, delete
+`%APPDATA%\krita\pykrita\ai_diffusion`, then import the zip again. Settings live in
+`%APPDATA%\krita\ai_diffusion` and aren't affected.
+
+**Log files.** *Configure ▸ Connection ▸ View log files* opens the log folder. With *Configure ▸ Interface ▸
+Dump Workflow* on, the last generated ComfyUI workflow is saved there as `workflow.json`.
+
+Report problems [here](https://github.com/SHoogstad/diffusion-for-krita/issues). Official Krita channels are
+**not** the right place for questions about this plugin.
+
+### Object selection tools
+For AI object selection and background removal, see the separate
+[krita-ai-tools](https://github.com/Acly/krita-ai-tools) plugin.
+
+## Versioning
+
+Release tags look like `v<version>`, for example `v1.56.0`. 1.56.0 is the first Diffusion for Krita release.
+Before that, the project was the Krita 5 only port
+[krita-ai-diffusion-qt5](https://github.com/SHoogstad/krita-ai-diffusion-qt5) (1.54.1 to 1.55.3, tagged
+`v<version>-krita5.3`). The updater still understands those tags, so those installs update to newer releases.
 
 ## Contributing
 
-Contributions are welcome. See the [contributing guide](CONTRIBUTING.md), which is inherited from upstream.
+Contributions are welcome. See the [contributing guide](CONTRIBUTING.md).
 
-## <a name="gallery"></a> Gallery
+## License
 
-_Live painting with regions (Click for video)_
-[![Watch video demo](media/screenshot-regions.png)](https://youtu.be/PPxOE9YH57E "Watch video demo")
-
-_Inpainting on a photo using a realistic model_
-<img src="media/screenshot-2.png">
-
-_Reworking and adding content to an AI generated image_
-<img src="media/screenshot-1.png">
-
-_Adding detail and iteratively refining small parts of the image_
-<img src="media/screenshot-3.png">
-
-_Modifying the pose vector layer to control character stances (Click for video)_
-[![Watch video demo](media/screenshot-5.png)](https://youtu.be/-QDPEcVmdLI "Watch video demo")
-
-_Control layers: Scribble, Line art, Depth map, Pose_
-![Scribble control layer](media/control-scribble-screen.png)
-![Line art control layer](media/control-line-screen.png)
-![Depth map control layer](media/control-depth-screen.png)
-![Pose control layer](media/control-pose-screen.png)
-
-## Technology
-
-* Image generation: [Stable Diffusion](https://github.com/Stability-AI/generative-models), [Flux](https://blackforestlabs.ai/)
-* Diffusion backend: [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
-* Inpainting: [ControlNet](https://github.com/lllyasviel/ControlNet), [IP-Adapter](https://github.com/tencent-ailab/IP-Adapter)
-
-## License & credits
-
-Original plugin © [Acly](https://github.com/Acly) and contributors, licensed under [GPL-3.0](LICENSE).
-Diffusion for Krita is distributed under the same license, with its own changes since 2026-10-21 (see the git history).
-It is not affiliated with or endorsed by the upstream project or Interstice.
+GPL-3.0, see [LICENSE](LICENSE). Diffusion for Krita is a modified version of
+[Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion) © Acly and contributors, with changes since
+2026-10-21 (see the git history). It is not affiliated with or endorsed by that project.

@@ -212,7 +212,7 @@ def collect_diagnostics(redact_user=True):
     except Exception:
         krita_version = "Unknown"
 
-    out = "Krita AI Diffusion Plugin Diagnostics\n"
+    out = "Diffusion for Krita Diagnostics\n"
     out += "-------------------------------------\n"
     out += f"Plugin Version: {__release__}\n"
     out += f"Krita Version: {krita_version}\n"

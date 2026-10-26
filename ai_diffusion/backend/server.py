@@ -904,7 +904,7 @@ def parse_common_errors(output: str, return_code: int | None = None):
         return (
             _("Could not bind on address")
             + f" {message_part}. "
-            + "<a href='https://docs.interstice.cloud/common-issues#bind-address'>More information...</a>"
+            + "<a href='https://github.com/SHoogstad/diffusion-for-krita#bind-address'>More information...</a>"
         )
 
     nvidia_driver = "Found no NVIDIA driver on your system"

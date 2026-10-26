@@ -319,7 +319,7 @@ if __name__ == "__main__":
     if args.checkpoints and args.zimage:
         checkpoints += [m.id.identifier for m in default_checkpoints if m.arch is Arch.zimage]
 
-    print(f"Generative AI for Krita - Model download - v{resources.version}")
+    print(f"Diffusion for Krita - Model download - v{resources.version}")
 
     backend = ModelRequirements.no_cuda
     if args.backend == "auto":

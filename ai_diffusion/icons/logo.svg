@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d3b53"/>
+      <stop offset="1" stop-color="#2a1f45"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff8a5c"/>
+      <stop offset="0.55" stop-color="#ffc857"/>
+      <stop offset="1" stop-color="#7ee0d0"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bg)"/>
+  <!-- brush stroke, solid at the start -->
+  <path d="M22 98 C 34 70, 52 58, 72 52" fill="none" stroke="url(#stroke)" stroke-width="15" stroke-linecap="round"/>
+  <!-- the stroke dissolving into noise -->
+  <g fill="#7ee0d0">
+    <circle cx="82" cy="47" r="6.5"/>
+    <circle cx="92" cy="40" r="5.2" opacity="0.9"/>
+    <circle cx="86" cy="33" r="3.6" opacity="0.8"/>
+    <circle cx="100" cy="31" r="4.2" opacity="0.75"/>
+    <circle cx="97" cy="51" r="3.2" opacity="0.7"/>
+    <circle cx="107" cy="22" r="3" opacity="0.6"/>
+    <circle cx="94" cy="21" r="2.4" opacity="0.55"/>
+    <circle cx="108" cy="40" r="2.6" opacity="0.5"/>
+    <circle cx="104" cy="13" r="1.8" opacity="0.4"/>
+    <circle cx="113" cy="30" r="1.8" opacity="0.4"/>
+    <circle cx="84" cy="22" r="1.6" opacity="0.35"/>
+  </g>
+</svg>

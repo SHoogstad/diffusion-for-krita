@@ -456,7 +456,7 @@ def _iter_nodes(nodes: list, depth: int = 0) -> Generator:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Krita AI Diffusion – design preview")
+    parser = argparse.ArgumentParser(description="Diffusion for Krita – design preview")
     parser.add_argument("--exit", action="store_true")
     parser.add_argument("--no-connect", action="store_true")
     args = parser.parse_args()
@@ -477,7 +477,7 @@ def main():
         eventloop.run(root.autostart(settings_dialog.connection.update_ui))
 
     container = QWidget()
-    container.setWindowTitle("AI Image Generation – design preview")
+    container.setWindowTitle("Diffusion for Krita – design preview")
     layout = QHBoxLayout(container)
     layout.addWidget(controls)
     layout.addWidget(dock, stretch=1)

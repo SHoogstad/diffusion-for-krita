@@ -119,7 +119,7 @@ class InitialSetupWidget(QWidget):
             _(
                 "Connect to an existing installation of ComfyUI. It can be on the same machine, or a remote machine over the network. You are responsible to setup ComfyUI and install required custom nodes and models."
             )
-            + "<br><a href='https://docs.interstice.cloud/comfyui-setup'>ComfyUI Setup Guide</a>",
+            + "<br><a href='https://github.com/SHoogstad/diffusion-for-krita#comfyui-setup'>ComfyUI Setup Guide</a>",
             _("Connect via URL"),
             ServerMode.external,
         )
@@ -663,7 +663,7 @@ class ConnectionSettings(SettingsTab):
                 text += "</li>"
             text += "</ul>"
 
-        link = "<a href='https://docs.interstice.cloud/comfyui-setup'>Custom ComfyUI Setup</a>"
+        link = "<a href='https://github.com/SHoogstad/diffusion-for-krita#comfyui-setup'>Custom ComfyUI Setup</a>"
         text += _(
             "See {link} for required models.<br>Check the client.log file for more details.",
             link=link,
@@ -1144,8 +1144,7 @@ class AboutSettings(SettingsTab):
 
 _links_text = """
 <a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub</a><br><br>
-<a href='https://docs.interstice.cloud'>Handbook: Guides and Tips (upstream)</a><br><br>
-<a href='https://github.com/Acly/krita-ai-diffusion'>Based on Krita AI Diffusion by Acly</a>
+<a href='https://github.com/SHoogstad/diffusion-for-krita#readme'>Documentation</a>
 """
 
 _contact_text = """

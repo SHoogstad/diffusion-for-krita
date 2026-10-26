@@ -1119,7 +1119,7 @@ class ErrorBox(QFrame):
                 _(
                     "Selected LoRA model could not be applied. Please make sure it is compatible with the checkpoint base model you are using."
                 )
-                + " <a href='https://docs.interstice.cloud/base-models'>"
+                + " <a href='https://github.com/SHoogstad/diffusion-for-krita#base-models'>"
                 + _("Learn more")
                 + "</a>"
             )

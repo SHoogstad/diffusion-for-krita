@@ -240,8 +240,8 @@ class WelcomeWidget(QWidget):
 
         info = QLabel(
             "<a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub Project</a> | "
-            + "<a href='https://www.interstice.cloud'>Interstice.cloud</a> | "
-            + "Based on <a href='https://github.com/Acly/krita-ai-diffusion'>Krita AI Diffusion</a>",
+            + "<a href='https://github.com/SHoogstad/diffusion-for-krita#readme'>Documentation</a> | "
+            + "<a href='https://github.com/SHoogstad/diffusion-for-krita/issues'>Issues</a>",
             self,
         )
         info.setOpenExternalLinks(True)
