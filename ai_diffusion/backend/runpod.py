@@ -90,17 +90,26 @@ class RunpodApi:
         self._key = api_key
         self._requests = RequestManager()
 
+    retry_delays = (2.0, 5.0, 10.0, 20.0)  # for temporary errors of the Runpod API
+
     async def _call(self, method: str, path: str, data: dict | None = None):
         url = f"{self.url}/{path}"
-        try:
-            return await self._requests.http(method, url, data, timeout=60, bearer=self._key)
-        except NetworkError as e:
-            if e.status == 404:
-                return None
-            detail = (e.data or {}).get("detail") or (e.data or {}).get("title") or e.message
-            if e.status == 401:
-                detail = "The Runpod API key is invalid"
-            raise RunpodError(f"Runpod: {detail}") from e
+        # Creating resources is not repeated, it could create a second pod or volume
+        retries = self.retry_delays if method in ("GET", "DELETE") else ()
+        for attempt in range(len(retries) + 1):
+            try:
+                return await self._requests.http(method, url, data, timeout=60, bearer=self._key)
+            except NetworkError as e:
+                if e.status == 404:
+                    return None
+                if attempt < len(retries) and _is_temporary(e):
+                    log.warning(f"Runpod API {method} {path} failed ({e.message}), retrying")
+                    await asyncio.sleep(retries[attempt])
+                    continue
+                detail = (e.data or {}).get("detail") or (e.data or {}).get("title") or e.message
+                if e.status == 401:
+                    detail = "The Runpod API key is invalid"
+                raise RunpodError(f"Runpod: {detail}") from e
 
     async def gpus(self) -> list[GpuType]:
         result = await self._call(
@@ -136,6 +145,11 @@ class RunpodApi:
 
     async def delete_volume(self, id: str):
         await self._call("DELETE", f"network-volumes/{id}")
+
+
+def _is_temporary(e: NetworkError):
+    # No status: connection failed or timed out
+    return e.status is None or e.status in (408, 425, 429, 500, 502, 503, 504)
 
 
 def _ensure_result(result: dict | None, operation: str) -> dict:

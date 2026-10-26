@@ -49,6 +49,7 @@ class FakeRunpod:
         ]
         self.create_pod_error: tuple[int, dict] | None = None
         self.volume_data_centers = ["EU-RO-1", "US-TX-3"]
+        self.fail_next: dict[str, int] = {}  # "METHOD path-prefix" -> number of 504 replies
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -79,6 +80,11 @@ class FakeRunpod:
                     return self._reply(200, status)
                 if auth != "Bearer test-key":
                     return self._reply(401, {"title": "Unauthorized", "status": 401})
+                for key, count in fake.fail_next.items():
+                    key_method, prefix = key.split(" ", 1)
+                    if count > 0 and method == key_method and self.path.startswith(prefix):
+                        fake.fail_next[key] -= 1
+                        return self._reply(504, {"title": "Gateway Timeout", "status": 504})
                 return self._reply(*fake.handle(method, self.path, body))
 
             def do_GET(self):
@@ -142,6 +148,7 @@ def fake_runpod(monkeypatch):
     fake = FakeRunpod()
     monkeypatch.setattr(runpod, "pod_url", lambda id: f"{fake.url}/pod/{id}")
     monkeypatch.setattr(RunpodPod, "poll_interval", 0.01)
+    monkeypatch.setattr(RunpodApi, "retry_delays", (0.01, 0.01, 0.01, 0.01))
     yield fake
     fake.server.shutdown()
 
@@ -319,6 +326,32 @@ async def test_pod_disappears_while_starting(fake_runpod: FakeRunpod):
     with pytest.raises(RunpodError, match="stopped unexpectedly"):
         await start()
     assert pod.info is None
+
+
+@qtapp
+async def test_temporary_api_errors_are_retried(fake_runpod: FakeRunpod):
+    fake_runpod.fail_next = {"GET /pods/": 2, "GET /catalog/gpus": 1}
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+    phases = [p async for p in pod.start()]
+    assert phases[-1].phase is PodPhase.ready
+    assert all(count == 0 for count in fake_runpod.fail_next.values())
+
+
+@qtapp
+async def test_create_pod_is_not_retried(fake_runpod: FakeRunpod):
+    fake_runpod.fail_next = {"POST /pods": 1}
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+    with pytest.raises(RunpodError, match="Gateway Timeout"):
+        _ = [p async for p in pod.start()]
+    assert not fake_runpod.pods
+
+
+@qtapp
+async def test_retries_give_up(fake_runpod: FakeRunpod):
+    fake_runpod.fail_next = {"GET /catalog/gpus": 10}
+    with pytest.raises(RunpodError, match="Gateway Timeout"):
+        await RunpodApi("test-key", fake_runpod.url).gpus()
+    assert fake_runpod.fail_next["GET /catalog/gpus"] == 5  # 1 try + 4 retries
 
 
 @qtapp

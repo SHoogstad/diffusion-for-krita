@@ -191,14 +191,14 @@ class Connection(QObject, ObservableProperties):
             self._pod = None
             try:
                 await pod.stop()
+                settings.runpod_pod_id = ""  # else kept, the next start reuses or removes it
+                settings.runpod_pod_token = ""
+                settings.save()
             except Exception as e:
                 message = util.log_error(e)
                 self.error = (
                     _("Could not terminate the Runpod pod, check runpod.io") + f": {message}"
                 )
-            settings.runpod_pod_id = ""
-            settings.runpod_pod_token = ""
-            settings.save()
         self.pod_status = ""
 
     def shutdown(self):
