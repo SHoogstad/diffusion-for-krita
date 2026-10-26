@@ -23,6 +23,7 @@ from .conftest import qtapp
 gpu_4090 = {
     "id": "NVIDIA GeForce RTX 4090",
     "name": "RTX 4090",
+    "manufacturer": "NVIDIA",
     "memory": 24,
     "price": {"secure": 0.69, "community": 0.34},
     "availability": "HIGH",
@@ -47,6 +48,7 @@ class FakeRunpod:
             {"phase": "ready", "message": "Ready", "progress": [4, 4]},
         ]
         self.create_pod_error: tuple[int, dict] | None = None
+        self.volume_data_centers = ["EU-RO-1", "US-TX-3"]
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -98,7 +100,11 @@ class FakeRunpod:
     def handle(self, method: str, path: str, body: dict | None) -> tuple[int, dict]:
         match method, path.split("?", maxsplit=1)[0].strip("/").split("/"):
             case "GET", ["catalog", "gpus"]:
-                return 200, {"gpus": [gpu_4090]}
+                amd = {**gpu_4090, "id": "AMD Instinct MI300X OAM", "manufacturer": "AMD"}
+                return 200, {"gpus": [gpu_4090, amd]}
+            case "GET", ["catalog", "datacenters"]:
+                assert "networkVolumeTypes=STANDARD" in path
+                return 200, {"dataCenters": [{"id": id} for id in self.volume_data_centers]}
             case "GET", ["pods"]:
                 return 200, {"pods": list(self.pods.values())}
             case "POST", ["pods"]:
@@ -246,6 +252,22 @@ async def test_reuse_running_pod(fake_runpod: FakeRunpod):
 
 
 @qtapp
+async def test_volume_only_in_supported_data_center(fake_runpod: FakeRunpod):
+    fake_runpod.volume_data_centers = ["EU-RO-1"]  # US-TX-3 has more GPUs but no volumes
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+    _ = [p async for p in pod.start()]
+    assert fake_runpod.volumes[pod.volume_id]["dataCenter"] == "EU-RO-1"
+
+
+@qtapp
+async def test_no_volume_data_center(fake_runpod: FakeRunpod):
+    fake_runpod.volume_data_centers = ["EU-SE-1"]
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+    with pytest.raises(RunpodError, match="data center with network volumes"):
+        _ = [p async for p in pod.start()]
+
+
+@qtapp
 async def test_existing_volume_is_used(fake_runpod: FakeRunpod):
     fake_runpod.volumes["vol9"] = {"id": "vol9", "dataCenter": "EU-RO-1", "size": 50}
     pod = RunpodPod(config(volume_id="vol9"), RunpodApi("test-key", fake_runpod.url))
@@ -282,6 +304,27 @@ async def test_pod_reports_error(fake_runpod: FakeRunpod):
     pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
     with pytest.raises(RunpodError, match="Model download failed"):
         _ = [p async for p in pod.start()]
+
+
+@qtapp
+async def test_pod_disappears_while_starting(fake_runpod: FakeRunpod):
+    fake_runpod.status_sequence = [{"phase": "starting", "message": "Starting ComfyUI"}]
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+
+    async def start():
+        async for progress in pod.start():
+            if progress.message == "Starting ComfyUI":
+                fake_runpod.pods.clear()  # terminated from the Runpod console
+
+    with pytest.raises(RunpodError, match="stopped unexpectedly"):
+        await start()
+    assert pod.info is None
+
+
+@qtapp
+async def test_only_nvidia_gpus(fake_runpod: FakeRunpod):
+    gpus = await RunpodApi("test-key", fake_runpod.url).gpus()
+    assert [g.id for g in gpus] == ["NVIDIA GeForce RTX 4090"]
 
 
 @qtapp

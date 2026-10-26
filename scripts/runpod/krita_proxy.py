@@ -40,6 +40,7 @@ class Activity:
         self.last_job = time.monotonic()
         self.last_client = time.monotonic()
         self.clients = 0
+        self.ready = False
 
     def job(self):
         self.last_job = time.monotonic()
@@ -175,6 +176,9 @@ async def watchdog(app: web.Application):
         error_since = None
         if phase != "ready":
             continue  # downloading models or starting, the plugin polls /krita/status
+        if not activity.ready:  # count idle time from when ComfyUI became usable
+            activity.ready = True
+            activity.last_job = activity.last_client = time.monotonic()
         if activity.orphan_minutes() >= ORPHAN_MINUTES:
             terminate_pod(f"no client connected for {ORPHAN_MINUTES:g} minutes")
         elif IDLE_MINUTES > 0 and activity.idle_minutes() >= IDLE_MINUTES:

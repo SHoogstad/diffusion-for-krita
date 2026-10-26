@@ -328,7 +328,7 @@ class ComfyClient(Client):
 
     async def _listen(self):
         url = websocket_url(self.url)
-        args = websocket_args(settings.server_authorization)
+        args = websocket_args(self._token or settings.server_authorization)
         async for websocket in websockets.connect(f"{url}/ws?clientId={self._id}", **args):
             try:
                 await self._subscribe_workflows()

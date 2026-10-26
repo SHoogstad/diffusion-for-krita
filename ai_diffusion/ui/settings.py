@@ -146,6 +146,7 @@ class RunpodWidget(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self._gpus: list[runpod.GpuType] = []
+        self._volume_data_centers: set[str] | None = None
         self._loading = False
 
         layout = QVBoxLayout()
@@ -269,10 +270,13 @@ class RunpodWidget(QWidget):
         gpus = self._gpus or []
         if not any(g.id == settings.runpod_gpu for g in gpus):
             self._gpu.addItem(settings.runpod_gpu, settings.runpod_gpu)
+        with_volume = settings.runpod_storage is RunpodStorage.network
         for gpu in gpus:
             label = gpu.label
             if gpu.availability == "NONE":
                 label += " - " + _("not available")
+            elif with_volume and gpu.best_data_center(self._volume_data_centers) is None:
+                label += " - " + _("not available with network volume")
             self._gpu.addItem(label, gpu.id)
         index = self._gpu.findData(settings.runpod_gpu)
         self._gpu.setCurrentIndex(max(index, 0))
@@ -287,7 +291,9 @@ class RunpodWidget(QWidget):
             self._loading = True
             self._load_button.setEnabled(False)
             try:
-                self._gpus = await runpod.RunpodApi(settings.runpod_api_key).gpus()
+                api = runpod.RunpodApi(settings.runpod_api_key)
+                self._gpus = await api.gpus()
+                self._volume_data_centers = await api.volume_data_centers()
                 self._fill_gpus()
             except Exception as e:
                 self._status.setText(f"<b>{_('Error')}</b>: {e}")
@@ -334,6 +340,7 @@ class RunpodWidget(QWidget):
         for storage, radio in self._storage.items():
             if radio.isChecked():
                 settings.runpod_storage = storage
+        self._fill_gpus()
         self.update_state()
 
     def _change_idle(self):

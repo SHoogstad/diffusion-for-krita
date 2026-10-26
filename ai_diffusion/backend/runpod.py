@@ -72,9 +72,11 @@ class GpuType(NamedTuple):
             ],
         )
 
-    def best_data_center(self):
+    def best_data_center(self, allowed: set[str] | None = None):
         rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
         available = [dc for dc in self.data_centers if rank.get(dc[1], 0) > 0]
+        if allowed is not None:
+            available = [dc for dc in available if dc[0] in allowed]
         if not available:
             return None
         return max(available, key=lambda dc: rank[dc[1]])[0]
@@ -104,7 +106,8 @@ class RunpodApi:
         result = await self._call(
             "GET", "catalog/gpus?include=AVAILABILITY&product=POD&cloud=SECURE"
         )
-        gpus = [GpuType.parse(g) for g in (result or {}).get("gpus", [])]
+        nvidia = [g for g in (result or {}).get("gpus", []) if g.get("manufacturer") == "NVIDIA"]
+        gpus = [GpuType.parse(g) for g in nvidia]  # the image needs CUDA
         return sorted([g for g in gpus if g.price > 0], key=lambda g: (g.price, g.memory))
 
     async def pods(self) -> list[dict]:
@@ -118,6 +121,11 @@ class RunpodApi:
 
     async def terminate_pod(self, id: str):
         await self._call("DELETE", f"pods/{id}")
+
+    async def volume_data_centers(self) -> set[str]:
+        """Data centers which support (standard) network volumes."""
+        result = await self._call("GET", "catalog/datacenters?networkVolumeTypes=STANDARD")
+        return {dc["id"] for dc in (result or {}).get("dataCenters", [])}
 
     async def volume(self, id: str) -> dict | None:
         return await self._call("GET", f"network-volumes/{id}")
@@ -302,9 +310,12 @@ class RunpodPod:
             if volume is not None:
                 return volume
             log.warning(f"Runpod network volume {self.volume_id} no longer exists")
-        data_center = gpu.best_data_center()
+        data_center = gpu.best_data_center(await self.api.volume_data_centers())
         if data_center is None:
-            raise RunpodError(f"No {gpu.name} is available right now, choose another GPU")
+            raise RunpodError(
+                f"No {gpu.name} is available right now in a data center with network volumes. "
+                "Choose another GPU, or download models on every start."
+            )
         size = volume_size_gb(model_gb)
         log.info(f"Creating {size} GB Runpod network volume in {data_center}")
         volume = await self.api.create_volume(pod_prefix, size, data_center)
@@ -350,15 +361,21 @@ class RunpodPod:
         log.info(f"Created Runpod pod {pod['id']} ({gpu.name}, ${gpu.price:.2f}/h)")
         return PodInfo(pod["id"], pod_url(pod["id"]), token)
 
+    async def _check_pod_alive(self) -> dict:
+        assert self.info is not None
+        pod = await self.api.pod(self.info.id)
+        if pod is None or pod.get("status") in ("EXITED", "ERROR", "TERMINATED"):
+            status = pod.get("status") if pod else "TERMINATED"
+            self.info = None  # nothing left to terminate
+            raise RunpodError(f"The Runpod pod stopped unexpectedly ({status})")
+        return pod
+
     async def _wait_until_ready(self) -> AsyncGenerator[PodProgress, None]:
         assert self.info is not None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.pod_timeout
         while True:
-            pod = await self.api.pod(self.info.id)
-            if pod is None or pod.get("status") in ("EXITED", "ERROR", "TERMINATED"):
-                status = pod.get("status") if pod else "TERMINATED"
-                raise RunpodError(f"The Runpod pod stopped unexpectedly ({status})")
+            pod = await self._check_pod_alive()
             if pod.get("status") == "RUNNING":
                 break
             if loop.time() > deadline:
@@ -367,7 +384,11 @@ class RunpodPod:
             await asyncio.sleep(self.poll_interval)
 
         deadline = loop.time() + self.ready_timeout
+        polls = 0
         while True:
+            polls += 1
+            if polls % 10 == 0:  # the pod can be terminated from the Runpod console meanwhile
+                await self._check_pod_alive()
             status = await self._status()
             phase = status.get("phase", "starting") if status else "starting"
             message = status.get("message", "Starting") if status else "Starting pod"
