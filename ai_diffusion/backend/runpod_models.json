@@ -1,0 +1,129 @@
+{
+ "files": {
+  "models/checkpoints/NoobAI-XL-Vpred-v1.0.safetensors": 7105350110,
+  "models/checkpoints/RealVisXL_V5.0_fp16.safetensors": 6938065488,
+  "models/checkpoints/dreamshaper_8.safetensors": 2132625894,
+  "models/checkpoints/novaAnimeXL_ilV125.safetensors": 7140932012,
+  "models/checkpoints/serenity_v21Safetensors.safetensors": 2132625894,
+  "models/checkpoints/zavychromaxl_v80.safetensors": 6938040682,
+  "models/clip_vision/clip-vision_vit-h.safetensors": 2528373448,
+  "models/controlnet/control_lora_rank128_v11f1e_sd15_tile_fp16.safetensors": 135722816,
+  "models/controlnet/control_v11p_sd15_inpaint_fp16.safetensors": 722601100,
+  "models/diffusion_models/flux-2-klein-4b-fp8.safetensors": 4070624520,
+  "models/diffusion_models/z_image_turbo_fp8_e4m3fn.safetensors": 6154958896,
+  "models/embeddings/EasyNegative.safetensors": 24655,
+  "models/inpaint/MAT_Places512_G_fp16.safetensors": 125280278,
+  "models/inpaint/fooocus_inpaint_head.pth": 52602,
+  "models/inpaint/inpaint_v26.fooocus.patch": 1323362033,
+  "models/ipadapter/ip-adapter_sd15.safetensors": 44642768,
+  "models/ipadapter/ip-adapter_sdxl_vit-h.safetensors": 698391064,
+  "models/loras/FLUX.1-Turbo-Alpha.safetensors": 694082424,
+  "models/loras/Hyper-SD15-8steps-CFG-lora.safetensors": 269127064,
+  "models/loras/Hyper-SDXL-8steps-CFG-lora.safetensors": 787359648,
+  "models/loras/flux-2-klein-4B-outpaint-lora.safetensors": 76038936,
+  "models/text_encoders/Qwen3-4B-Q4_K_M.gguf": 2497281312,
+  "models/text_encoders/clip_l.safetensors": 246144152,
+  "models/text_encoders/t5-v1_1-xxl-encoder-Q5_K_M.gguf": 3386856640,
+  "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth": 66958607,
+  "models/upscale_models/OmniSR_X2_DIV2K.safetensors": 1655992,
+  "models/upscale_models/OmniSR_X3_DIV2K.safetensors": 1673302,
+  "models/upscale_models/OmniSR_X4_DIV2K.safetensors": 1697536,
+  "models/vae/flux2-vae.safetensors": 336211292,
+  "models/vae/flux_vae.safetensors": 335304388
+ },
+ "workloads": {
+  "sd15": {
+   "files": [
+    "models/clip_vision/clip-vision_vit-h.safetensors",
+    "models/controlnet/control_lora_rank128_v11f1e_sd15_tile_fp16.safetensors",
+    "models/controlnet/control_v11p_sd15_inpaint_fp16.safetensors",
+    "models/embeddings/EasyNegative.safetensors",
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/ipadapter/ip-adapter_sd15.safetensors",
+    "models/loras/Hyper-SD15-8steps-CFG-lora.safetensors",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors"
+   ],
+   "checkpoints": [
+    "models/checkpoints/dreamshaper_8.safetensors",
+    "models/checkpoints/serenity_v21Safetensors.safetensors"
+   ]
+  },
+  "sdxl": {
+   "files": [
+    "models/clip_vision/clip-vision_vit-h.safetensors",
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/inpaint/fooocus_inpaint_head.pth",
+    "models/inpaint/inpaint_v26.fooocus.patch",
+    "models/ipadapter/ip-adapter_sdxl_vit-h.safetensors",
+    "models/loras/Hyper-SDXL-8steps-CFG-lora.safetensors",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors"
+   ],
+   "checkpoints": [
+    "models/checkpoints/RealVisXL_V5.0_fp16.safetensors",
+    "models/checkpoints/zavychromaxl_v80.safetensors"
+   ]
+  },
+  "illu": {
+   "files": [
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors"
+   ],
+   "checkpoints": [
+    "models/checkpoints/NoobAI-XL-Vpred-v1.0.safetensors",
+    "models/checkpoints/novaAnimeXL_ilV125.safetensors"
+   ]
+  },
+  "flux": {
+   "files": [
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/loras/FLUX.1-Turbo-Alpha.safetensors",
+    "models/text_encoders/clip_l.safetensors",
+    "models/text_encoders/t5-v1_1-xxl-encoder-Q5_K_M.gguf",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors",
+    "models/vae/flux_vae.safetensors"
+   ],
+   "checkpoints": []
+  },
+  "flux2": {
+   "files": [
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/loras/flux-2-klein-4B-outpaint-lora.safetensors",
+    "models/text_encoders/Qwen3-4B-Q4_K_M.gguf",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors",
+    "models/vae/flux2-vae.safetensors"
+   ],
+   "checkpoints": [
+    "models/diffusion_models/flux-2-klein-4b-fp8.safetensors"
+   ]
+  },
+  "zimage": {
+   "files": [
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/text_encoders/Qwen3-4B-Q4_K_M.gguf",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors",
+    "models/vae/flux_vae.safetensors"
+   ],
+   "checkpoints": [
+    "models/diffusion_models/z_image_turbo_fp8_e4m3fn.safetensors"
+   ]
+  }
+ }
+}

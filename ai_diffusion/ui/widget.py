@@ -23,12 +23,10 @@ from ..model.model import (
 )
 from ..model.properties import Bind, Binding, bind, bind_combo
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QSize, Qt, pyqtSignal
 from ..qt.QtGui import (
     QCloseEvent,
     QColor,
-    QDesktopServices,
-    QEnterEvent,
     QFontMetrics,
     QGuiApplication,
     QIcon,
@@ -939,8 +937,6 @@ class GenerateButton(QPushButton):
         self.model = root.active_model
         self._operation = _("Generate")
         self._kind = kind
-        self._cost = 0
-        self._cost_icon = theme.icon("interstice")
         self._seed_icon = theme.icon("seed")
         self._resolution_icon = theme.icon("resolution-multiplier")
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
@@ -957,13 +953,6 @@ class GenerateButton(QPushButton):
     def minimumSizeHint(self):
         fm = self.fontMetrics()
         return QSize(fm.horizontalAdvance(self._operation) + 40, 12 + int(1.3 * fm.height()))
-
-    def enterEvent(self, event: QEnterEvent | None):
-        if (client := root.connection.client_if_connected) and client.user:
-            self._cost = self.model.estimate_cost(self._kind)
-
-    def leaveEvent(self, a0: QEvent | None):
-        self._cost = 0
 
     def mouseReleaseEvent(self, e: QMouseEvent | None):
         if (
@@ -1002,20 +991,6 @@ class GenerateButton(QPushButton):
         style.drawItemText(painter, content_rect, align, self.palette(), True, self._operation)
 
         cost_width = 0
-        if is_hover and self._cost > 0:
-            pixmap = self._cost_icon.pixmap(fm.height())
-            text_width = fm.horizontalAdvance(str(self._cost))
-            cost_width = text_width + 16 + pixmap_width
-            cost_rect = rect.adjusted(rect.width() - cost_width, 0, 0, 0)
-            painter.setOpacity(0.3)
-            painter.drawLine(
-                cost_rect.left(), cost_rect.top() + 6, cost_rect.left(), cost_rect.bottom() - 6
-            )
-            painter.setOpacity(0.7)
-            cost_rect = cost_rect.adjusted(6, 0, 0, 0)
-            style.drawItemText(painter, cost_rect, align, self.palette(), True, str(self._cost))
-            cost_rect = cost_rect.adjusted(text_width + 4, 0, 0, 0)
-            style.drawItemPixmap(painter, cost_rect, align, pixmap)
 
         seed_width = 0
         if is_hover and self.model.fixed_seed:
@@ -1053,23 +1028,15 @@ class ErrorBox(QFrame):
         self._copy_button.setAutoRaise(True)
         self._copy_button.clicked.connect(self._copy_error)
 
-        self._recharge_button = QToolButton(self)
-        self._recharge_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._recharge_button.setText(_("Charge"))
-        self._recharge_button.setIcon(theme.icon("interstice"))
-        self._recharge_button.clicked.connect(self._recharge)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.addWidget(self._label)
         layout.addWidget(self._copy_button)
-        layout.addWidget(self._recharge_button)
 
         self.reset()
 
     def reset(self, color: str = theme.red):
         self._copy_button.setVisible(False)
-        self._recharge_button.setVisible(False)
         self._label.setStyleSheet(f"color: {color};")
         if color == theme.red:
             self.setStyleSheet("QFrame#errorBox { border: 1px solid #a01020; }")
@@ -1136,15 +1103,11 @@ class ErrorBox(QFrame):
                 tokens=data["credits"],
             )
         self._label.setText(message)
-        self._recharge_button.setVisible(True)
         self.setVisible(True)
 
     def _copy_error(self):
         if clipboard := QGuiApplication.clipboard():
             clipboard.setText(self._original_error)
-
-    def _recharge(self):
-        QDesktopServices.openUrl(QUrl("https://www.interstice.cloud/user"))
 
 
 def create_wide_tool_button(icon_name: str, text: str, parent=None):

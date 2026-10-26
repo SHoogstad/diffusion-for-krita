@@ -3,7 +3,7 @@
 Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
 regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the backend.
 
-⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | ❓ [Common issues](#common-issues)
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | ❓ [Common issues](#common-issues)
 
 ## <a name="features"></a> Features
 
@@ -18,6 +18,7 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 * **Job queue and history**: queue and cancel jobs, browse earlier results and prompts.
 * **Styles**: presets with your own checkpoints, LoRA, samplers and more.
 * **Krita 5 and Krita 6**: one download for both.
+* **No GPU? Use Runpod**: rent a GPU with your own [Runpod](#runpod) account, started and stopped from Krita.
 
 ### MOSS-Image and Fibo 2
 * **MOSS-Image**: text-to-image with a Qwen3.5-9B text encoder. **Regions** become MOSS layout boxes
@@ -38,7 +39,7 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
    It replaces Krita AI Diffusion if that's installed (same `ai_diffusion` folder). Your settings stay.
 4. Restart Krita and create a new document or open an image.
 5. Show the docker with *Settings ▸ Dockers ▸ Diffusion for Krita*.
-6. Click **Configure** in the docker to install a local server or connect to one.
+6. Click **Configure** in the docker to install a local server, connect to one, or start a [Runpod](#runpod) GPU.
 
 **Updates:** the plugin checks this repository's releases on startup and verifies each download against the
 SHA-256 digest that GitHub publishes. *Configure ▸ Plugin ▸ Include Pre-releases* also offers pre-releases.
@@ -53,6 +54,35 @@ Windows, Linux and macOS. To run locally, a graphics card with at least 6 GB VRA
 | Intel GPU | XPU (Windows/Linux) |
 | Apple Silicon | MPS on macOS 14+ |
 | CPU | works, but very slow |
+
+## <a name="runpod"></a> Runpod (rent a GPU)
+
+Without a suitable GPU you can run ComfyUI on a [Runpod](https://www.runpod.io) GPU pod. It runs on your own
+Runpod account; you pay Runpod directly, per second while the pod runs.
+
+1. Create a Runpod account, add credit, and create an API key (*Settings ▸ API Keys*).
+2. In Krita: *Configure ▸ Connection ▸ Runpod*, paste the API key and click **Load GPUs**.
+3. Choose a GPU (price per hour is shown), the workloads (base models) and where models are kept:
+   * **Keep models (network volume)**: models are downloaded once to a network volume. It costs about
+     $0.07 per GB per month, also when no pod runs, but every start after the first takes only a minute or two.
+   * **Download models on every start**: no storage cost, but each start downloads the models again, which
+     takes several minutes of paid GPU time.
+
+   The settings page shows an estimate for both, based on the selected GPU and models.
+4. Click **Start pod**. The plugin creates the pod, shows the download progress and connects.
+
+**Stopping.** The pod is terminated when you click **Stop pod**, when Krita closes, and after the idle time
+you set (default 15 minutes without a job). As a safety net the pod also terminates itself when Krita has
+been disconnected for 10 minutes, for example after a crash. Still check
+[your pods](https://www.runpod.io/console/pods) now and then. A network volume stays (and costs storage)
+until you click **Delete network volume** or delete it on Runpod.
+
+**Security.** Runpod makes the pod reachable on a public URL. The pod only accepts requests with a secret
+token that the plugin generates for each pod.
+
+The pod runs the image built from [`scripts/runpod`](scripts/runpod): ComfyUI with the required custom
+nodes, a small gatekeeper that checks the token and reports start-up progress, and the plugin's model
+download script.
 
 ## <a name="comfyui-setup"></a> ComfyUI setup
 

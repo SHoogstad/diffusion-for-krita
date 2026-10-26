@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Iterable
 from enum import Enum
 
@@ -13,12 +14,11 @@ from ..backend.client import (
     MissingResources,
     SharedWorkflow,
 )
-from ..backend.cloud_client import CloudClient
 from ..backend.comfy_client import ComfyClient
 from ..backend.network import NetworkError
+from ..backend.runpod import PodConfig, PodPhase, RunpodError, RunpodPod, terminate_pod_blocking
 from ..localization import translate as _
-from ..qt.QtCore import QObject, QUrl, pyqtSignal
-from ..qt.QtGui import QDesktopServices
+from ..qt.QtCore import QObject, QTimer, pyqtSignal
 from ..settings import PerformancePreset, ServerMode, Settings, settings
 from .properties import ObservableProperties, Property
 
@@ -31,20 +31,19 @@ class ConnectionState(Enum):
 
     discover_models = 10
 
-    auth_missing = 20
-    auth_requesting = 21
-    auth_pending = 22
-    auth_error = 23
+    pod_starting = 30  # Runpod: creating the pod, downloading models, starting ComfyUI
 
 
 class Connection(QObject, ObservableProperties):
     state = Property(ConnectionState.disconnected)
     error = Property("")
     progress = Property((1, 1))
+    pod_status = Property("")
 
     state_changed = pyqtSignal(ConnectionState)
     error_changed = pyqtSignal(str)
     progress_changed = pyqtSignal(tuple)
+    pod_status_changed = pyqtSignal(str)
     models_changed = pyqtSignal()
     message_received = pyqtSignal(ClientMessage)
     workflow_published = pyqtSignal(str)
@@ -56,42 +55,25 @@ class Connection(QObject, ObservableProperties):
         self._task: asyncio.Task | None = None
         self._workflows: dict[str, dict] = {}
         self._temporary_disconnect = False
+        self._pod: RunpodPod | None = None
+        self._last_activity = time.monotonic()
+        self._idle_timer = QTimer(self)
+        self._idle_timer.setInterval(30_000)
+        self._idle_timer.timeout.connect(self._check_idle)
         self.error_kind = ""
         self.missing_resources: MissingResources | None = None
 
         settings.changed.connect(self._handle_settings_changed)
-        self._update_state()
 
     def __del__(self):
         if self._task is not None:
             self._task.cancel()
 
-    async def _sign_in(self, url: str):
-        client = CloudClient(url)
-        self.state = ConnectionState.auth_requesting
-        try:
-            sign_in = client.sign_in()
-            url = await anext(sign_in)
-            self.state = ConnectionState.auth_pending
-            QDesktopServices.openUrl(QUrl(url))
-
-            settings.access_token = await anext(sign_in)
-            self.state = ConnectionState.disconnected
-            await self._connect(client)
-            settings.save()
-
-        except Exception as e:
-            self.error = util.log_error(e)
-            self.state = ConnectionState.auth_error
-
-    def sign_in(self):
-        eventloop.run(self._sign_in(CloudClient.default_api_url))
-
     async def _connect(self, client: Client):
         if self.state is ConnectionState.connecting:
             return
         if self.state is ConnectionState.connected:
-            await self.disconnect()
+            await self.disconnect(stop_pod=False)
         self.error = ""
         self.error_kind = ""
         self.state = ConnectionState.connecting
@@ -114,9 +96,6 @@ class Connection(QObject, ObservableProperties):
             self.error = e.message
             self.error_kind = "network"
             self.state = ConnectionState.error
-            if e.status == 401:  # Unauthorized
-                settings.access_token = ""
-                self._update_state()
         except MissingResources as e:
             self.error = _(
                 "Connection established, but the server is missing required custom nodes or models."
@@ -131,20 +110,123 @@ class Connection(QObject, ObservableProperties):
 
     def create_client(self, settings: Settings) -> Client | None:
         match settings.server_mode:
-            case ServerMode.cloud:
-                if settings.access_token == "":
-                    self.state = ConnectionState.auth_missing
-                    return None
-                return CloudClient(CloudClient.default_api_url, settings.access_token)
             case ServerMode.external | ServerMode.managed:
-                return ComfyClient(settings.server_url, settings.access_token)
+                return ComfyClient(settings.server_url)
             case _:
                 raise ValueError(f"Invalid server mode: {settings.server_mode}")
 
     def connect(self, client: Client):
         eventloop.run(self._connect(client))
 
-    async def disconnect(self):  # type: ignore (hides QObject.disconnect)
+    # Runpod ###########################################################################################
+
+    @property
+    def pod_running(self):
+        return self._pod is not None
+
+    def start_pod(self):
+        eventloop.run(self._start_pod())
+
+    def stop_pod(self):
+        eventloop.run(self.disconnect())
+
+    async def _start_pod(self, reuse_only=False):
+        if self._pod is not None or self.state in (
+            ConnectionState.pod_starting,
+            ConnectionState.connecting,
+        ):
+            return
+        if not settings.runpod_api_key:
+            self.error = _("Enter your Runpod API key first.")
+            self.state = ConnectionState.error
+            return
+        if reuse_only and not settings.runpod_pod_id:
+            return
+        config = PodConfig(
+            api_key=settings.runpod_api_key,
+            gpu=settings.runpod_gpu,
+            storage=settings.runpod_storage,
+            workloads=settings.runpod_workloads,
+            checkpoints=settings.runpod_checkpoints,
+            idle_minutes=settings.runpod_idle_minutes,
+            volume_id=settings.runpod_volume_id,
+            pod_id=settings.runpod_pod_id,
+            pod_token=settings.runpod_pod_token,
+        )
+        pod = self._pod = RunpodPod(config)
+        self.error = ""
+        self.error_kind = ""
+        self.state = ConnectionState.pod_starting
+        try:
+            async for status in pod.start():
+                if pod.info and pod.info.id != settings.runpod_pod_id:
+                    settings.runpod_pod_id = pod.info.id
+                    settings.runpod_pod_token = pod.info.token
+                    settings.runpod_volume_id = pod.volume_id
+                    settings.save()
+                if reuse_only and status.phase is PodPhase.creating:
+                    self.state = ConnectionState.disconnected
+                    return  # the saved pod is gone, don't start a new one automatically
+                self.pod_status = _pod_status_text(status.phase, status.progress)
+                done, total = status.progress
+                self.progress = (done, total) if total else (0, 0)
+            assert pod.info is not None
+            self.pod_status = ""
+            self._last_activity = time.monotonic()
+            self._idle_timer.start()  # also on error, the pod is stopped when it isn't used
+            await self._connect(ComfyClient(pod.info.url, pod.info.token))
+        except Exception as e:
+            self.pod_status = ""
+            self.error = str(e) if isinstance(e, RunpodError) else util.log_error(e)
+            self.error_kind = "runpod"
+            self.state = ConnectionState.error
+            await self._stop_pod()
+        finally:
+            if self._pod is pod and pod.info is None:
+                self._pod = None
+
+    async def _stop_pod(self):
+        self._idle_timer.stop()
+        if pod := self._pod:
+            self._pod = None
+            try:
+                await pod.stop()
+            except Exception as e:
+                message = util.log_error(e)
+                self.error = (
+                    _("Could not terminate the Runpod pod, check runpod.io") + f": {message}"
+                )
+            settings.runpod_pod_id = ""
+            settings.runpod_pod_token = ""
+            settings.save()
+        self.pod_status = ""
+
+    def shutdown(self):
+        """Krita is closing: terminate the pod without waiting for the event loop."""
+        if self._pod and self._pod.info:
+            if terminate_pod_blocking(settings.runpod_api_key, self._pod.info.id):
+                settings.runpod_pod_id = ""
+                settings.runpod_pod_token = ""
+                settings.save()
+
+    def _check_idle(self):
+        minutes = settings.runpod_idle_minutes
+        if self._pod is None or minutes <= 0:
+            return
+        idle = (time.monotonic() - self._last_activity) / 60
+        if idle >= minutes:
+            util.client_logger.info(f"Runpod pod idle for {idle:.0f} minutes, terminating")
+            eventloop.run(self._stop_idle_pod(minutes))
+
+    async def _stop_idle_pod(self, minutes: int):
+        await self.disconnect()
+        self.error = _("The Runpod pod was stopped after {minutes} minutes without use.").format(
+            minutes=minutes
+        )
+
+    ####################################################################################################
+
+    async def disconnect(self, stop_pod=True):  # type: ignore (hides QObject.disconnect)
         if self._task is not None:
             self._task.cancel()
             await self._task
@@ -154,7 +236,8 @@ class Connection(QObject, ObservableProperties):
         self.error = ""
         self.missing_resources = None
         self.state = ConnectionState.disconnected
-        self._update_state()
+        if stop_pod:
+            await self._stop_pod()
 
     def interrupt(self):
         eventloop.run(self.client.interrupt())
@@ -180,11 +263,6 @@ class Connection(QObject, ObservableProperties):
         return self._client
 
     @property
-    def user(self):
-        if client := self.client_if_connected:
-            return client.user
-
-    @property
     def workflows(self):
         return self._workflows
 
@@ -207,6 +285,7 @@ class Connection(QObject, ObservableProperties):
             pass  # shutdown
 
     def _handle_message(self, msg: ClientMessage):
+        self._last_activity = time.monotonic()
         match msg:
             case (ClientEvent.error, "", *_):
                 self.error = _("Error communicating with server: ") + str(msg.error)
@@ -224,30 +303,25 @@ class Connection(QObject, ObservableProperties):
             case _:
                 self.message_received.emit(msg)
 
-    def _update_state(self):
-        if (
-            self.state in [ConnectionState.disconnected, ConnectionState.error]
-            and settings.server_mode is ServerMode.cloud
-            and settings.access_token == ""
-        ):
-            self.state = ConnectionState.auth_missing
-        elif (
-            self.state in [ConnectionState.auth_missing, ConnectionState.auth_error]
-            and settings.server_mode is not ServerMode.cloud
-        ):
-            self.state = ConnectionState.disconnected
-
     def _handle_settings_changed(self, key: str, value: object):
-        if key == "server_mode":
-            client_is_cloud = isinstance(self._client, CloudClient)
-            mode_is_cloud = settings.server_mode is ServerMode.cloud
-            if client_is_cloud != mode_is_cloud:
-                self.error = ""
-                eventloop.run(self.disconnect())
-            self._update_state()
+        if key == "server_mode" and self._pod is not None and value is not ServerMode.runpod:
+            self.error = ""
+            eventloop.run(self.disconnect())
 
-        elif key == "access_token":
-            self._update_state()
+
+def _pod_status_text(phase: PodPhase, progress: tuple[int, int]):
+    match phase:
+        case PodPhase.creating:
+            return _("Creating Runpod pod...")
+        case PodPhase.starting:
+            return _("Starting pod...")
+        case PodPhase.downloading:
+            done, total = progress
+            if total:
+                return _("Downloading models") + f" {done / 1024**3:.1f} / {total / 1024**3:.1f} GB"
+            return _("Checking models...")
+        case PodPhase.ready:
+            return _("Connecting...")
 
 
 def apply_performance_preset(settings: Settings, device: DeviceInfo):

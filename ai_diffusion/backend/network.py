@@ -125,7 +125,7 @@ class RequestManager:
 
         request = self._prepare_request(url, timeout, bearer)
 
-        assert method in ["GET", "POST", "PUT"]
+        assert method in ["GET", "POST", "PUT", "DELETE"]
         if method == "POST":
             data = data or {}
             data_bytes = QByteArray(json.dumps(data).encode("utf-8"))
@@ -141,6 +141,8 @@ class RequestManager:
             )
             request.setHeader(QNetworkRequest.KnownHeaders.ContentLengthHeader, data.size())
             reply = self._net.put(request, data)
+        elif method == "DELETE":
+            reply = self._net.deleteResource(request)
         else:
             reply = self._net.get(request)
 
@@ -157,6 +159,9 @@ class RequestManager:
 
     def put(self, url: str, data: QByteArray | bytes):
         return self.http("PUT", url, data)
+
+    def delete(self, url: str, bearer: str | None = None):
+        return self.http("DELETE", url, bearer=bearer)
 
     async def upload(self, url: str, data: QByteArray | bytes, sha256: str | None = None):
         self._cleanup()
@@ -235,7 +240,7 @@ class RequestManager:
                     content_type = reply.header(QNetworkRequest.KnownHeaders.ContentTypeHeader)
                     data = reply.readAll().data()
                     if content_type and ("application/json" in content_type):
-                        future.set_result(json.loads(data))
+                        future.set_result(json.loads(data) if data else None)
                     else:
                         future.set_result(data)
             else:

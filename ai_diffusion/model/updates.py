@@ -98,7 +98,7 @@ class AutoUpdate(QObject, ObservableProperties):
         )
         if not (self.include_prereleases or on_prerelease):
             releases = [r for r in releases if not r.get("prerelease")]
-        result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]), default={})
+        result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]) or (), default={})
         tag = result.get("tag_name", "")
         latest = parse_release_tag(tag)
         current = parse_release_tag(self.current_version)

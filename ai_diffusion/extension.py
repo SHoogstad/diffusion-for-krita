@@ -55,6 +55,7 @@ class AIToolsExtension(Extension):
 
     def shutdown(self):
         root.server.terminate()
+        root.connection.shutdown()
         eventloop.stop()
 
     def _create_action(self, window: Window, name: str, func: Callable[[], None]):

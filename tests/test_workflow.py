@@ -23,7 +23,6 @@ from ai_diffusion.backend.api import (
     WorkflowKind,
 )
 from ai_diffusion.backend.client import CheckpointInfo, Client, ClientEvent, ClientModels
-from ai_diffusion.backend.cloud_client import CloudClient
 from ai_diffusion.backend.comfy_client import ComfyClient
 from ai_diffusion.backend.comfy_workflow import ComfyWorkflow
 from ai_diffusion.backend.resources import ControlMode, ResourceKind, resource_id
@@ -37,11 +36,8 @@ from ai_diffusion.text import extract_layers
 from ai_diffusion.util import ensure
 
 from . import config
-from .config import default_checkpoint, image_dir, reference_dir, result_dir, root_dir, test_dir
-from .conftest import CloudService
+from .config import default_checkpoint, image_dir, reference_dir, result_dir, test_dir
 
-service_available = (root_dir / "service" / "web" / ".env.local").exists()
-client_params = ["local", "cloud"] if service_available else ["local"]
 files = FileLibrary(FileCollection(), FileCollection())
 
 
@@ -53,26 +49,12 @@ async def connect_local():
     return client
 
 
-async def connect_cloud(service: CloudService):
-    user = await service.create_user("workflow-tester")
-    client = CloudClient(service.url, user["token"])
-    await client.connect()
-    async for _ in client.discover_models(refresh=False):
-        pass
-    return client
-
-
-@pytest.fixture(params=client_params)
-def client(pytestconfig, request, qtapp, cloud_service: CloudService):
+@pytest.fixture()
+def client(pytestconfig, qtapp):
     if pytestconfig.getoption("--ci"):
         pytest.skip("Diffusion is disabled on CI")
 
-    if request.param == "local":
-        client = qtapp.run(connect_local())
-    else:
-        if not cloud_service.enabled:
-            pytest.skip("Cloud service not running")
-        client = qtapp.run(connect_cloud(cloud_service))
+    client = qtapp.run(connect_local())
     files.loras.update([File.remote(m) for m in client.models.loras], FileSource.remote)
 
     yield client
@@ -478,8 +460,6 @@ def test_inpaint(qtapp, client):
 
 @pytest.mark.parametrize("sdver", [Arch.sd15, Arch.sdxl, Arch.zimage, Arch.flux2_4b, Arch.anima])
 def test_inpaint_upscale(qtapp, client, sdver):
-    if isinstance(client, CloudClient) and sdver is Arch.anima:
-        pytest.skip("Skipping test for CloudClient with anima model")
     image = Image.load(image_dir / "beach_1536x1024.webp")
     mask = Mask.rectangle(Bounds(150, 150, 768, 512), Bounds(150, 50, 1068, 812))
     prompt = ConditioningInput("ship")
@@ -557,8 +537,6 @@ def test_inpaint_remove_object(qtapp, client):
 
 @pytest.mark.parametrize("setup", ["sd15", "sdxl", "flux", "flux_k", "flux2"])
 def test_refine(qtapp, client, setup):
-    if isinstance(client, CloudClient) and setup in ["flux", "flux_k"]:
-        pytest.skip("Skipping test for CloudClient with flux models")
 
     sdver, extent, strength = {
         "sd15": (Arch.sd15, Extent(768, 508), 0.5),
@@ -586,8 +564,6 @@ def test_refine(qtapp, client, setup):
 
 @pytest.mark.parametrize("setup", ["sd15_0.4", "sd15_0.6", "sdxl_0.7", "flux_0.6"])
 def test_refine_region(qtapp, client, setup):
-    if isinstance(client, CloudClient) and setup == "flux_0.6":
-        pytest.skip("Skipping test for CloudClient with flux models")
 
     sdver, strength = {
         "sd15_0.4": (Arch.sd15, 0.4),
@@ -807,8 +783,6 @@ _control_lines_setup = {
 @pytest.mark.parametrize("setup", _control_lines_setup.keys())
 def test_control_lines(qtapp, client, setup):
     arch, mode, strength = _control_lines_setup[setup]
-    if isinstance(client, CloudClient) and arch is Arch.anima:
-        pytest.skip("Skipping test for CloudClient with anima model")
 
     lines_image = Image.load(image_dir / "truck_landscape_lines.webp")
     control = [ControlInput(mode, lines_image, strength)]
@@ -835,9 +809,6 @@ def test_control_canny_downscale(qtapp, client):
 def test_create_control_image(qtapp, client: Client, mode):
     if mode is ControlMode.hands:
         pytest.skip("No longer supported")
-    skip_cloud_modes = [ControlMode.normal, ControlMode.segmentation, ControlMode.hands]
-    if isinstance(client, CloudClient) and mode in skip_cloud_modes:
-        pytest.skip("Control image preproccessor not available")
 
     image_name = f"test_create_control_image_{mode.name}"
     image = Image.load(image_dir / "adobe_stock.jpg")
@@ -995,8 +966,6 @@ def test_refine_live(qtapp, client, sdver):
 
 @pytest.mark.parametrize("arch", [Arch.flux_k, Arch.flux2_4b])
 def test_edit(qtapp, client, arch):
-    if isinstance(client, CloudClient) and arch is Arch.flux_k:
-        pytest.skip("Flux Kontext not supported on Cloud")
     image = Image.load(image_dir / "flowers.webp")
     style = default_style(client, arch)
     cond = ConditioningInput("turn the image into a minimalistic vector illustration")
@@ -1007,8 +976,6 @@ def test_edit(qtapp, client, arch):
 
 @pytest.mark.parametrize("arch", [Arch.flux_k, Arch.flux2_4b])
 def test_edit_selection(qtapp, client, arch):
-    if isinstance(client, CloudClient) and arch is Arch.flux_k:
-        pytest.skip("Flux Kontext not supported on Cloud")
     image = Image.load(image_dir / "flowers.webp")
     mask = Mask.load(image_dir / "flowers_mask.png")
     cond = ConditioningInput("make all flowers have yellow blossoms")
@@ -1244,8 +1211,6 @@ def run_inpaint_benchmark(
 def test_inpaint_benchmark(pytestconfig, qtapp, client):
     if not pytestconfig.getoption("--benchmark"):
         pytest.skip("Only runs with --benchmark")
-    if isinstance(client, CloudClient):
-        pytest.skip("Inpaint benchmark runs local")
     print()
 
     output_dir = config.benchmark_dir / datetime.now(UTC).strftime("%Y%m%d-%H%M")

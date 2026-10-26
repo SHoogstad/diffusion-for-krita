@@ -5,18 +5,16 @@ from typing import cast
 from krita import Krita
 
 from .. import __release__, eventloop, util
-from ..backend import resources
-from ..backend.client import Client, MissingResources, User
-from ..backend.cloud_client import CloudClient
+from ..backend import resources, runpod
+from ..backend.client import Client, MissingResources
 from ..backend.resources import Arch, ResourceId
 from ..backend.server import Server, ServerState
 from ..localization import Localization
 from ..localization import translate as _
 from ..model.connection import ConnectionState, apply_performance_preset
-from ..model.properties import Binding
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
-from ..qt.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtCore import QSize, Qt, QUrl, pyqtSignal
 from ..qt.QtGui import (
     QColor,
     QCursor,
@@ -27,10 +25,10 @@ from ..qt.QtGui import (
     QPainter,
 )
 from ..qt.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -38,6 +36,7 @@ from ..qt.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QStackedWidget,
     QStyle,
@@ -46,7 +45,14 @@ from ..qt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
+from ..settings import (
+    ImageFileFormat,
+    PerformancePreset,
+    RunpodStorage,
+    ServerMode,
+    Settings,
+    settings,
+)
 from ..style import Style
 from .server import ServerWidget
 from .settings_widgets import (
@@ -98,13 +104,13 @@ class InitialSetupWidget(QWidget):
             layout.addSpacing(16)
 
         add_option(
-            _("Option {number}", number=1) + ": " + _("Online Service"),
+            _("Option {number}", number=1) + ": " + _("Runpod"),
             _(
-                "Generate images via {link}. Create an account to get started. No local installation or powerful hardware needed.",
-                link="<a href='https://www.interstice.cloud'>interstice.cloud</a>",
+                "Rent a GPU on {link} with your own account, billed per second while it runs. No local installation or powerful hardware needed.",
+                link="<a href='https://www.runpod.io'>runpod.io</a>",
             ),
-            _("Login or Sign up"),
-            ServerMode.cloud,
+            _("Set up Runpod"),
+            ServerMode.runpod,
         )
         add_option(
             _("Option {number}", number=2) + ": " + _("Local Managed Server"),
@@ -134,207 +140,286 @@ class InitialSetupWidget(QWidget):
         return handler
 
 
-class UserWidget(QFrame):
-    _user: User | None = None
-    _connections: list[QMetaObject.Connection | Binding]
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._connections = []
-
-        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        self.setLineWidth(2)
-        self.setVisible(False)
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        self._user_name = QLabel("", self)
-        self._user_name.setStyleSheet("font-weight:bold")
-        user_name_layout = QHBoxLayout()
-        user_name_layout.addWidget(QLabel(_("Account:"), self), 0)
-        user_name_layout.addWidget(self._user_name, 1)
-        layout.addLayout(user_name_layout)
-
-        self._images_generated = QLabel("", self)
-        image_count_layout = QHBoxLayout()
-        image_count_layout.addWidget(QLabel(_("Total generated:"), self), 0)
-        image_count_layout.addWidget(self._images_generated, 1)
-        layout.addLayout(image_count_layout)
-
-        self._tokens_remaining = QLabel("", self)
-        self._tokens_remaining.setStyleSheet("font-weight:bold")
-        image_remaining_layout = QHBoxLayout()
-        image_remaining_layout.addWidget(QLabel(_("Image tokens remaining:"), self), 0)
-        image_remaining_layout.addWidget(self._tokens_remaining, 1)
-        layout.addLayout(image_remaining_layout)
-        layout.addSpacing(8)
-
-        buy_layout = QHBoxLayout()
-        layout.addLayout(buy_layout)
-
-        self._buy_tokens5000_button = QPushButton(_("Buy Tokens") + " (5000)", self)
-        self._buy_tokens5000_button.clicked.connect(lambda: self._buy_tokens("5000"))
-        buy_layout.addWidget(self._buy_tokens5000_button, 1)
-
-        self._buy_tokens15000_button = QPushButton(_("Buy Tokens") + " (15000)", self)
-        self._buy_tokens15000_button.clicked.connect(lambda: self._buy_tokens("15000"))
-        buy_layout.addWidget(self._buy_tokens15000_button, 1)
-
-        self._account_button = QPushButton(_("View Account"), self)
-        self._account_button.setMinimumWidth(200)
-        self._account_button.clicked.connect(self._view_account)
-        layout.addWidget(self._account_button)
-
-        self._logout_button = QPushButton(_("Sign out"), self)
-        self._logout_button.setMinimumWidth(200)
-        self._logout_button.clicked.connect(self._logout)
-        layout.addWidget(self._logout_button)
-
-    @property
-    def user(self):
-        return self._user
-
-    @user.setter
-    def user(self, user: User | None):
-        if self._user is not user:
-            Binding.disconnect_all(self._connections)
-            self.setVisible(user is not None)
-
-            self._user = user
-            if user is not None:
-                self._user_name.setText(user.name)
-                self._connections = [
-                    user.images_generated_changed.connect(self._update_counts),
-                    user.credits_changed.connect(self._update_counts),
-                ]
-                self._update_counts()
-
-    def _update_counts(self):
-        user = util.ensure(self.user)
-        self._images_generated.setText(str(user.images_generated))
-        self._tokens_remaining.setText(str(user.credits))
-
-    def _view_account(self):
-        QDesktopServices.openUrl(QUrl(CloudClient.default_web_url + "/user"))
-
-    def _buy_tokens(self, amount: str):
-        QDesktopServices.openUrl(QUrl(f"{CloudClient.default_web_url}/checkout/tokens{amount}"))
-
-    def _logout(self):
-        eventloop.run(self._disconnect_and_logout())
-
-    async def _disconnect_and_logout(self):
-        await root.connection.disconnect()
-        settings.access_token = ""
-        settings.save()
-
-
-class CloudWidget(QWidget):
-    value_changed = pyqtSignal()
+class RunpodWidget(QWidget):
+    """Configure, start and stop a Runpod GPU pod running ComfyUI."""
 
     def __init__(self, parent):
         super().__init__(parent)
+        self._gpus: list[runpod.GpuType] = []
+        self._loading = False
+
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 12, 4, 4)
         self.setLayout(layout)
 
-        service_url = CloudClient.default_web_url
-        service_url_text = (
-            service_url.removeprefix("https://").removeprefix("www.").removesuffix("/")
+        header = QLabel(
+            "<b>Runpod</b> - "
+            + _(
+                "GPU pods on {link}, billed to your own account per second while they run.",
+                link="<a href='https://www.runpod.io'>runpod.io</a>",
+            ),
+            self,
         )
-        header = QLabel(f"<b>{service_url_text}</b>", self)
-        service_label = QLabel(f"<a href='{service_url}'>Visit Website</a>", self)
-        service_label.setOpenExternalLinks(True)
+        header.setWordWrap(True)
+        header.setOpenExternalLinks(True)
         layout.addWidget(header)
-        layout.addWidget(service_label)
+        layout.addSpacing(8)
 
-        self._connection_status = QLabel(self)
-        self._connection_status.setWordWrap(True)
-        self._connection_status.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(self._connection_status)
+        add_header(layout, Settings._runpod_api_key)
+        key_layout = QHBoxLayout()
+        self._api_key = QLineEdit(self)
+        self._api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._api_key.setPlaceholderText("rpa_...")
+        self._api_key.editingFinished.connect(self._change_api_key)
+        key_layout.addWidget(self._api_key)
+        self._load_button = QPushButton(_("Load GPUs"), self)
+        self._load_button.clicked.connect(self._load_gpus)
+        key_layout.addWidget(self._load_button)
+        layout.addLayout(key_layout)
 
-        self.connect_button = QPushButton(_("Login"), self)
-        self.connect_button.setMinimumWidth(200)
-        self.connect_button.setMinimumHeight(int(1.3 * self.connect_button.sizeHint().height()))
-        self.connect_button.clicked.connect(self._connect)
+        add_header(layout, Settings._runpod_gpu)
+        self._gpu = QComboBox(self)
+        self._gpu.currentIndexChanged.connect(self._change_gpu)
+        layout.addWidget(self._gpu)
 
-        self._sign_out_button = QPushButton(_("Sign out"), self)
-        self._sign_out_button.setVisible(False)
-        self._sign_out_button.setMinimumWidth(200)
-        self._sign_out_button.clicked.connect(self._sign_out)
+        add_header(layout, Settings._runpod_workloads)
+        workload_layout = QHBoxLayout()
+        self._workloads: dict[str, QCheckBox] = {}
+        for id, name in runpod.workload_names.items():
+            box = QCheckBox(name, self)
+            box.toggled.connect(self._change_workloads)
+            self._workloads[id] = box
+            workload_layout.addWidget(box)
+        workload_layout.addStretch()
+        layout.addLayout(workload_layout)
+        self._checkpoints = QCheckBox(Settings._runpod_checkpoints.name, self)
+        self._checkpoints.setToolTip(Settings._runpod_checkpoints.desc)
+        self._checkpoints.toggled.connect(self._change_workloads)
+        layout.addWidget(self._checkpoints)
 
-        self._user_widget = UserWidget(self)
+        add_header(layout, Settings._runpod_storage)
+        self._storage_group = QButtonGroup(self)
+        self._storage: dict[RunpodStorage, QRadioButton] = {}
+        self._estimates: dict[RunpodStorage, QLabel] = {}
+        for storage in RunpodStorage:
+            radio = QRadioButton(storage.value, self)
+            radio.toggled.connect(self._change_storage)
+            self._storage_group.addButton(radio)
+            estimate = QLabel(self)
+            estimate.setWordWrap(True)
+            estimate.setTextFormat(Qt.TextFormat.RichText)
+            estimate.setContentsMargins(24, 0, 0, 6)
+            estimate.setStyleSheet(f"color: {grey}")
+            self._storage[storage] = radio
+            self._estimates[storage] = estimate
+            layout.addWidget(radio)
+            layout.addWidget(estimate)
+        self._delete_volume = QPushButton(_("Delete network volume"), self)
+        self._delete_volume.clicked.connect(self._delete_volume_clicked)
+        layout.addWidget(self._delete_volume, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        buttons_layout = QVBoxLayout()
-        buttons_layout.addWidget(self.connect_button)
-        buttons_layout.addWidget(self._sign_out_button)
+        idle_layout = QHBoxLayout()
+        idle_label = QLabel(Settings._runpod_idle_minutes.name, self)
+        idle_label.setToolTip(Settings._runpod_idle_minutes.desc)
+        self._idle = QSpinBox(self)
+        self._idle.setRange(0, 240)
+        self._idle.setSuffix(" " + _("min"))
+        self._idle.setSpecialValueText(_("Never"))
+        self._idle.valueChanged.connect(self._change_idle)
+        idle_layout.addWidget(idle_label)
+        idle_layout.addWidget(self._idle)
+        idle_layout.addStretch()
+        layout.addLayout(idle_layout)
+        layout.addSpacing(8)
 
-        connect_layout = QHBoxLayout()
-        connect_layout.addLayout(buttons_layout)
-        connect_layout.addWidget(self._user_widget)
-        connect_layout.addStretch()
-        layout.addLayout(connect_layout)
+        self._status = QLabel(self)
+        self._status.setWordWrap(True)
+        self._status.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self._status)
 
+        self._start_button = QPushButton(_("Start pod"), self)
+        self._start_button.setMinimumWidth(200)
+        self._start_button.setMinimumHeight(int(1.3 * self._start_button.sizeHint().height()))
+        self._start_button.clicked.connect(self._start_or_stop)
+        layout.addWidget(self._start_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
 
-    def update_connection_state(self, state: ConnectionState):
-        is_connected = state == ConnectionState.connected
-        self.connect_button.setVisible(not is_connected)
-        self._sign_out_button.setVisible(False)
-        self._user_widget.user = root.connection.user
+        self.read()
+        root.connection.pod_status_changed.connect(self.update_state)
 
-        if state in [ConnectionState.auth_missing, ConnectionState.auth_error]:
-            self.connect_button.setText(_("Sign in"))
-            self.connect_button.setEnabled(True)
-            self._connection_status.setText(_("Disconnected"))
-            self._connection_status.setStyleSheet(f"color: {grey}; font-style:italic")
-        elif state is ConnectionState.auth_pending:
-            self.connect_button.setText(_("Sign in"))
-            self.connect_button.setEnabled(False)
-            self._connection_status.setText(_("Waiting for sign-in to complete..."))
-            self._connection_status.setStyleSheet(f"color: {yellow}; font-weight:bold")
-            self._connection_status.setVisible(True)
-        elif state is ConnectionState.connected:
-            self._connection_status.setText(_("Connected"))
-            self._connection_status.setStyleSheet(f"color: {green}; font-weight:bold")
-            self._user_widget.user = root.connection.user
-        else:
-            can_connect = state in [ConnectionState.disconnected, ConnectionState.error]
-            self.connect_button.setEnabled(can_connect)
-            self.connect_button.setText(_("Connect") if can_connect else _("Connected"))
-            self._connection_status.setText(_("Disconnected"))
-            self._connection_status.setStyleSheet(f"color: {grey}; font-style:italic")
+    def read(self):
+        self._api_key.setText(settings.runpod_api_key)
+        for id, box in self._workloads.items():
+            box.blockSignals(True)
+            box.setChecked(id in settings.runpod_workloads)
+            box.blockSignals(False)
+        self._checkpoints.blockSignals(True)
+        self._checkpoints.setChecked(settings.runpod_checkpoints)
+        self._checkpoints.blockSignals(False)
+        self._storage[settings.runpod_storage].setChecked(True)
+        self._idle.setValue(settings.runpod_idle_minutes)
+        self._fill_gpus()
+        if settings.runpod_api_key and not self._gpus:
+            self._load_gpus()
+        self.update_state()
 
-        if state in [ConnectionState.error, ConnectionState.auth_error]:
-            error = root.connection.error or "Unknown error"
-            self._connection_status.setText(f"<b>Error</b>: {error.removeprefix('Error: ')}")
-            self._connection_status.setStyleSheet(f"color: {red}; font-weight:bold")
-            self._connection_status.setVisible(True)
-            if settings.access_token:
-                self._sign_out_button.setVisible(True)
+    def _fill_gpus(self):
+        self._gpu.blockSignals(True)
+        self._gpu.clear()
+        gpus = self._gpus or []
+        if not any(g.id == settings.runpod_gpu for g in gpus):
+            self._gpu.addItem(settings.runpod_gpu, settings.runpod_gpu)
+        for gpu in gpus:
+            label = gpu.label
+            if gpu.availability == "NONE":
+                label += " - " + _("not available")
+            self._gpu.addItem(label, gpu.id)
+        index = self._gpu.findData(settings.runpod_gpu)
+        self._gpu.setCurrentIndex(max(index, 0))
+        self._gpu.blockSignals(False)
+        self._update_estimates()
 
-    def _connect(self):
+    def _load_gpus(self):
+        if self._loading or not settings.runpod_api_key:
+            return
+
+        async def load():
+            self._loading = True
+            self._load_button.setEnabled(False)
+            try:
+                self._gpus = await runpod.RunpodApi(settings.runpod_api_key).gpus()
+                self._fill_gpus()
+            except Exception as e:
+                self._status.setText(f"<b>{_('Error')}</b>: {e}")
+                self._status.setStyleSheet(f"color: {red}")
+            finally:
+                self._loading = False
+                self._load_button.setEnabled(True)
+
+        eventloop.run(load())
+
+    def _selected_gpu(self):
+        return next((g for g in self._gpus if g.id == settings.runpod_gpu), None)
+
+    def _update_estimates(self):
+        gpu = self._selected_gpu()
+        price = gpu.price if gpu else 0.0
+        model_gb = runpod.model_size_gb(settings.runpod_workloads, settings.runpod_checkpoints)
+        for storage, label in self._estimates.items():
+            estimate = runpod.estimate(storage, model_gb, price)
+            label.setText(estimate.describe(storage, model_gb))
+
+    def _change_api_key(self):
+        key = self._api_key.text().strip()
+        if key != settings.runpod_api_key:
+            settings.runpod_api_key = key
+            settings.save()
+            self._gpus = []
+            self._load_gpus()
+
+    def _change_gpu(self):
+        settings.runpod_gpu = self._gpu.currentData() or settings.runpod_gpu
+        self._update_estimates()
+
+    def _change_workloads(self):
+        if self._workloads["illu"].isChecked() and not self._workloads["sdxl"].isChecked():
+            self._workloads["sdxl"].setChecked(True)  # Illustrious builds on the SDXL models
+            return
+        workloads = [id for id, box in self._workloads.items() if box.isChecked()]
+        settings.runpod_workloads = workloads or ["sdxl"]
+        settings.runpod_checkpoints = self._checkpoints.isChecked()
+        self._update_estimates()
+
+    def _change_storage(self):
+        for storage, radio in self._storage.items():
+            if radio.isChecked():
+                settings.runpod_storage = storage
+        self.update_state()
+
+    def _change_idle(self):
+        settings.runpod_idle_minutes = self._idle.value()
+
+    def _start_or_stop(self):
         connection = root.connection
-        if connection.state in [ConnectionState.auth_missing, ConnectionState.auth_error]:
-            connection.sign_in()
+        if connection.pod_running:
+            connection.stop_pod()
         else:
-            if client := connection.create_client(settings):
-                connection.connect(client)
+            settings.save()
+            connection.start_pod()
 
-    def _sign_out(self):
-        settings.access_token = ""
-        settings.save()
+    def _delete_volume_clicked(self):
+        answer = QMessageBox.question(
+            self,
+            _("Delete network volume"),
+            _(
+                "Delete the Runpod network volume with all downloaded models? The next start downloads them again."
+            ),
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        async def delete():
+            try:
+                await runpod.RunpodApi(settings.runpod_api_key).delete_volume(
+                    settings.runpod_volume_id
+                )
+                settings.runpod_volume_id = ""
+                settings.save()
+                self._status.setText(_("Network volume deleted."))
+                self._status.setStyleSheet(f"color: {grey}")
+            except Exception as e:
+                self._status.setText(f"<b>{_('Error')}</b>: {e}")
+                self._status.setStyleSheet(f"color: {red}")
+            self.update_state()
+
+        eventloop.run(delete())
+
+    def update_state(self):
+        connection = root.connection
+        state = connection.state
+        running = connection.pod_running
+        busy = state in (ConnectionState.pod_starting, ConnectionState.connecting)
+        editable = not running
+        for widget in (self._gpu, self._checkpoints, *self._workloads.values()):
+            widget.setEnabled(editable)
+        for radio in self._storage.values():
+            radio.setEnabled(editable)
+        self._delete_volume.setVisible(bool(settings.runpod_volume_id))
+        self._delete_volume.setEnabled(not running)
+        self._start_button.setText(_("Stop pod") if running else _("Start pod"))
+        self._start_button.setEnabled(bool(settings.runpod_api_key) and not busy or running)
+
+        if state is ConnectionState.pod_starting:
+            self._status.setText(connection.pod_status)
+            self._status.setStyleSheet(f"color: {yellow}; font-weight:bold")
+        elif state is ConnectionState.connected and running:
+            gpu = self._selected_gpu()
+            cost = f" - ${gpu.price:.2f}/h" if gpu else ""
+            self._status.setText(_("Pod running, connected") + cost)
+            self._status.setStyleSheet(f"color: {green}; font-weight:bold")
+        elif state in (ConnectionState.connecting, ConnectionState.discover_models):
+            self._status.setText(_("Connecting"))
+            self._status.setStyleSheet(f"color: {yellow}; font-weight:bold")
+        elif state is ConnectionState.error and connection.error:
+            msg = connection.error.removeprefix("Error: ")
+            self._status.setText(f"<b>{_('Error')}</b>: {msg}")
+            self._status.setStyleSheet(f"color: {red}")
+        elif connection.error:  # e.g. stopped after idle time
+            self._status.setText(connection.error)
+            self._status.setStyleSheet(f"color: {grey}")
+        else:
+            self._status.setText(_("No pod running"))
+            self._status.setStyleSheet(f"color: {grey}; font-style:italic")
 
 
 _server_mode_text = {
     ServerMode.undefined: "Undefined",
-    ServerMode.cloud: _("Online Service"),
+    ServerMode.runpod: _("Runpod"),
     ServerMode.managed: _("Local Managed Server"),
     ServerMode.external: _("Custom Server"),
 }
 _server_mode_status = {
-    "signed_out": (_("Signed out"), grey),
+    "not_started": (_("Not started"), grey),
     "not_installed": (_("Not installed"), grey),
     "not_running": (_("Not running"), grey),
     "not_connected": (_("Not connected"), grey),
@@ -416,14 +501,14 @@ class ServerModeSelect(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        self._cloud_button = ServerModeButton(ServerMode.cloud, "signed_out", self)
+        self._runpod_button = ServerModeButton(ServerMode.runpod, "not_started", self)
         self._managed_button = ServerModeButton(ServerMode.managed, "not_installed", self)
         self._external_button = ServerModeButton(ServerMode.external, "not_connected", self)
 
-        for button in (self._cloud_button, self._managed_button, self._external_button):
+        for button in (self._runpod_button, self._managed_button, self._external_button):
             button.toggled.connect(self._change_mode)
 
-        layout.addWidget(self._cloud_button)
+        layout.addWidget(self._runpod_button)
         layout.addWidget(self._managed_button)
         layout.addWidget(self._external_button)
         layout.addStretch()
@@ -434,8 +519,8 @@ class ServerModeSelect(QWidget):
 
     @property
     def mode(self):
-        if self._cloud_button.isChecked():
-            return ServerMode.cloud
+        if self._runpod_button.isChecked():
+            return ServerMode.runpod
         elif self._managed_button.isChecked():
             return ServerMode.managed
         elif self._external_button.isChecked():
@@ -444,12 +529,12 @@ class ServerModeSelect(QWidget):
 
     @mode.setter
     def mode(self, mode: ServerMode):
-        self._cloud_button.setChecked(mode is ServerMode.cloud)
+        self._runpod_button.setChecked(mode is ServerMode.runpod)
         self._managed_button.setChecked(mode is ServerMode.managed)
         self._external_button.setChecked(mode is ServerMode.external)
 
     def update_status(self, state: ConnectionState, server_state: ServerState):
-        self._cloud_button.status = "signed_out"
+        self._runpod_button.status = "not_started"
         self._external_button.status = "not_connected"
         match server_state:
             case ServerState.not_installed:
@@ -460,14 +545,14 @@ class ServerModeSelect(QWidget):
                 self._managed_button.status = "not_connected"
 
         match self.mode, state, server_state:
-            case ServerMode.cloud, ConnectionState.auth_missing | ConnectionState.auth_error, _:
-                self._cloud_button.status = "signed_out"
-            case ServerMode.cloud, ConnectionState.auth_pending, _:
-                self._cloud_button.status = "connecting"
-            case ServerMode.cloud, ConnectionState.connected, _:
-                self._cloud_button.status = "connected"
-            case ServerMode.cloud, ConnectionState.error, _:
-                self._cloud_button.status = "error"
+            case ServerMode.runpod, ConnectionState.pod_starting | ConnectionState.connecting, _:
+                self._runpod_button.status = "connecting"
+            case ServerMode.runpod, ConnectionState.discover_models, _:
+                self._runpod_button.status = "connecting"
+            case ServerMode.runpod, ConnectionState.connected, _:
+                self._runpod_button.status = "connected"
+            case ServerMode.runpod, ConnectionState.error, _:
+                self._runpod_button.status = "error"
             case ServerMode.managed, _, ServerState.starting:
                 self._managed_button.status = "connecting"
             case ServerMode.managed, ConnectionState.connecting, _:
@@ -495,12 +580,12 @@ class ConnectionSettings(SettingsTab):
         self._server_mode.changed.connect(self._change_server_mode)
 
         self._setup_widget = InitialSetupWidget(self)
-        self._cloud_widget = CloudWidget(self)
+        self._runpod_widget = RunpodWidget(self)
         self._server_widget = ServerWidget(server, self)
         self._connection_widget = QWidget(self)
         self._server_stack = QStackedWidget(self)
         self._server_stack.addWidget(self._setup_widget)
-        self._server_stack.addWidget(self._cloud_widget)
+        self._server_stack.addWidget(self._runpod_widget)
         self._server_stack.addWidget(self._server_widget)
         self._server_stack.addWidget(self._connection_widget)
 
@@ -559,7 +644,7 @@ class ConnectionSettings(SettingsTab):
     def _update_server_mode(self, mode: ServerMode):
         self._server_mode.setVisible(mode is not ServerMode.undefined)
         widget = {
-            ServerMode.cloud: self._cloud_widget,
+            ServerMode.runpod: self._runpod_widget,
             ServerMode.managed: self._server_widget,
             ServerMode.external: self._connection_widget,
             ServerMode.undefined: self._setup_widget,
@@ -590,7 +675,7 @@ class ConnectionSettings(SettingsTab):
     def update_server_status(self):
         connection = root.connection
         self._server_mode.update_status(connection.state, self._server.state)
-        self._cloud_widget.update_connection_state(connection.state)
+        self._runpod_widget.update_state()
         self._connect_button.setEnabled(True)
         if connection.state == ConnectionState.connected:
             self._connection_status.setText(_("Connected"))

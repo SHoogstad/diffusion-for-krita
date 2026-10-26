@@ -157,7 +157,9 @@ class ComfyClient(Client):
 
         self._requests.add_header("ngrok-skip-browser-warning", "69420")
         self._requests.add_header("skip_zrok_interstitial", "69420")
-        if settings.server_authorization:
+        if access_token:  # Runpod pod token
+            self._requests.set_auth(access_token)
+        elif settings.server_authorization:
             self._requests.set_auth(settings.server_authorization)
 
     async def connect(self):

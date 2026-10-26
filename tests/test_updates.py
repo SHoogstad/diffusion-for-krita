@@ -1,18 +1,16 @@
 import hashlib
 import json
-import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from aiohttp import ClientSession
 
 from ai_diffusion.model.updates import AutoUpdate, UpdateState, parse_release_tag
 from ai_diffusion.platform_tools import ZipFile
 from ai_diffusion.qt.QtCore import pyqtBoundSignal
 
-from .conftest import CloudService, qtapp
+from .conftest import qtapp
 
 
 class SignalObserver:
@@ -25,12 +23,6 @@ class SignalObserver:
 
     def reset(self):
         self.events = []
-
-
-def http_session(service_url: str):
-    service_token = os.environ["INTERSTICE_INFRA_TOKEN"]
-    headers = {"Authorization": f"Bearer {service_token}"}
-    return ClientSession(service_url, headers=headers)
 
 
 class FakeGithub:
@@ -62,7 +54,7 @@ class FakeGithub:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def log_message(self, *args):
+            def log_message(self, format, *args):
                 pass
 
         self.server = HTTPServer(("127.0.0.1", 0), Handler)
@@ -238,16 +230,3 @@ async def test_auto_update_from_prerelease(github: FakeGithub, tmp_path: Path):
     )
     await stable.check()
     assert stable.state is UpdateState.latest
-
-
-async def test_authorization(cloud_service: CloudService):
-    if not cloud_service.enabled:
-        pytest.skip("Cloud service not running")
-    async with ClientSession(cloud_service.url) as session:
-        # Version check is public
-        async with session.get("/plugin/latest?version=1.2.3") as response:
-            assert response.status == 200
-
-        # Upload requires authorization
-        async with session.put("/plugin/upload/1.2.3") as response:
-            assert response.status == 401

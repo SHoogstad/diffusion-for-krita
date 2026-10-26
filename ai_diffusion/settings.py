@@ -18,7 +18,12 @@ class ServerMode(Enum):
     undefined = -1
     managed = 0
     external = 1
-    cloud = 2
+    runpod = 3
+
+
+class RunpodStorage(Enum):
+    network = _("Keep models (network volume)")
+    container = _("Download models on every start")
 
 
 class ServerBackend(Enum):
@@ -186,8 +191,42 @@ class Settings(QObject):
         _("To generate images, the plugin connects to a ComfyUI server"),
     )
 
-    access_token: str
-    _access_token = Setting(_("Cloud Access Token"), "")
+    runpod_api_key: str
+    _runpod_api_key = Setting(
+        _("Runpod API Key"), "", _("Create one at runpod.io under Settings > API Keys")
+    )
+
+    runpod_gpu: str
+    _runpod_gpu = Setting(_("GPU"), "NVIDIA GeForce RTX 4090", _("GPU type of the pod"))
+
+    runpod_storage: RunpodStorage
+    _runpod_storage = Setting(_("Models"), RunpodStorage.network)
+
+    runpod_workloads: list[str]
+    _runpod_workloads = Setting(_("Workloads"), ["sdxl"])
+
+    runpod_checkpoints: bool
+    _runpod_checkpoints = Setting(
+        _("Include default checkpoints"),
+        True,
+        _("Download the checkpoints used by the default styles"),
+    )
+
+    runpod_idle_minutes: int
+    _runpod_idle_minutes = Setting(
+        _("Stop when idle"),
+        15,
+        _("Terminate the pod after this many minutes without a job (0: never)"),
+    )
+
+    runpod_volume_id: str
+    _runpod_volume_id = Setting("Runpod network volume", "")
+
+    runpod_pod_id: str
+    _runpod_pod_id = Setting("Runpod pod", "")
+
+    runpod_pod_token: str
+    _runpod_pod_token = Setting("Runpod pod token", "")
 
     server_path: str
     _server_path = Setting(

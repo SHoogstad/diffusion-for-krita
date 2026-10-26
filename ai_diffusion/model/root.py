@@ -120,9 +120,8 @@ class Root(QObject):
                 client = ComfyClient(url)
                 await connection._connect(client)
                 signal_server_change()
-            elif settings.server_mode is ServerMode.cloud:
-                if client := connection.create_client(settings):
-                    await connection._connect(client)
+            elif settings.server_mode is ServerMode.runpod:
+                await connection._start_pod(reuse_only=True)  # never create a paid pod on startup
             elif settings.server_mode in [ServerMode.undefined, ServerMode.external]:
                 urls = [settings.server_url]
                 if settings.server_mode is ServerMode.undefined:
@@ -150,7 +149,6 @@ class Root(QObject):
                     else:
                         connection.state = ConnectionState.disconnected
                         connection.error = ""
-                        settings.server_mode = ServerMode.cloud
         except Exception as e:
             log.warning(f"Failed to launch/connect server at startup: {e}")
 
@@ -230,7 +228,7 @@ def collect_diagnostics(redact_user=True):
     out += "-------------------------------------\n"
     out += "Settings:\n"
     for name, value in settings:
-        if name in ("access_token", "server_authorization") or value == settings.access_token:
+        if name in ("server_authorization", "runpod_api_key", "runpod_pod_token"):
             value = "<redacted>"
         out += f"  {name}: {value}\n"
     out += "-------------------------------------\n"

@@ -26,7 +26,7 @@ from ..qt.QtWidgets import (
 from ..settings import ServerMode, settings
 from . import theme
 from .animation import AnimationWidget
-from .custom_workflow import CustomWorkflowPlaceholder, CustomWorkflowWidget
+from .custom_workflow import CustomWorkflowWidget
 from .generation import GenerationWidget
 from .live import LiveWidget
 from .upscale import UpscaleWidget
@@ -130,6 +130,7 @@ class ConnectionWidget(QWidget):
         self.setLayout(layout)
 
         root.connection.state_changed.connect(self.update_content)
+        root.connection.pod_status_changed.connect(self.update_content)
         self.update_content()
 
     def update_content(self):
@@ -154,8 +155,9 @@ class ConnectionWidget(QWidget):
                     _("Server is not installed or not running. Click below to start.")
                 )
             self._connect_error.setVisible(True)
-        if connection.state is ConnectionState.auth_missing:
-            self._connect_status.setText(_("Not signed in. Click below to connect."))
+        if connection.state is ConnectionState.pod_starting:
+            self._connect_status.setText(connection.pod_status or _("Starting Runpod pod..."))
+            self._connect_error.setVisible(False)
         if connection.state is ConnectionState.connecting:
             self._connect_status.setText(_("Connecting to server..."))
         if connection.state is ConnectionState.discover_models:
@@ -286,7 +288,6 @@ class ImageDiffusionWidget(DockWidget):
         self._animation = AnimationWidget()
         self._live = LiveWidget()
         self._custom = CustomWorkflowWidget()
-        self._custom_placeholder = CustomWorkflowPlaceholder()
         self._frame = QStackedWidget(self)
         self._frame.addWidget(self._welcome)
         self._frame.addWidget(self._generation)
@@ -294,7 +295,6 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._live)
         self._frame.addWidget(self._animation)
         self._frame.addWidget(self._custom)
-        self._frame.addWidget(self._custom_placeholder)
         self.setWidget(self._frame)
 
         self._welcome.accepted.connect(self.update_content)
@@ -321,7 +321,6 @@ class ImageDiffusionWidget(DockWidget):
         is_connected = connection.state is ConnectionState.connected
         requires_update = self._welcome.requires_update
         has_news = self._welcome.has_news
-        is_cloud = settings.server_mode is ServerMode.cloud
         if model is None or not is_connected or requires_update or has_news:
             self._frame.setCurrentWidget(self._welcome)
         elif model.workspace is Workspace.generation:
@@ -336,9 +335,6 @@ class ImageDiffusionWidget(DockWidget):
         elif model.workspace is Workspace.animation:
             self._animation.model = model
             self._frame.setCurrentWidget(self._animation)
-        elif model.workspace is Workspace.custom and is_cloud:
-            self._custom_placeholder.model = model
-            self._frame.setCurrentWidget(self._custom_placeholder)
         elif model.workspace is Workspace.custom:
             self._custom.model = model
             self._frame.setCurrentWidget(self._custom)

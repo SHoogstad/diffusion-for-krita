@@ -3,11 +3,12 @@ expose it. The fallback mimics Krita's slider spinbox: a number box with a fill 
 dragged to change the value. Double-click to type a value."""
 
 try:
-    from krita import DoubleSliderSpinBox
+    from krita import DoubleSliderSpinBox  # pyright: ignore[reportAssignmentType]
 except ImportError:
     from ..qt.QtCore import QEvent, QObject, QRectF, Qt, pyqtSignal
-    from ..qt.QtGui import QColor, QPainter, QPalette
-    from ..qt.QtWidgets import QDoubleSpinBox
+    from ..qt.QtGui import QColor, QMouseEvent, QPainter, QPalette
+    from ..qt.QtWidgets import QDoubleSpinBox, QLineEdit
+    from ..util import ensure
 
     class _SliderSpinBox(QDoubleSpinBox):
         drag_finished = pyqtSignal()
@@ -21,12 +22,15 @@ except ImportError:
             self._editing = False
             self.setKeyboardTracking(False)
             # Transparent text field so the fill bar painted by the spinbox shows behind the text
-            palette = self.lineEdit().palette()
+            palette = self._line_edit().palette()
             palette.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
-            self.lineEdit().setPalette(palette)
-            self.lineEdit().setReadOnly(True)
-            self.lineEdit().installEventFilter(self)
-            self.lineEdit().editingFinished.connect(self._stop_editing)
+            self._line_edit().setPalette(palette)
+            self._line_edit().setReadOnly(True)
+            self._line_edit().installEventFilter(self)
+            self._line_edit().editingFinished.connect(self._stop_editing)
+
+        def _line_edit(self) -> QLineEdit:
+            return ensure(self.lineEdit())
 
         def _bar_range(self):
             lo = self.minimum() if self.soft_min is None else self.soft_min
@@ -35,25 +39,28 @@ except ImportError:
 
         def _value_at(self, x: float):
             lo, hi = self._bar_range()
-            width = max(self.lineEdit().width(), 1)
+            width = max(self._line_edit().width(), 1)
             value = lo + (hi - lo) * min(max(x / width, 0.0), 1.0)
             return round(value, self.decimals())
 
         def _stop_editing(self):
             self._editing = False
-            self.lineEdit().setReadOnly(True)
-            self.lineEdit().deselect()
+            self._line_edit().setReadOnly(True)
+            self._line_edit().deselect()
             self.update()
 
-        def eventFilter(self, obj, event):
-            if obj is not self.lineEdit() or self._editing or not self.isEnabled():
-                return super().eventFilter(obj, event)
+        def eventFilter(self, a0, a1):
+            event = a1
+            if a0 is not self._line_edit() or not isinstance(event, QMouseEvent):
+                return super().eventFilter(a0, a1)
+            if self._editing or not self.isEnabled():
+                return super().eventFilter(a0, a1)
             kind = event.type()
             if kind == QEvent.Type.MouseButtonDblClick:
                 self._editing = True
                 self._pressed = self.dragging = False
-                self.lineEdit().setReadOnly(False)
-                self.lineEdit().setFocus()
+                self._line_edit().setReadOnly(False)
+                self._line_edit().setFocus()
                 self.selectAll()
                 return True
             if kind == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
@@ -69,25 +76,25 @@ except ImportError:
                 self.dragging = False
                 self.drag_finished.emit()
                 return True
-            return super().eventFilter(obj, event)
+            return super().eventFilter(a0, a1)
 
         def stepBy(self, steps: int):
             super().stepBy(steps)
             if not self._editing:
-                self.lineEdit().deselect()
+                self._line_edit().deselect()
 
-        def focusOutEvent(self, event):
+        def focusOutEvent(self, e):
             if self._editing:
                 self._stop_editing()
-            super().focusOutEvent(event)
+            super().focusOutEvent(e)
 
-        def paintEvent(self, event):
-            super().paintEvent(event)
+        def paintEvent(self, e):
+            super().paintEvent(e)
             lo, hi = self._bar_range()
             ratio = min(max((self.value() - lo) / (hi - lo), 0.0), 1.0)
             if ratio <= 0:
                 return
-            rect = QRectF(self.lineEdit().geometry()).adjusted(-1, -1, 1, 1)
+            rect = QRectF(self._line_edit().geometry()).adjusted(-1, -1, 1, 1)
             rect.setWidth(rect.width() * ratio)
             color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
             color.setAlpha(110 if self.isEnabled() else 45)
