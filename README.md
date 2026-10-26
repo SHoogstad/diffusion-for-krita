@@ -70,6 +70,10 @@ Runpod account; you pay Runpod directly, per second while the pod runs.
      takes several minutes of paid GPU time.
 
    The settings page shows an estimate for both, based on the selected GPU and models.
+
+   Workloads: Stable Diffusion 1.5, SDXL, Illustrious, Flux, Flux 2, Z-Image, Qwen Image (with Qwen Image
+   Edit 2511), Qwen Image 2.1, Krea 2, MOSS-Image and Fibo 2 (with Fibo 2 Edit). The larger models are
+   downloaded in fp8/int8 versions; Qwen Image needs a GPU with at least 24 GB, 48 GB is more comfortable.
 4. Click **Start pod**. The plugin creates the pod, shows the download progress and connects.
 
 **Stopping.** The pod is terminated when you click **Stop pod**, when Krita closes, and after the idle time

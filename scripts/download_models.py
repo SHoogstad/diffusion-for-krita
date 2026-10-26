@@ -57,6 +57,11 @@ def list_models(
     flux2=False,
     illu=False,
     zimage=False,
+    qwen=False,
+    qwen2=False,
+    krea2=False,
+    moss=False,
+    fibo2=False,
     upscalers=False,
     checkpoints=None,
     controlnet=False,
@@ -89,6 +94,16 @@ def list_models(
         versions.extend((Arch.illu, Arch.illu_v))
     if zimage or all:
         versions.append(Arch.zimage)
+    if qwen or all:
+        versions.extend((Arch.qwen, Arch.qwen_e, Arch.qwen_e_p))
+    if qwen2 or all:
+        versions.append(Arch.qwen2)
+    if krea2 or all:
+        versions.append(Arch.krea2)
+    if moss or all:
+        versions.append(Arch.moss)
+    if fibo2 or all:
+        versions.extend((Arch.fibo2, Arch.fibo2_e))
 
     models: set[ModelResource] = set()
     models.update([m for m in default_checkpoints if all or (m.id.identifier in checkpoints)])
@@ -292,6 +307,11 @@ if __name__ == "__main__":
     parser.add_argument("--flux", action="store_true", help="[Workload] everything needed to run Flux (no checkpoints)")
     parser.add_argument("--flux2", action="store_true", help="[Workload] everything needed to run Flux 2 (no checkpoints)")
     parser.add_argument("--zimage", action="store_true", help="[Workload] everything needed to run Z-Image (no checkpoints)")
+    parser.add_argument("--qwen", action="store_true", help="[Workload] everything needed to run Qwen Image and Qwen Image Edit (no checkpoints)")
+    parser.add_argument("--qwen2", action="store_true", help="[Workload] everything needed to run Qwen Image 2.1 (no checkpoints)")
+    parser.add_argument("--krea2", action="store_true", help="[Workload] everything needed to run Krea 2 (no checkpoints)")
+    parser.add_argument("--moss", action="store_true", help="[Workload] everything needed to run MOSS-Image (no checkpoints)")
+    parser.add_argument("--fibo2", action="store_true", help="[Workload] everything needed to run Fibo 2 and Fibo 2 Edit (no checkpoints)")
     parser.add_argument("--checkpoints", action="store_true", dest="checkpoints", help="download all checkpoints for selected workloads")
     parser.add_argument("--controlnet", action="store_true", help="download ControlNet models for selected workloads")
     parser.add_argument("--checkpoint", action="append", choices=checkpoint_names, dest="checkpoint_list", help="download a specific checkpoint (can specify multiple times)")
@@ -318,6 +338,16 @@ if __name__ == "__main__":
         checkpoints += [m.id.identifier for m in default_checkpoints if m.arch is Arch.illu_v]
     if args.checkpoints and args.zimage:
         checkpoints += [m.id.identifier for m in default_checkpoints if m.arch is Arch.zimage]
+    extra_workloads = {
+        "qwen": (Arch.qwen, Arch.qwen_e, Arch.qwen_e_p),
+        "qwen2": (Arch.qwen2,),
+        "krea2": (Arch.krea2,),
+        "moss": (Arch.moss,),
+        "fibo2": (Arch.fibo2, Arch.fibo2_e),
+    }
+    for name, archs in extra_workloads.items():
+        if args.checkpoints and getattr(args, name):
+            checkpoints += [m.id.identifier for m in default_checkpoints if m.arch in archs]
 
     print(f"Diffusion for Krita - Model download - v{resources.version}")
 
@@ -333,6 +363,11 @@ if __name__ == "__main__":
         flux2=args.flux2,
         illu=args.illu,
         zimage=args.zimage,
+        qwen=args.qwen,
+        qwen2=args.qwen2,
+        krea2=args.krea2,
+        moss=args.moss,
+        fibo2=args.fibo2,
         upscalers=args.upscalers,
         checkpoints=checkpoints,
         controlnet=args.controlnet,

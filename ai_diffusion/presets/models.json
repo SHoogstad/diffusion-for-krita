@@ -210,7 +210,12 @@
       ]
     },
     {
-      "id": "vae-default-flux2_4b",
+      "id": [
+        "vae-default-flux2_4b",
+        "vae-default-moss",
+        "vae-default-fibo2",
+        "vae-default-fibo2_e"
+      ],
       "name": "VAE (Flux 2)",
       "files": [
         {
@@ -228,6 +233,85 @@
           "path": "models/loras/flux-2-klein-4B-outpaint-lora.safetensors",
           "url": "https://huggingface.co/fal/flux-2-klein-4B-outpaint-lora/resolve/main/LyNiaZ53Tudg0J6sT8Xbx_pytorch_lora_weights_comfy_converted.safetensors",
           "sha256": "b8a5142b40f2e24aa1f5cfd0710323188836f49ea70b15b5f85b1e364316bc5b"
+        }
+      ]
+    },
+    {
+      "id": [
+        "text_encoder-qwen-qwen",
+        "text_encoder-qwen-qwen_e",
+        "text_encoder-qwen-qwen_e_p"
+      ],
+      "name": "Qwen 2.5 VL 7B [fp8]",
+      "files": [
+        {
+          "path": "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+          "sha256": "cb5636d852a0ea6a9075ab1bef496c0db7aef13c02350571e388aea959c5c0b4"
+        }
+      ]
+    },
+    {
+      "id": [
+        "vae-default-qwen",
+        "vae-default-qwen_e",
+        "vae-default-qwen_e_p",
+        "vae-default-krea2"
+      ],
+      "name": "VAE (Qwen Image)",
+      "files": [
+        {
+          "path": "models/vae/qwen_image_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+          "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+        }
+      ]
+    },
+    {
+      "id": "text_encoder-qwen_3vl_8b-qwen2",
+      "name": "Qwen3-VL 8B [int8]",
+      "files": [
+        {
+          "path": "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f"
+        }
+      ]
+    },
+    {
+      "id": "vae-default-qwen2",
+      "name": "VAE (Qwen Image 2.1)",
+      "files": [
+        {
+          "path": "models/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9"
+        }
+      ]
+    },
+    {
+      "id": [
+        "text_encoder-qwen_3vl_4b-krea2",
+        "text_encoder-qwen_3vl_4b-fibo2",
+        "text_encoder-qwen_3vl_4b-fibo2_e"
+      ],
+      "name": "Qwen3-VL 4B [int8]",
+      "files": [
+        {
+          "path": "models/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+          "sha256": "32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c"
+        }
+      ]
+    },
+    {
+      "id": "text_encoder-qwen_3_5_9b-moss",
+      "name": "Qwen3.5 9B [int8]",
+      "files": [
+        {
+          "path": "models/text_encoders/qwen3.5_9b_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors",
+          "sha256": "32e3787472f708fa5f83624acbf5ef23f7fc89c439e05065ea57cfe5a97f025a"
         }
       ]
     }
@@ -363,6 +447,114 @@
           "sha256": "56c06ad6cb80941e8203d3e248a16ad1263499ba870f2c1931aa724fdc7c25d3"
         }
       ]
+    },
+    {
+      "id": "checkpoint-qwen_image_2512-qwen",
+      "name": "Qwen Image 2512 [fp8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
+          "sha256": "5dc80554d5d83390046a2f4a94ece06afb7700bf7b0aaf8bde9769793875876b"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-qwen_image_edit_2511-qwen_e_p",
+      "name": "Qwen Image Edit 2511 [fp8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+          "sha256": "c9fdc158e46d3b61ef75f21ae866ca2fe808bf4a53643120d1c1e87c19280a4e"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-qwen_image_21-qwen2",
+      "name": "Qwen Image 2.1 [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-qwen_image_21_turbo-qwen2",
+      "name": "Qwen Image 2.1 Turbo [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
+          "sha256": "8144a0182964aa8403ad6dbc011db837304167d235161b9aabaa8532e967314c"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-krea2_turbo-krea2",
+      "name": "Krea 2 Turbo [fp8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+          "sha256": "eb4dd8c612cfd10f64f25b057e6e6bbcb5737c94a7372177e456dbf7579502f1"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-krea2_raw-krea2",
+      "name": "Krea 2 Raw [fp8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/krea2_raw_fp8_scaled.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors",
+          "sha256": "48cd5d6c100297968349b41a8e77c6591d1dac18a215807f5f25f59e5c54cd61"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-moss_image_sft-moss",
+      "name": "MOSS-Image [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/moss_image_sft_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors",
+          "sha256": "b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-fibo2_dev-fibo2",
+      "name": "Fibo 2 Dev [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/fibo2_dev_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/diffusion_models/fibo2_dev_int8_convrot.safetensors",
+          "sha256": "063dd397395809fd22234c6bd32932cfcb22619f4d2282bdbf1dc58c406fe325"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-fibo2_edit_turbo-fibo2_e",
+      "name": "Fibo 2 Edit Turbo [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors",
+          "sha256": "1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b"
+        }
+      ],
+      "requirements": "cuda"
     }
   ],
   "upscale": [

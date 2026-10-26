@@ -26,7 +26,7 @@ from ..util import client_logger as log
 from .network import NetworkError, RequestManager
 
 api_url = os.getenv("RUNPOD_API_URL", "https://api.runpod.io/v2")
-image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.58.0")
+image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.59.0")
 pod_prefix = "diffusion-for-krita"
 comfy_port = 8188
 
@@ -43,6 +43,11 @@ workload_names = {
     "flux": "Flux",
     "flux2": "Flux 2",
     "zimage": "Z-Image",
+    "qwen": "Qwen Image",
+    "qwen2": "Qwen Image 2.1",
+    "krea2": "Krea 2",
+    "moss": "MOSS-Image",
+    "fibo2": "Fibo 2",
 }
 
 

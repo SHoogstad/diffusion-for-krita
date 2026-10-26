@@ -24,6 +24,11 @@ checkpoint_archs = {
     "flux": [Arch.flux],
     "flux2": [Arch.flux2_4b],
     "zimage": [Arch.zimage],
+    "qwen": [Arch.qwen, Arch.qwen_e, Arch.qwen_e_p],
+    "qwen2": [Arch.qwen2],
+    "krea2": [Arch.krea2],
+    "moss": [Arch.moss],
+    "fibo2": [Arch.fibo2, Arch.fibo2_e],
 }
 
 

@@ -28,6 +28,7 @@ from ai_diffusion.backend.runpod_serverless import (
 from ai_diffusion.image import Extent, Image
 from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.settings import RunpodStorage
+from ai_diffusion.style import Arch
 
 from .conftest import qtapp
 
@@ -600,3 +601,27 @@ def test_serverless_estimate():
     assert estimate.per_100_images == pytest.approx(100 * 10 / 3600 * 1.10)
     assert estimate.keep_warm_cost == pytest.approx(60 / 3600 * 1.10)
     assert "per 100 images" in estimate.describe(18, 60)
+
+
+@pytest.mark.parametrize("workload", ["qwen", "qwen2", "krea2", "moss", "fibo2"])
+def test_new_workloads(workload: str):
+    from ai_diffusion.backend.resources import ResourceKind, required_models
+
+    assert workload in runpod.workload_names
+    assert model_size_gb([workload], checkpoints=False) > 4  # text encoder at least
+    assert model_size_gb([workload], checkpoints=True) > model_size_gb([workload], False) + 5
+    archs = {
+        "qwen": [Arch.qwen],
+        "qwen2": [Arch.qwen2],
+        "krea2": [Arch.krea2],
+        "moss": [Arch.moss],
+        "fibo2": [Arch.fibo2],
+    }[workload]
+    kinds = {m.kind for m in required_models if m.arch in archs}
+    assert {ResourceKind.text_encoder, ResourceKind.vae} <= kinds
+
+
+def test_shared_model_files_counted_once():
+    together = model_size_gb(["krea2", "fibo2"], checkpoints=True)
+    separate = model_size_gb(["krea2"], True) + model_size_gb(["fibo2"], True)
+    assert together < separate - 4  # Qwen3-VL 4B text encoder is shared

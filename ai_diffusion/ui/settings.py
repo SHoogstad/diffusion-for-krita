@@ -29,6 +29,7 @@ from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -198,14 +199,14 @@ class RunpodWidget(QWidget):
         layout.addWidget(self._gpu)
 
         add_header(layout, Settings._runpod_workloads)
-        workload_layout = QHBoxLayout()
+        workload_layout = QGridLayout()
         self._workloads: dict[str, QCheckBox] = {}
-        for id, name in runpod.workload_names.items():
+        for i, (id, name) in enumerate(runpod.workload_names.items()):
             box = QCheckBox(name, self)
             box.toggled.connect(self._change_workloads)
             self._workloads[id] = box
-            workload_layout.addWidget(box)
-        workload_layout.addStretch()
+            workload_layout.addWidget(box, i // 6, i % 6)
+        workload_layout.setColumnStretch(6, 1)
         layout.addLayout(workload_layout)
         self._checkpoints = QCheckBox(Settings._runpod_checkpoints.name, self)
         self._checkpoints.setToolTip(Settings._runpod_checkpoints.desc)
