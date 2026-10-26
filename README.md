@@ -41,15 +41,10 @@ Not in Krita AI Diffusion, included since 1.55:
 
 ### Versioning
 Release tags look like `v<plugin version>`, for example `v1.56.0`. The plugin version follows upstream
-(own features bump the minor version, as in 1.55). Releases up to 1.55.3 were Krita 5 only and tagged
-`v<version>-krita5.3`; the updater still understands those tags, so they update to newer releases.
-
-| Release | Based on | Channel |
-|---|---|---|
-| `v1.55.3-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2, slider fix | stable (latest) |
-| `v1.55.2-krita5.3` | upstream 1.54 + MOSS-Image / Fibo 2 | previous stable |
-| `v1.55.0`, `v1.55.1` | same, earlier builds | pre-release |
-| `v1.54.1-krita5.3` | upstream 1.54 | older stable |
+(own features bump the minor version). **1.56.0 is the first Diffusion for Krita release.** Before that, the
+project was the Krita 5 only port [krita-ai-diffusion-qt5](https://github.com/SHoogstad/krita-ai-diffusion-qt5)
+(1.54.1 to 1.55.3, tagged `v<version>-krita5.3`). The updater still understands those tags, so those installs
+update to newer releases.
 
 ---
 
