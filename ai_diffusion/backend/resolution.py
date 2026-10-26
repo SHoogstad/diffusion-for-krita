@@ -216,6 +216,7 @@ def prepare_diffusion_input(
     elif arch.is_fibo2 and max_scale < 0.9 and any(x > max_size for x in desired):
         # Fibo 2 falls apart well above its training resolution (duplicated limbs etc.), and edits
         # don't use 2 passes. Generate at checkpoint resolution and scale up the result.
+        input = extent  # scaled down to the generation resolution below
         initial = desired = (desired * max_scale).multiple_of(mult)
 
     elif min_scale > 1 and all(x < min_size for x in desired):
