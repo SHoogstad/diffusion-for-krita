@@ -302,9 +302,7 @@ class RunpodWidget(QWidget):
             box.blockSignals(True)
             box.setChecked(id in settings.runpod_workloads)
             box.blockSignals(False)
-        self._checkpoints.blockSignals(True)
-        self._checkpoints.setChecked(settings.runpod_checkpoints)
-        self._checkpoints.blockSignals(False)
+        self._read_checkpoints()
         self._storage[settings.runpod_storage].setChecked(True)
         self._modes[settings.runpod_mode].setChecked(True)
         self._idle.setValue(settings.runpod_idle_minutes)
@@ -313,6 +311,14 @@ class RunpodWidget(QWidget):
         if settings.runpod_api_key and not self._gpus:
             self._load_gpus()
         self.update_state()
+
+    def _read_checkpoints(self):
+        checked = runpod.include_checkpoints(settings.runpod_storage, settings.runpod_checkpoints)
+        if settings.runpod_mode is RunpodMode.serverless:
+            checked = settings.runpod_checkpoints  # serverless always uses a network volume
+        self._checkpoints.blockSignals(True)
+        self._checkpoints.setChecked(checked)
+        self._checkpoints.blockSignals(False)
 
     def _fill_gpus(self):
         self._gpu.blockSignals(True)
@@ -362,10 +368,13 @@ class RunpodWidget(QWidget):
     def _update_estimates(self):
         gpu = self._selected_gpu()
         price = gpu.hourly_price(settings.runpod_mode) if gpu else 0.0
-        model_gb = runpod.model_size_gb(settings.runpod_workloads, settings.runpod_checkpoints)
+        workloads, checkpoints = settings.runpod_workloads, settings.runpod_checkpoints
         for storage, label in self._estimates.items():
-            estimate = runpod.estimate(storage, model_gb, price)
-            label.setText(estimate.describe(storage, model_gb))
+            storage_checkpoints = runpod.include_checkpoints(storage, checkpoints)
+            storage_gb = runpod.model_size_gb(workloads, storage_checkpoints)
+            estimate = runpod.estimate(storage, storage_gb, price)
+            label.setText(estimate.describe(storage, storage_gb))
+        model_gb = runpod.model_size_gb(workloads, checkpoints)
         keep_warm = settings.runpod_keep_warm
         serverless = runpod_serverless.estimate_serverless(model_gb, price, keep_warm)
         self._serverless_estimate.setText(serverless.describe(model_gb, keep_warm))
@@ -388,7 +397,8 @@ class RunpodWidget(QWidget):
             return
         workloads = [id for id, box in self._workloads.items() if box.isChecked()]
         settings.runpod_workloads = workloads or ["sdxl"]
-        settings.runpod_checkpoints = self._checkpoints.isChecked()
+        if self._checkpoints.isEnabled():  # disabled and always on for the container disk
+            settings.runpod_checkpoints = self._checkpoints.isChecked()
         self._update_estimates()
 
     def _change_storage(self):
@@ -469,8 +479,11 @@ class RunpodWidget(QWidget):
         busy = state in (ConnectionState.pod_starting, ConnectionState.connecting)
         editable = not running
         serverless = settings.runpod_mode is RunpodMode.serverless
-        for widget in (self._gpu, self._checkpoints, *self._workloads.values()):
+        for widget in (self._gpu, *self._workloads.values()):
             widget.setEnabled(editable)
+        container = not serverless and settings.runpod_storage is RunpodStorage.container
+        self._checkpoints.setEnabled(editable and not container)
+        self._read_checkpoints()
         for radio in (*self._storage.values(), *self._modes.values()):
             radio.setEnabled(editable)
         for storage in RunpodStorage:  # serverless always keeps models on a network volume

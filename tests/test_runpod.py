@@ -12,6 +12,7 @@ from ai_diffusion.backend.runpod import (
     GpuType,
     PodConfig,
     PodPhase,
+    PodStopped,
     RunpodApi,
     RunpodError,
     RunpodPod,
@@ -295,6 +296,23 @@ async def test_start_container_disk(fake_runpod: FakeRunpod):
 
 
 @qtapp
+async def test_container_disk_always_downloads_checkpoints(fake_runpod: FakeRunpod):
+    # Nothing else could provide a checkpoint, the pod would be unusable without one
+    cfg = config(storage=RunpodStorage.container, checkpoints=False)
+    pod = RunpodPod(cfg, RunpodApi("test-key", fake_runpod.url))
+    _ = [p async for p in pod.start()]
+    assert pod.info is not None
+    created = fake_runpod.pods[pod.info.id]
+    assert created["env"]["KRITA_CHECKPOINTS"] == "1"
+    assert created["disk"] > runpod.container_base_gb + model_size_gb(["sdxl"], True)
+
+    volume_pod = RunpodPod(config(checkpoints=False), RunpodApi("test-key", fake_runpod.url))
+    _ = [p async for p in volume_pod.start()]
+    assert volume_pod.info is not None
+    assert fake_runpod.pods[volume_pod.info.id]["env"]["KRITA_CHECKPOINTS"] == "0"
+
+
+@qtapp
 async def test_reuse_running_pod(fake_runpod: FakeRunpod):
     first = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
     _ = [p async for p in first.start()]
@@ -377,6 +395,37 @@ async def test_pod_disappears_while_starting(fake_runpod: FakeRunpod):
     with pytest.raises(RunpodError, match="stopped unexpectedly"):
         await start()
     assert pod.info is None
+
+
+@qtapp
+async def test_stop_while_starting(fake_runpod: FakeRunpod):
+    fake_runpod.status_sequence = [{"phase": "starting", "message": "Starting ComfyUI"}]
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+
+    async def start():
+        async for progress in pod.start():
+            if progress.message == "Starting ComfyUI":
+                await pod.stop()
+
+    with pytest.raises(PodStopped):
+        await start()
+    assert not fake_runpod.pods
+
+
+@qtapp
+async def test_stop_while_creating(fake_runpod: FakeRunpod):
+    pod = RunpodPod(config(), RunpodApi("test-key", fake_runpod.url))
+    create_pod = pod._create_pod
+
+    async def create_and_stop():
+        info = await create_pod()
+        await pod.stop()  # pod.info is not set yet, start() has to clean up
+        return info
+
+    pod._create_pod = create_and_stop
+    with pytest.raises(PodStopped):
+        _ = [p async for p in pod.start()]
+    assert not fake_runpod.pods
 
 
 @qtapp

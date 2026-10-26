@@ -55,6 +55,18 @@ class RunpodError(Exception):
     pass
 
 
+class PodStopped(RunpodError):
+    """The pod was stopped while it was still starting."""
+
+    def __init__(self):
+        super().__init__("The Runpod pod was stopped")
+
+
+def include_checkpoints(storage: RunpodStorage, checkpoints: bool):
+    # Without a network volume there is no way to bring your own checkpoints
+    return checkpoints or storage is RunpodStorage.container
+
+
 class GpuType(NamedTuple):
     id: str
     name: str
@@ -325,6 +337,7 @@ class RunpodPod:
         self.api = api or RunpodApi(config.api_key)
         self.info: PodInfo | None = None
         self.volume_id = config.volume_id
+        self._stopped = False
         self._status_requests = RequestManager()
 
     async def start(self) -> AsyncGenerator[PodProgress, None]:
@@ -337,11 +350,17 @@ class RunpodPod:
         if self.info is None:
             await self._remove_stale_pods()
             yield PodProgress(PodPhase.creating, "Creating pod")
-            self.info = await self._create_pod()
+            info = await self._create_pod()
+            if self._stopped:  # stopped while the pod was being created
+                log.info(f"Terminating Runpod pod {info.id}")
+                await self.api.terminate_pod(info.id)
+                raise PodStopped()
+            self.info = info
         async for progress in self._wait_until_ready():
             yield progress
 
     async def stop(self):
+        self._stopped = True
         if self.info is not None:
             log.info(f"Terminating Runpod pod {self.info.id}")
             await self.api.terminate_pod(self.info.id)
@@ -372,7 +391,8 @@ class RunpodPod:
     async def _create_pod(self) -> PodInfo:
         cfg = self.config
         gpu = await self._gpu()
-        model_gb = model_size_gb(cfg.workloads, cfg.checkpoints)
+        checkpoints = include_checkpoints(cfg.storage, cfg.checkpoints)
+        model_gb = model_size_gb(cfg.workloads, checkpoints)
         token = secrets.token_urlsafe(32)
         data: dict = {
             "name": f"{pod_prefix}-{secrets.token_hex(3)}",
@@ -384,7 +404,7 @@ class RunpodPod:
                 "KRITA_TOKEN": token,
                 "KRITA_STORAGE": cfg.storage.name,
                 "KRITA_WORKLOADS": ",".join(cfg.workloads),
-                "KRITA_CHECKPOINTS": "1" if cfg.checkpoints else "0",
+                "KRITA_CHECKPOINTS": "1" if checkpoints else "0",
                 "KRITA_IDLE_MINUTES": str(cfg.idle_minutes + 5 if cfg.idle_minutes else 0),
             },
         }
@@ -408,9 +428,16 @@ class RunpodPod:
         log.info(f"Created Runpod pod {pod['id']} ({gpu.name}, ${gpu.price:.2f}/h)")
         return PodInfo(pod["id"], pod_url(pod["id"]), token)
 
+    def _running_info(self) -> PodInfo:
+        if self.info is None:
+            raise PodStopped()
+        return self.info
+
     async def _check_pod_alive(self) -> dict:
-        assert self.info is not None
-        pod = await self.api.pod(self.info.id)
+        info = self._running_info()
+        pod = await self.api.pod(info.id)
+        if self._stopped:
+            raise PodStopped()
         if pod is None or pod.get("status") in ("EXITED", "ERROR", "TERMINATED"):
             status = pod.get("status") if pod else "TERMINATED"
             self.info = None  # nothing left to terminate
@@ -418,7 +445,6 @@ class RunpodPod:
         return pod
 
     async def _wait_until_ready(self) -> AsyncGenerator[PodProgress, None]:
-        assert self.info is not None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.pod_timeout
         while True:
@@ -454,10 +480,10 @@ class RunpodPod:
             await asyncio.sleep(self.poll_interval)
 
     async def _status(self) -> dict | None:
-        assert self.info is not None
-        url = f"{self.info.url}/krita/status"
+        info = self._running_info()
+        url = f"{info.url}/krita/status"
         try:
-            result = await self._status_requests.get(url, timeout=20, bearer=self.info.token)
+            result = await self._status_requests.get(url, timeout=20, bearer=info.token)
             return result if isinstance(result, dict) else None
         except NetworkError:
             return None  # proxy not reachable yet while the container starts

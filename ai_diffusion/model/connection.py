@@ -16,7 +16,15 @@ from ..backend.client import (
 )
 from ..backend.comfy_client import ComfyClient
 from ..backend.network import NetworkError
-from ..backend.runpod import PodConfig, PodPhase, RunpodError, RunpodPod, terminate_pod_blocking
+from ..backend.runpod import (
+    PodConfig,
+    PodPhase,
+    PodStopped,
+    RunpodError,
+    RunpodPod,
+    include_checkpoints,
+    terminate_pod_blocking,
+)
 from ..backend.runpod_serverless import RunpodServerless, ServerlessConfig
 from ..localization import translate as _
 from ..qt.QtCore import QObject, QTimer, pyqtSignal
@@ -181,6 +189,14 @@ class Connection(QObject, ObservableProperties):
             self._last_activity = time.monotonic()
             self._idle_timer.start()  # also on error, the pod is stopped when it isn't used
             await self._connect(ComfyClient(pod.info.url, pod.info.token))
+            if self.error_kind == "missing_resources" and not include_checkpoints(
+                config.storage, config.checkpoints
+            ):
+                self.error += " " + _(
+                    "Default checkpoints were not downloaded: turn on 'Include default checkpoints', or put your own checkpoints on the network volume."
+                )
+        except PodStopped:
+            self.pod_status = ""  # stopped by the user while starting
         except Exception as e:
             self.pod_status = ""
             self.error = str(e) if isinstance(e, RunpodError) else util.log_error(e)
