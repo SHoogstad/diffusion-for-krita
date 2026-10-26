@@ -691,7 +691,9 @@ def apply_layout_prompt(cond: Conditioning, shape: Extent | ImageReshape):
 
     boxes = []
     for region in regions:
-        if region.is_background or region.mask.image is None:
+        # The first region counts as background, but it is only the leftover area (which has no
+        # caption) if the regions don't cover the whole image. Otherwise it is a region of its own.
+        if (region.is_background and not region.caption) or region.mask.image is None:
             continue
         if bounds := mask_bounds(region.mask.image):
             boxes.append((region.caption or region.positive.text, bounds))

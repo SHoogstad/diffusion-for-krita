@@ -182,6 +182,24 @@ def test_moss_regions_layout():
     assert fox["bbox"] == [-(h // 2), -(w // 2), h - h // 2, 0]
 
 
+def test_moss_regions_cover_whole_canvas():
+    # Without leftover area there is no background region, the first region is a box too
+    canvas = Extent(1024, 1024)
+    left = rect_mask(canvas, (0, 0, 512, 1024))
+    right = rect_mask(canvas, (512, 0, 512, 1024))
+    cond = ConditioningInput("two animals in a meadow")
+    cond.regions = [
+        RegionInput(left, Bounds(0, 0, 512, 1024), "a red fox, a meadow", caption="a red fox"),
+        RegionInput(
+            right, Bounds(512, 0, 512, 1024), "a white owl, a meadow", caption="a white owl"
+        ),
+    ]
+    nodes = create(Arch.moss, WorkflowKind.generate, canvas, cond)
+    texts = [n["inputs"]["text"] for n in find(nodes, "CLIPTextEncode")]
+    layout = json.loads(next(t for t in texts if t.startswith("{")))
+    assert [item["caption"] for item in layout["items"]] == ["a red fox", "a white owl"]
+
+
 @pytest.mark.parametrize("arch", [Arch.fibo2, Arch.fibo2_e])
 def test_fibo2_large_canvas_generates_at_trained_resolution(arch: Arch):
     from ai_diffusion.backend.resolution import prepare_diffusion_input
