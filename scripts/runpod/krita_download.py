@@ -2,7 +2,7 @@
 
 Pods run this as a script before ComfyUI starts: the selection comes from KRITA_WORKLOADS
 (comma separated: sd15, sdxl, illu, flux, flux2, zimage, qwen, qwen2, krea2,
-moss, fibo2) and KRITA_CHECKPOINTS=1 to include the
+moss, fibo2, h3) and KRITA_CHECKPOINTS=1 to include the
 default checkpoints of those workloads, progress goes to /krita/status. The serverless worker
 calls download() directly. Files that already exist (network volume) are skipped.
 """
@@ -36,6 +36,7 @@ _checkpoint_archs = {
     "krea2": [Arch.krea2],
     "moss": [Arch.moss],
     "fibo2": [Arch.fibo2, Arch.fibo2_e],
+    "h3": [Arch.h3_e],
 }
 
 Progress = Callable[[str, int, int], None]  # message, bytes done, bytes total

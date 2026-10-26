@@ -14,6 +14,7 @@
   "models/diffusion_models/flux-2-klein-4b-fp8.safetensors": 4070624520,
   "models/diffusion_models/krea2_raw_fp8_scaled.safetensors": 13141730784,
   "models/diffusion_models/krea2_turbo_fp8_scaled.safetensors": 13141730784,
+  "models/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors": 20970379616,
   "models/diffusion_models/moss_image_sft_int8_convrot.safetensors": 5413698958,
   "models/diffusion_models/qwen_image_2.1_int8_convrot.safetensors": 7256783064,
   "models/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors": 7256787829,
@@ -30,9 +31,11 @@
   "models/loras/Hyper-SD15-8steps-CFG-lora.safetensors": 269127064,
   "models/loras/Hyper-SDXL-8steps-CFG-lora.safetensors": 787359648,
   "models/loras/flux-2-klein-4B-outpaint-lora.safetensors": 76038936,
+  "models/loras/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors": 620285592,
   "models/text_encoders/Qwen3-4B-Q4_K_M.gguf": 2497281312,
   "models/text_encoders/clip_l.safetensors": 246144152,
   "models/text_encoders/qwen3.5_9b_int8_convrot.safetensors": 9748121532,
+  "models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors": 15687142551,
   "models/text_encoders/qwen3vl_4b_int8_convrot.safetensors": 4858559240,
   "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors": 9350798360,
   "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors": 9384670680,
@@ -43,6 +46,7 @@
   "models/upscale_models/OmniSR_X4_DIV2K.safetensors": 1697536,
   "models/vae/flux2-vae.safetensors": 336211292,
   "models/vae/flux_vae.safetensors": 335304388,
+  "models/vae/minimax_h3_video_vae_fp16.safetensors": 5207808496,
   "models/vae/qwen_image_2.1_vae_bf16.safetensors": 675509688,
   "models/vae/qwen_image_vae.safetensors": 253806246
  },
@@ -212,6 +216,21 @@
    "checkpoints": [
     "models/diffusion_models/fibo2_dev_int8_convrot.safetensors",
     "models/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors"
+   ]
+  },
+  "h3": {
+   "files": [
+    "models/inpaint/MAT_Places512_G_fp16.safetensors",
+    "models/loras/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
+    "models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+    "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+    "models/upscale_models/OmniSR_X4_DIV2K.safetensors",
+    "models/vae/minimax_h3_video_vae_fp16.safetensors"
+   ],
+   "checkpoints": [
+    "models/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
    ]
   }
  }

@@ -5,6 +5,7 @@ FROM pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
 
 ARG COMFYUI_REF=master
 ARG RUNPODCTL_VERSION=3.0.1
+ARG H3_STUDIO_REF=9834e55976cd1d0572b55a3453de0e1b3c5d3dad
 
 # torch lives in the system Python of this image; keep its CUDA build when installing nodes
 ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PYTHONUNBUFFERED=1 \
@@ -28,9 +29,14 @@ RUN git clone --depth 1 https://github.com/Fannovel16/comfyui_controlnet_aux \
     && git clone --depth 1 https://github.com/Acly/comfyui-inpaint-nodes \
     && git clone --depth 1 https://github.com/Acly/comfyui-tooling-nodes \
     && git clone --depth 1 https://github.com/city96/ComfyUI-GGUF \
+    && git clone https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio \
+    && git -C ComfyUI-MiniMax-H3-Image-Studio checkout "$H3_STUDIO_REF" \
     && for d in */; do \
         if [ -f "$d/requirements.txt" ]; then pip install -r "$d/requirements.txt" || exit 1; fi; \
     done
+
+# H3 Edit: still decode without the stock decode's 16 px banding
+COPY scripts/runpod/custom_nodes/ComfyUI-H3StudioStill /opt/comfyui/custom_nodes/ComfyUI-H3StudioStill
 
 RUN pip install aiohttp tqdm runpod
 

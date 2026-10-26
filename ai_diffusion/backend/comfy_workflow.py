@@ -740,6 +740,121 @@ class ComfyWorkflow:
         positive, negative, _ = self.add("TextEncodeFibo2", 3, **args)
         return ConditioningOutput(positive, negative)
 
+    # MiniMax H3 Image Studio nodes
+
+    def h3_image_to_image_prepare(
+        self, clip: Output, vae: Output, image: Output, instruction: str | Output, extent: Extent
+    ):
+        # The source becomes frame 0 of a short clip (pixel anchor), the edit is the last frame
+        return self.add(
+            "H3ImageToImagePrepare",
+            3,
+            clip=clip,
+            vae=vae,
+            source_image=image,
+            edit_instruction=instruction,
+            width=extent.width,
+            height=extent.height,
+            quality_profile="recommended | 5 frames",
+            source_fidelity=0.75,
+            source_fit="crop_center",
+            optimize_for_still=True,
+        )
+
+    def h3_sampling_settings(self, model: Output, sampler: str, scheduler: str, steps: int):
+        return self.add(
+            "H3SamplingSettings",
+            3,
+            model=model,
+            sampler_name=sampler,
+            scheduler=scheduler,
+            steps=steps,
+            denoise=1.0,
+            shift_video=12.0,
+            shift_audio=3.0,
+            beta_alpha=0.6,
+            beta_beta=0.6,
+        )
+
+    def h3_sample(self, guider: Output, sampler: Output, sigmas: Output, latent: Output, seed: int):
+        noise = self.random_noise(seed)
+        args = {
+            "noise": noise,
+            "guider": guider,
+            "sampler": sampler,
+            "sigmas": sigmas,
+            "latent_image": latent,
+        }
+        return self.add("SamplerCustomAdvanced", 2, **args)[0]
+
+    def h3_decode_still(self, latent: Output, vae: Output, source: Output):
+        if "H3StillSliceDecode" in self.node_defs:  # without the stock decode's 16 px banding
+            return self.add("H3StillSliceDecode", 1, samples=latent, vae=vae, slice=-1)
+        frames, _, _, recommended = self.add(
+            "H3ImageDecode",
+            4,
+            samples=latent,
+            vae=vae,
+            decode_mode="temporal",
+            latent_index=0,
+            spatial_decode="native",
+        )
+        return self.add(
+            "H3ImageFrameSelector",
+            1,
+            frames=frames,
+            strategy="decode_recommended",
+            manual_index=0,
+            skip_first_frames=0,
+            candidate_start=0.0,
+            candidate_end=1.0,
+            similarity_weight=0.6,
+            top_k=4,
+            source_image=source,
+            emit_candidate_batch=False,
+            recommended_index=recommended,
+        )
+
+    def h3_studio_models(self, diffusion_model: str, text_encoder: str, vae: str):
+        return self.add_cached(
+            "H3StudioModels",
+            1,
+            diffusion_model=diffusion_model,
+            text_encoder=text_encoder,
+            video_vae=vae,
+            turbo_lora="None",
+        )
+
+    def h3_studio_lora(self, models: Output, lora_name: str, strength: float):
+        args = {"models": models, "lora_name": lora_name, "strength_model": strength}
+        return self.add("H3StudioLoRA", 1, **args)
+
+    def h3_studio_edit(
+        self,
+        models: Output,
+        image: Output,
+        instruction: str | Output,
+        extent: Extent,
+        references: list[Output],
+    ):
+        assert len(references) <= 8, "H3 Edit supports a maximum of 8 reference images"
+        args = {
+            "models": models,
+            "image": image,
+            "instruction": instruction,
+            "aspect_ratio": "custom pixels",
+            "megapixels": round(extent.pixel_count / 10**6, 1),
+            "width": extent.width,
+            "height": extent.height,
+        }
+        for i, ref in enumerate(references):
+            args[f"references.reference_image_{i + 2}"] = ref
+        return self.add("H3StudioEdit", 1, **args)
+
+    def h3_studio_render(self, job: Output, steps: int, seed: int, sampler: str, scheduler: str):
+        args = {"steps": steps, "seed": seed, "sampler_name": sampler, "scheduler": scheduler}
+        return self.add("H3StudioRender", 2, image_job=job, **args)[0]
+
     def background_region(self, conditioning: Output):
         return self.add("ETN_BackgroundRegion", 1, conditioning=conditioning)
 

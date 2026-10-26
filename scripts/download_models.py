@@ -62,6 +62,7 @@ def list_models(
     krea2=False,
     moss=False,
     fibo2=False,
+    h3=False,
     upscalers=False,
     checkpoints=None,
     controlnet=False,
@@ -104,9 +105,14 @@ def list_models(
         versions.append(Arch.moss)
     if fibo2 or all:
         versions.extend((Arch.fibo2, Arch.fibo2_e))
+    if h3:  # experimental, not part of --all
+        versions.append(Arch.h3_e)
+
+    def include_checkpoint(m: ModelResource):
+        return (all and m.arch is not Arch.h3_e) or m.id.identifier in checkpoints
 
     models: set[ModelResource] = set()
-    models.update([m for m in default_checkpoints if all or (m.id.identifier in checkpoints)])
+    models.update([m for m in default_checkpoints if include_checkpoint(m)])
     if len(versions) > 1:
         models.update([m for m in required_models if m.arch in versions])
     if minimal:
@@ -312,6 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--krea2", action="store_true", help="[Workload] everything needed to run Krea 2 (no checkpoints)")
     parser.add_argument("--moss", action="store_true", help="[Workload] everything needed to run MOSS-Image (no checkpoints)")
     parser.add_argument("--fibo2", action="store_true", help="[Workload] everything needed to run Fibo 2 and Fibo 2 Edit (no checkpoints)")
+    parser.add_argument("--h3", action="store_true", help="[Workload] everything needed to run H3 Edit, experimental (no checkpoints)")
     parser.add_argument("--checkpoints", action="store_true", dest="checkpoints", help="download all checkpoints for selected workloads")
     parser.add_argument("--controlnet", action="store_true", help="download ControlNet models for selected workloads")
     parser.add_argument("--checkpoint", action="append", choices=checkpoint_names, dest="checkpoint_list", help="download a specific checkpoint (can specify multiple times)")
@@ -344,6 +351,7 @@ if __name__ == "__main__":
         "krea2": (Arch.krea2,),
         "moss": (Arch.moss,),
         "fibo2": (Arch.fibo2, Arch.fibo2_e),
+        "h3": (Arch.h3_e,),
     }
     for name, archs in extra_workloads.items():
         if args.checkpoints and getattr(args, name):
@@ -368,6 +376,7 @@ if __name__ == "__main__":
         krea2=args.krea2,
         moss=args.moss,
         fibo2=args.fibo2,
+        h3=args.h3,
         upscalers=args.upscalers,
         checkpoints=checkpoints,
         controlnet=args.controlnet,

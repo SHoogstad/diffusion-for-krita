@@ -68,6 +68,13 @@ optional_custom_nodes = [
         "01f8845bf30d89fff293c7bd50187bc59d9d53ea",
         ["UnetLoaderGGUF", "DualCLIPLoaderGGUF"],
     ),
+    CustomNode(
+        "MiniMax H3 Image Studio",
+        "ComfyUI-MiniMax-H3-Image-Studio",
+        "https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio",
+        "9834e55976cd1d0572b55a3453de0e1b3c5d3dad",
+        ["H3ImageToImagePrepare", "H3SamplingSettings", "H3StudioEdit", "H3StudioRender"],
+    ),
 ]
 
 
@@ -96,6 +103,7 @@ class Arch(Enum):
     moss = "MOSS-Image"
     fibo2 = "Fibo 2"
     fibo2_e = "Fibo 2 Edit"
+    h3_e = "H3 Edit (experimental)"
 
     auto = "Automatic"
     all = "All"
@@ -149,6 +157,10 @@ class Arch(Enum):
             return Arch.moss
         if string in {"fibo2", "fibo-2"} or (string == "unknown" and "fibo" in filename):
             return Arch.fibo2_e if "edit" in filename else Arch.fibo2
+        if string in {"minimax-h3", "minimax_h3"} or (
+            string == "unknown" and any(s in filename for s in ("minimax_h3", "minimaxh3"))
+        ):
+            return Arch.h3_e
         return None
 
     @staticmethod
@@ -212,7 +224,14 @@ class Arch(Enum):
 
     @property
     def is_edit(self):  # edit models make changes to input images
-        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.fibo2_e]
+        return self in [
+            Arch.flux_k,
+            Arch.qwen_e,
+            Arch.qwen_e_p,
+            Arch.qwen_l,
+            Arch.fibo2_e,
+            Arch.h3_e,
+        ]
 
     @property
     def supports_edit(self):  # includes text-to-image models that can also edit
@@ -236,6 +255,13 @@ class Arch(Enum):
         return self in [Arch.fibo2, Arch.fibo2_e]
 
     @property
+    def comfy_nodes(self) -> list[str]:
+        """Custom nodes the arch's workflows need, it is only supported if the server has them."""
+        if self is Arch.h3_e:
+            return ["H3ImageToImagePrepare", "H3SamplingSettings", "H3StudioEdit", "H3StudioRender"]
+        return []
+
+    @property
     def comfy_clip_type(self) -> str | None:
         """Text encoder type for CLIPLoader, if the arch needs a recent ComfyUI version.
         The arch is only supported if the server's CLIPLoader offers this type."""
@@ -244,6 +270,8 @@ class Arch(Enum):
                 return "moss_image"
             case Arch.fibo2 | Arch.fibo2_e:
                 return "fibo2"
+            case Arch.h3_e:
+                return "minimax"
         return None
 
     @property
@@ -281,6 +309,8 @@ class Arch(Enum):
                 return ["qwen_3vl_4b"]
             case Arch.moss:
                 return ["qwen_3_5_9b"]
+            case Arch.h3_e:
+                return ["qwen_3vl_32b_h3"]
             case _:
                 raise ValueError(f"Unsupported architecture: {self}")
 
@@ -309,6 +339,7 @@ class Arch(Enum):
             Arch.moss,
             Arch.fibo2,
             Arch.fibo2_e,
+            Arch.h3_e,
         ]
 
 
@@ -833,6 +864,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.lora, Arch.flux, "turbo"): ["flux.1-turbo"],
     resource_id(ResourceKind.lora, Arch.flux_k, "turbo"): ["flux.1-turbo"],
     resource_id(ResourceKind.lora, Arch.anima, "turbo"): ["anima-turbo-lora"],
+    resource_id(ResourceKind.lora, Arch.h3_e, "turbo"): ["minimax_h3_turbo_v4_step600_ema", "minimax_h3_turbo_4step_ckpt600_ema_v4"],
     resource_id(ResourceKind.lora, Arch.sd15, ControlMode.face): ["ip-adapter-faceid-plusv2_sd15_lora", "ip-adapter-faceid-plus_sd15_lora"],
     resource_id(ResourceKind.lora, Arch.sdxl, ControlMode.face): ["ip-adapter-faceid-plusv2_sdxl_lora", "ip-adapter-faceid_sdxl_lora"],
     resource_id(ResourceKind.lora, Arch.flux, ControlMode.depth): ["flux1-depth"],
@@ -858,6 +890,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_4b"): ["qwen3vl_4b", "qwen_3vl_4b", "qwen3-vl-4b"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_8b"): ["qwen3vl_8b", "qwen_3vl_8b", "qwen3-vl-8b"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3_5_9b"): ["qwen3.5_9b", "qwen_3.5_9b", "qwen3.5-9b", "qwen35_9b"],
+    resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_32b_h3"): ["qwen3vl_32b_minimax_h3"],
     resource_id(ResourceKind.vae, Arch.sd15, "default"): ["vae-ft-mse-840000-ema"],
     resource_id(ResourceKind.vae, Arch.sdxl, "default"): ["sdxl_vae"],
     resource_id(ResourceKind.vae, Arch.illu, "default"): ["sdxl_vae"],
@@ -880,6 +913,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.vae, Arch.moss, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.fibo2, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.fibo2_e, "default"): ["flux2"],
+    resource_id(ResourceKind.vae, Arch.h3_e, "default"): ["minimax_h3_video_vae"],
 }
 # fmt: on
 
@@ -925,6 +959,8 @@ required_resource_ids = {
     ResourceId(ResourceKind.vae, Arch.fibo2, "default"),
     ResourceId(ResourceKind.text_encoder, Arch.fibo2_e, "qwen_3vl_4b"),
     ResourceId(ResourceKind.vae, Arch.fibo2_e, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.h3_e, "qwen_3vl_32b_h3"),
+    ResourceId(ResourceKind.vae, Arch.h3_e, "default"),
 }
 
 recommended_resource_ids = [

@@ -352,6 +352,7 @@ class SamplerPreset(NamedTuple):
     steps: int
     cfg: float
     lora: str | None = None
+    lora_strength: float = 1.0
     minimum_steps: int = 4
     hidden: bool = False
 

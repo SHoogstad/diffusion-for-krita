@@ -30,6 +30,18 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 * Both use the Flux 2 VAE and are detected by filename. They only show up if the connected ComfyUI
   supports them; otherwise you get an "update ComfyUI" hint.
 
+### H3 Edit (experimental)
+* Edits images with **MiniMax H3**, the same way [H3 Image Studio](https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio)
+  does. Without reference images it uses **Keep source**: the canvas is anchored as the first frame of a
+  short clip, which keeps faces, pose and background. With reference images it switches to **Creative**,
+  which redraws the scene using all of them (`<Picture 1>` is the canvas, references are `<Picture 2>` and up).
+* Needs ComfyUI master with H3 support and the H3 Image Studio custom nodes. `H3StillSliceDecode` (included
+  in the Runpod image) removes the 16 px banding of the stock decode; without it the stock decode is used.
+* The default style uses the **H3 - Turbo** sampler: Larry's v4 EMA turbo LoRA at 0.38, 20 steps, er_sde.
+  **H3 - ER-SDE** runs 50 steps without the LoRA. Large canvases are edited at about 2 MP and then upscaled.
+* The models are big: about 40 GB (FL2VA pruned int8, Qwen3-VL 32B text encoder in nvfp4, video VAE). On
+  Runpod, pick a GPU with 48 GB or more.
+
 ## <a name="installation"></a> Installation
 
 1. Install [Krita](https://krita.org/) **5.3** or **6** (5.2 may work).
@@ -72,8 +84,9 @@ Runpod account; you pay Runpod directly, per second while the pod runs.
    The settings page shows an estimate for both, based on the selected GPU and models.
 
    Workloads: Stable Diffusion 1.5, SDXL, Illustrious, Flux, Flux 2, Z-Image, Qwen Image (with Qwen Image
-   Edit 2511), Qwen Image 2.1, Krea 2, MOSS-Image and Fibo 2 (with Fibo 2 Edit). The larger models are
-   downloaded in fp8/int8 versions; Qwen Image needs a GPU with at least 24 GB, 48 GB is more comfortable.
+   Edit 2511), Qwen Image 2.1, Krea 2, MOSS-Image, Fibo 2 (with Fibo 2 Edit) and H3 Edit (experimental,
+   about 40 GB). The larger models are downloaded in fp8/int8 versions; Qwen Image needs a GPU with at least
+   24 GB, 48 GB is more comfortable. H3 Edit needs 48 GB or more.
 4. Click **Start pod**. The plugin creates the pod, shows the download progress and connects.
 
 **Stopping.** The pod is terminated when you click **Stop pod**, when Krita closes, and after the idle time
@@ -144,6 +157,7 @@ The style list shows each style's base model as an icon, and any LoRA you add mu
 | Flux, Flux Kontext, Flux 2 (Klein 4B / 9B) | Flux 2 also edits images |
 | Z-Image, Qwen Image (incl. Edit), Chroma, Anima | |
 | MOSS-Image, Fibo 2, Fibo 2 Edit | See [MOSS-Image and Fibo 2](#moss-image-and-fibo-2) |
+| H3 Edit (experimental) | See [H3 Edit](#h3-edit-experimental) |
 
 When you install the managed server you choose "workloads": the minimal set of models a base model needs.
 

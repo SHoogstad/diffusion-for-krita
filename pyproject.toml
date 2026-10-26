@@ -23,6 +23,8 @@ ignore = ["ASYNC240", "E741", "EXE001", "BLE001", "SIM102", "T100", "TRY300"]
 [tool.ruff.lint.per-file-ignores]
 # Module names mirror PyQt (QtCore, QtGui, ...)
 "ai_diffusion/qt/*" = ["N999"]
+# ComfyUI custom node folders are named like their repositories
+"scripts/runpod/custom_nodes/*" = ["N999"]
 
 [tool.ruff.format]
 docstring-code-format = false

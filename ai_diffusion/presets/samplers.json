@@ -109,5 +109,21 @@
         "steps": 20,
         "minimum_steps": 3,
         "cfg": 5.0
+    },
+    "H3 - ER-SDE": {
+        "sampler": "er_sde",
+        "scheduler": "simple",
+        "steps": 50,
+        "minimum_steps": 8,
+        "cfg": 1.0
+    },
+    "H3 - Turbo": {
+        "sampler": "er_sde",
+        "scheduler": "simple",
+        "lora": "turbo",
+        "lora_strength": 0.38,
+        "steps": 20,
+        "minimum_steps": 4,
+        "cfg": 1.0
     }
 }

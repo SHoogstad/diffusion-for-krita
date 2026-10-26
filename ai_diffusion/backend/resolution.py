@@ -136,7 +136,7 @@ class ScaledExtent(NamedTuple):
 # Image resolution for diffusion should be divisible by this factor, either because it is the
 # required latent compression factor, or to avoid border artifacts with UNET models.
 def diffusion_multiple(arch: Arch):
-    return 32 if arch is Arch.qwen2 else 16
+    return 32 if arch in (Arch.qwen2, Arch.h3_e) else 16
 
 
 class CheckpointResolution(NamedTuple):
@@ -158,6 +158,7 @@ class CheckpointResolution(NamedTuple):
                 Arch.moss: (512, 2048, 1024**2, 1448**2),  # 1-2 MP
                 Arch.fibo2: (512, 1536, 832**2, 1088**2),  # trained at ~1 MP
                 Arch.fibo2_e: (512, 1536, 832**2, 1088**2),
+                Arch.h3_e: (512, 1792, 1024**2, 1448**2),  # 1-2 MP, larger is slow
             }
             default = (256, 2048, 512**2, 2048**2)
             if inpaint:
@@ -213,9 +214,14 @@ def prepare_diffusion_input(
         # and processing large images in subsequent steps.
         image = Image.scale(image, initial) if image else None
 
-    elif arch.is_fibo2 and max_scale < 0.9 and any(x > max_size for x in desired):
+    elif (
+        (arch.is_fibo2 or arch is Arch.h3_e)
+        and max_scale < 0.9
+        and any(x > max_size for x in desired)
+    ):
         # Fibo 2 falls apart well above its training resolution (duplicated limbs etc.), and edits
         # don't use 2 passes. Generate at checkpoint resolution and scale up the result.
+        # H3 Edit works at large sizes, but gets very slow.
         input = extent  # scaled down to the generation resolution below
         initial = desired = (desired * max_scale).multiple_of(mult)
 

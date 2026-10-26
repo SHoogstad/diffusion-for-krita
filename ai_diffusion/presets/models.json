@@ -314,6 +314,40 @@
           "sha256": "32e3787472f708fa5f83624acbf5ef23f7fc89c439e05065ea57cfe5a97f025a"
         }
       ]
+    },
+    {
+      "id": "text_encoder-qwen_3vl_32b_h3-h3_e",
+      "name": "Qwen3-VL 32B MiniMax H3 [nvfp4]",
+      "files": [
+        {
+          "path": "models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "vae-default-h3_e",
+      "name": "Video VAE (MiniMax H3)",
+      "files": [
+        {
+          "path": "models/vae/minimax_h3_video_vae_fp16.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+          "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522"
+        }
+      ]
+    },
+    {
+      "id": "lora-turbo-h3_e",
+      "name": "Turbo LoRA v4 EMA (H3 Edit)",
+      "files": [
+        {
+          "path": "models/loras/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
+          "url": "https://huggingface.co/drbaph/MiniMax-H3-Turbo-Lora-ComfyUI/resolve/main/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
+          "sha256": "7098acf3ee75028fd9fcd948f50fcc8d995057fabb76f86bd3ca2c0ffc58e409"
+        }
+      ]
     }
   ],
   "checkpoints": [
@@ -552,6 +586,18 @@
           "path": "models/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors",
           "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors",
           "sha256": "1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b"
+        }
+      ],
+      "requirements": "cuda"
+    },
+    {
+      "id": "checkpoint-h3_fl2va-h3_e",
+      "name": "MiniMax H3 FL2VA pruned [int8]",
+      "files": [
+        {
+          "path": "models/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sha256": "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a"
         }
       ],
       "requirements": "cuda"
