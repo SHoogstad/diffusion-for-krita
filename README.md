@@ -60,7 +60,8 @@ Windows, Linux and macOS. To run locally, a graphics card with at least 6 GB VRA
 Without a suitable GPU you can run ComfyUI on a [Runpod](https://www.runpod.io) GPU pod. It runs on your own
 Runpod account; you pay Runpod directly, per second while the pod runs.
 
-1. Create a Runpod account, add credit, and create an API key (*Settings ▸ API Keys*).
+1. [Create a Runpod account](https://runpod.io?ref=y5f8nxcm), add credit, and create an API key (*Settings ▸ API Keys*).
+   This is a referral link: it supports the development of Diffusion for Krita and costs you nothing extra.
 2. In Krita: *Configure ▸ Connection ▸ Runpod*, paste the API key and click **Load GPUs**.
 3. Choose a GPU (price per hour is shown), the workloads (base models) and where models are kept:
    * **Keep models (network volume)**: models are downloaded once to a network volume. It costs about
