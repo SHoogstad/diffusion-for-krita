@@ -21,6 +21,11 @@ class ServerMode(Enum):
     runpod = 3
 
 
+class RunpodMode(Enum):
+    pod = _("GPU pod - pay while it runs")
+    serverless = _("Serverless - pay per image")
+
+
 class RunpodStorage(Enum):
     network = _("Keep models (network volume)")
     container = _("Download models on every start")
@@ -196,8 +201,11 @@ class Settings(QObject):
         _("Runpod API Key"), "", _("Create one at runpod.io under Settings > API Keys")
     )
 
+    runpod_mode: RunpodMode
+    _runpod_mode = Setting(_("Mode"), RunpodMode.pod)
+
     runpod_gpu: str
-    _runpod_gpu = Setting(_("GPU"), "NVIDIA GeForce RTX 4090", _("GPU type of the pod"))
+    _runpod_gpu = Setting(_("GPU"), "NVIDIA GeForce RTX 4090", _("GPU type and price per hour"))
 
     runpod_storage: RunpodStorage
     _runpod_storage = Setting(_("Models"), RunpodStorage.network)
@@ -219,8 +227,20 @@ class Settings(QObject):
         _("Terminate the pod after this many minutes without a job (0: never)"),
     )
 
+    runpod_keep_warm: int
+    _runpod_keep_warm = Setting(
+        _("Keep worker ready"),
+        60,
+        _(
+            "Seconds a serverless worker stays ready after a job. Longer avoids cold starts but costs GPU time."
+        ),
+    )
+
     runpod_volume_id: str
     _runpod_volume_id = Setting("Runpod network volume", "")
+
+    runpod_endpoint_id: str
+    _runpod_endpoint_id = Setting("Runpod serverless endpoint", "")
 
     runpod_pod_id: str
     _runpod_pod_id = Setting("Runpod pod", "")

@@ -17,9 +17,10 @@ from ..backend.client import (
 from ..backend.comfy_client import ComfyClient
 from ..backend.network import NetworkError
 from ..backend.runpod import PodConfig, PodPhase, RunpodError, RunpodPod, terminate_pod_blocking
+from ..backend.runpod_serverless import RunpodServerless, ServerlessConfig
 from ..localization import translate as _
 from ..qt.QtCore import QObject, QTimer, pyqtSignal
-from ..settings import PerformancePreset, ServerMode, Settings, settings
+from ..settings import PerformancePreset, RunpodMode, ServerMode, Settings, settings
 from .properties import ObservableProperties, Property
 
 
@@ -56,6 +57,7 @@ class Connection(QObject, ObservableProperties):
         self._workflows: dict[str, dict] = {}
         self._temporary_disconnect = False
         self._pod: RunpodPod | None = None
+        self._serverless: RunpodServerless | None = None
         self._last_activity = time.monotonic()
         self._idle_timer = QTimer(self)
         self._idle_timer.setInterval(30_000)
@@ -122,7 +124,7 @@ class Connection(QObject, ObservableProperties):
 
     @property
     def pod_running(self):
-        return self._pod is not None
+        return self._pod is not None or self._serverless is not None
 
     def start_pod(self):
         eventloop.run(self._start_pod())
@@ -131,6 +133,10 @@ class Connection(QObject, ObservableProperties):
         eventloop.run(self.disconnect())
 
     async def _start_pod(self, reuse_only=False):
+        if settings.runpod_mode is RunpodMode.serverless:
+            if not reuse_only:  # connecting to serverless starts a worker, never automatically
+                await self._start_serverless()
+            return
         if self._pod is not None or self.state in (
             ConnectionState.pod_starting,
             ConnectionState.connecting,
@@ -167,7 +173,7 @@ class Connection(QObject, ObservableProperties):
                 if reuse_only and status.phase is PodPhase.creating:
                     self.state = ConnectionState.disconnected
                     return  # the saved pod is gone, don't start a new one automatically
-                self.pod_status = _pod_status_text(status.phase, status.progress)
+                self.pod_status = _pod_status_text(status.phase, status.progress, serverless=False)
                 done, total = status.progress
                 self.progress = (done, total) if total else (0, 0)
             assert pod.info is not None
@@ -185,8 +191,67 @@ class Connection(QObject, ObservableProperties):
             if self._pod is pod and pod.info is None:
                 self._pod = None
 
+    async def _start_serverless(self):
+        if self.pod_running or self.state in (
+            ConnectionState.pod_starting,
+            ConnectionState.connecting,
+        ):
+            return
+        if not settings.runpod_api_key:
+            self.error = _("Enter your Runpod API key first.")
+            self.state = ConnectionState.error
+            return
+        config = ServerlessConfig(
+            api_key=settings.runpod_api_key,
+            gpu=settings.runpod_gpu,
+            workloads=settings.runpod_workloads,
+            checkpoints=settings.runpod_checkpoints,
+            keep_warm=settings.runpod_keep_warm,
+            volume_id=settings.runpod_volume_id,
+            endpoint_id=settings.runpod_endpoint_id,
+        )
+        serverless = self._serverless = RunpodServerless(config)
+        self.error = ""
+        self.error_kind = ""
+        self.state = ConnectionState.pod_starting
+        try:
+            async for status in serverless.start():
+                if (serverless.volume_id, serverless.endpoint_id) != (
+                    settings.runpod_volume_id,
+                    settings.runpod_endpoint_id,
+                ):
+                    settings.runpod_volume_id = serverless.volume_id
+                    settings.runpod_endpoint_id = serverless.endpoint_id
+                    settings.save()
+                self.pod_status = _pod_status_text(status.phase, status.progress, serverless=True)
+                done, total = status.progress
+                self.progress = (done, total) if total else (0, 0)
+            self.pod_status = ""
+            await self._connect(serverless.client())
+            if self.state is not ConnectionState.connected:
+                self._serverless = None
+        except Exception as e:
+            self._serverless = None
+            self.pod_status = ""
+            self.error = str(e) if isinstance(e, RunpodError) else util.log_error(e)
+            self.error_kind = "runpod"
+            self.state = ConnectionState.error
+
+    async def delete_serverless_endpoint(self):
+        """Removes the endpoint on Runpod (it costs nothing while idle, but keeps the volume)."""
+        await self.disconnect()
+        if settings.runpod_endpoint_id:
+            config = ServerlessConfig(
+                settings.runpod_api_key, settings.runpod_gpu, [], False, 0,
+                endpoint_id=settings.runpod_endpoint_id,
+            )  # fmt: skip
+            await RunpodServerless(config).delete()
+            settings.runpod_endpoint_id = ""
+            settings.save()
+
     async def _stop_pod(self):
         self._idle_timer.stop()
+        self._serverless = None  # scales to zero on its own
         if pod := self._pod:
             self._pod = None
             try:
@@ -304,13 +369,17 @@ class Connection(QObject, ObservableProperties):
                 self.message_received.emit(msg)
 
     def _handle_settings_changed(self, key: str, value: object):
-        if key == "server_mode" and self._pod is not None and value is not ServerMode.runpod:
+        if key == "server_mode" and self.pod_running and value is not ServerMode.runpod:
             self.error = ""
             eventloop.run(self.disconnect())
 
 
-def _pod_status_text(phase: PodPhase, progress: tuple[int, int]):
+def _pod_status_text(phase: PodPhase, progress: tuple[int, int], serverless: bool):
     match phase:
+        case PodPhase.creating if serverless:
+            return _("Preparing Runpod endpoint...")
+        case PodPhase.starting if serverless:
+            return _("Waiting for a Runpod worker (cold start)...")
         case PodPhase.creating:
             return _("Creating Runpod pod...")
         case PodPhase.starting:

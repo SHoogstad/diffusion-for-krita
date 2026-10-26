@@ -5,7 +5,7 @@ from typing import cast
 from krita import Krita
 
 from .. import __release__, eventloop, util
-from ..backend import resources, runpod
+from ..backend import resources, runpod, runpod_serverless
 from ..backend.client import Client, MissingResources
 from ..backend.resources import Arch, ResourceId
 from ..backend.server import Server, ServerState
@@ -48,6 +48,7 @@ from ..qt.QtWidgets import (
 from ..settings import (
     ImageFileFormat,
     PerformancePreset,
+    RunpodMode,
     RunpodStorage,
     ServerMode,
     Settings,
@@ -141,7 +142,7 @@ class InitialSetupWidget(QWidget):
 
 
 class RunpodWidget(QWidget):
-    """Configure, start and stop a Runpod GPU pod running ComfyUI."""
+    """Configure, start and stop ComfyUI on Runpod: a GPU pod or a serverless endpoint."""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -156,7 +157,7 @@ class RunpodWidget(QWidget):
         header = QLabel(
             "<b>Runpod</b> - "
             + _(
-                "GPU pods on {link}, billed to your own account per second while they run.",
+                "GPUs on {link}, billed to your own account by the second.",
                 link="<a href='https://www.runpod.io'>runpod.io</a>",
             ),
             self,
@@ -165,6 +166,19 @@ class RunpodWidget(QWidget):
         header.setOpenExternalLinks(True)
         layout.addWidget(header)
         layout.addSpacing(8)
+
+        add_header(layout, Settings._runpod_mode)
+        self._mode_group = QButtonGroup(self)
+        self._modes: dict[RunpodMode, QRadioButton] = {}
+        mode_layout = QHBoxLayout()
+        for mode in RunpodMode:
+            radio = QRadioButton(mode.value, self)
+            radio.toggled.connect(self._change_mode)
+            self._mode_group.addButton(radio)
+            self._modes[mode] = radio
+            mode_layout.addWidget(radio)
+        mode_layout.addStretch()
+        layout.addLayout(mode_layout)
 
         add_header(layout, Settings._runpod_api_key)
         key_layout = QHBoxLayout()
@@ -215,11 +229,44 @@ class RunpodWidget(QWidget):
             self._estimates[storage] = estimate
             layout.addWidget(radio)
             layout.addWidget(estimate)
+        self._serverless_estimate = QLabel(self)
+        self._serverless_estimate.setWordWrap(True)
+        self._serverless_estimate.setTextFormat(Qt.TextFormat.RichText)
+        self._serverless_estimate.setStyleSheet(f"color: {grey}")
+        layout.addWidget(self._serverless_estimate)
+
+        cleanup_layout = QHBoxLayout()
         self._delete_volume = QPushButton(_("Delete network volume"), self)
         self._delete_volume.clicked.connect(self._delete_volume_clicked)
-        layout.addWidget(self._delete_volume, alignment=Qt.AlignmentFlag.AlignLeft)
+        cleanup_layout.addWidget(self._delete_volume)
+        self._delete_endpoint = QPushButton(_("Delete endpoint"), self)
+        self._delete_endpoint.setToolTip(
+            _("Remove the serverless endpoint on Runpod. It costs nothing while idle.")
+        )
+        self._delete_endpoint.clicked.connect(self._delete_endpoint_clicked)
+        cleanup_layout.addWidget(self._delete_endpoint)
+        cleanup_layout.addStretch()
+        layout.addLayout(cleanup_layout)
 
-        idle_layout = QHBoxLayout()
+        self._keep_warm_widget = QWidget(self)
+        keep_warm_layout = QHBoxLayout(self._keep_warm_widget)
+        keep_warm_layout.setContentsMargins(0, 0, 0, 0)
+        keep_warm_label = QLabel(Settings._runpod_keep_warm.name, self)
+        keep_warm_label.setToolTip(Settings._runpod_keep_warm.desc)
+        self._keep_warm = QSpinBox(self)
+        self._keep_warm.setRange(5, 3600)
+        self._keep_warm.setSingleStep(15)
+        self._keep_warm.setSuffix(" " + _("s"))
+        self._keep_warm.setToolTip(Settings._runpod_keep_warm.desc)
+        self._keep_warm.valueChanged.connect(self._change_keep_warm)
+        keep_warm_layout.addWidget(keep_warm_label)
+        keep_warm_layout.addWidget(self._keep_warm)
+        keep_warm_layout.addStretch()
+        layout.addWidget(self._keep_warm_widget)
+
+        self._idle_widget = QWidget(self)
+        idle_layout = QHBoxLayout(self._idle_widget)
+        idle_layout.setContentsMargins(0, 0, 0, 0)
         idle_label = QLabel(Settings._runpod_idle_minutes.name, self)
         idle_label.setToolTip(Settings._runpod_idle_minutes.desc)
         self._idle = QSpinBox(self)
@@ -230,7 +277,7 @@ class RunpodWidget(QWidget):
         idle_layout.addWidget(idle_label)
         idle_layout.addWidget(self._idle)
         idle_layout.addStretch()
-        layout.addLayout(idle_layout)
+        layout.addWidget(self._idle_widget)
         layout.addSpacing(8)
 
         self._status = QLabel(self)
@@ -258,7 +305,9 @@ class RunpodWidget(QWidget):
         self._checkpoints.setChecked(settings.runpod_checkpoints)
         self._checkpoints.blockSignals(False)
         self._storage[settings.runpod_storage].setChecked(True)
+        self._modes[settings.runpod_mode].setChecked(True)
         self._idle.setValue(settings.runpod_idle_minutes)
+        self._keep_warm.setValue(settings.runpod_keep_warm)
         self._fill_gpus()
         if settings.runpod_api_key and not self._gpus:
             self._load_gpus()
@@ -270,9 +319,11 @@ class RunpodWidget(QWidget):
         gpus = self._gpus or []
         if not any(g.id == settings.runpod_gpu for g in gpus):
             self._gpu.addItem(settings.runpod_gpu, settings.runpod_gpu)
-        with_volume = settings.runpod_storage is RunpodStorage.network
+        serverless = settings.runpod_mode is RunpodMode.serverless
+        with_volume = serverless or settings.runpod_storage is RunpodStorage.network
         for gpu in gpus:
-            label = gpu.label
+            price = gpu.hourly_price(settings.runpod_mode)
+            label = f"{gpu.name} ({gpu.memory} GB) - ${price:.2f}/h"
             if gpu.availability == "NONE":
                 label += " - " + _("not available")
             elif with_volume and gpu.best_data_center(self._volume_data_centers) is None:
@@ -292,7 +343,7 @@ class RunpodWidget(QWidget):
             self._load_button.setEnabled(False)
             try:
                 api = runpod.RunpodApi(settings.runpod_api_key)
-                self._gpus = await api.gpus()
+                self._gpus = await api.gpus(settings.runpod_mode)
                 self._volume_data_centers = await api.volume_data_centers()
                 self._fill_gpus()
             except Exception as e:
@@ -309,11 +360,14 @@ class RunpodWidget(QWidget):
 
     def _update_estimates(self):
         gpu = self._selected_gpu()
-        price = gpu.price if gpu else 0.0
+        price = gpu.hourly_price(settings.runpod_mode) if gpu else 0.0
         model_gb = runpod.model_size_gb(settings.runpod_workloads, settings.runpod_checkpoints)
         for storage, label in self._estimates.items():
             estimate = runpod.estimate(storage, model_gb, price)
             label.setText(estimate.describe(storage, model_gb))
+        keep_warm = settings.runpod_keep_warm
+        serverless = runpod_serverless.estimate_serverless(model_gb, price, keep_warm)
+        self._serverless_estimate.setText(serverless.describe(model_gb, keep_warm))
 
     def _change_api_key(self):
         key = self._api_key.text().strip()
@@ -345,6 +399,32 @@ class RunpodWidget(QWidget):
 
     def _change_idle(self):
         settings.runpod_idle_minutes = self._idle.value()
+
+    def _change_keep_warm(self):
+        settings.runpod_keep_warm = self._keep_warm.value()
+        self._update_estimates()
+
+    def _change_mode(self):
+        for mode, radio in self._modes.items():
+            if radio.isChecked() and settings.runpod_mode is not mode:
+                settings.runpod_mode = mode
+                self._gpus = []  # prices and availability differ for serverless
+                self._fill_gpus()
+                self._load_gpus()
+        self.update_state()
+
+    def _delete_endpoint_clicked(self):
+        async def delete():
+            try:
+                await root.connection.delete_serverless_endpoint()
+                self._status.setText(_("Endpoint deleted."))
+                self._status.setStyleSheet(f"color: {grey}")
+            except Exception as e:
+                self._status.setText(f"<b>{_('Error')}</b>: {e}")
+                self._status.setStyleSheet(f"color: {red}")
+            self.update_state()
+
+        eventloop.run(delete())
 
     def _start_or_stop(self):
         connection = root.connection
@@ -387,18 +467,34 @@ class RunpodWidget(QWidget):
         running = connection.pod_running
         busy = state in (ConnectionState.pod_starting, ConnectionState.connecting)
         editable = not running
+        serverless = settings.runpod_mode is RunpodMode.serverless
         for widget in (self._gpu, self._checkpoints, *self._workloads.values()):
             widget.setEnabled(editable)
-        for radio in self._storage.values():
+        for radio in (*self._storage.values(), *self._modes.values()):
             radio.setEnabled(editable)
+        for storage in RunpodStorage:  # serverless always keeps models on a network volume
+            self._storage[storage].setVisible(not serverless)
+            self._estimates[storage].setVisible(not serverless)
+        self._serverless_estimate.setVisible(serverless)
+        self._keep_warm_widget.setVisible(serverless)
+        self._idle_widget.setVisible(not serverless)
         self._delete_volume.setVisible(bool(settings.runpod_volume_id))
         self._delete_volume.setEnabled(not running)
-        self._start_button.setText(_("Stop pod") if running else _("Start pod"))
+        self._delete_endpoint.setVisible(serverless and bool(settings.runpod_endpoint_id))
+        self._delete_endpoint.setEnabled(not running)
+        if serverless:
+            self._start_button.setText(_("Disconnect") if running else _("Connect"))
+        else:
+            self._start_button.setText(_("Stop pod") if running else _("Start pod"))
         self._start_button.setEnabled(bool(settings.runpod_api_key) and not busy or running)
 
         if state is ConnectionState.pod_starting:
             self._status.setText(connection.pod_status)
             self._status.setStyleSheet(f"color: {yellow}; font-weight:bold")
+        elif state is ConnectionState.connected and running and serverless:
+            text = _("Connected to the serverless endpoint, billed per job")
+            self._status.setText(text)
+            self._status.setStyleSheet(f"color: {green}; font-weight:bold")
         elif state is ConnectionState.connected and running:
             gpu = self._selected_gpu()
             cost = f" - ${gpu.price:.2f}/h" if gpu else ""
@@ -415,7 +511,8 @@ class RunpodWidget(QWidget):
             self._status.setText(connection.error)
             self._status.setStyleSheet(f"color: {grey}")
         else:
-            self._status.setText(_("No pod running"))
+            idle_text = _("Not connected") if serverless else _("No pod running")
+            self._status.setText(idle_text)
             self._status.setStyleSheet(f"color: {grey}; font-style:italic")
 
 

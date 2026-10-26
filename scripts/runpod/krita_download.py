@@ -1,8 +1,9 @@
-"""Download the models the plugin asked for and report progress to /krita/status.
+"""Download the models the plugin asked for and report progress.
 
-The selection comes from KRITA_WORKLOADS (comma separated: sd15, sdxl, illu, flux, flux2,
-zimage) and KRITA_CHECKPOINTS=1 to include the default checkpoints of those workloads.
-Files that already exist (network volume) are skipped by the download script.
+Pods run this as a script before ComfyUI starts: the selection comes from KRITA_WORKLOADS
+(comma separated: sd15, sdxl, illu, flux, flux2, zimage) and KRITA_CHECKPOINTS=1 to include the
+default checkpoints of those workloads, progress goes to /krita/status. The serverless worker
+calls download() directly. Files that already exist (network volume) are skipped.
 """
 
 import asyncio
@@ -11,6 +12,7 @@ import os
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -29,6 +31,8 @@ _checkpoint_archs = {
     "flux2": [Arch.flux2_4b],
     "zimage": [Arch.zimage],
 }
+
+Progress = Callable[[str, int, int], None]  # message, bytes done, bytes total
 
 
 def write_status(phase: str, message: str, done=0, total=0):
@@ -54,38 +58,36 @@ def local_size(path: Path):
     return 0
 
 
-def select_models():
-    workloads = [w for w in os.environ.get("KRITA_WORKLOADS", "sdxl").split(",") if w]
+def select_models(workloads: list[str], checkpoints: bool):
     unknown = [w for w in workloads if w not in _checkpoint_archs]
     if unknown:
         raise ValueError(f"Unknown workloads: {unknown}")
-    checkpoints = []
-    if os.environ.get("KRITA_CHECKPOINTS", "1") == "1":
+    checkpoint_ids = []
+    if checkpoints:
         archs = [a for w in workloads for a in _checkpoint_archs[w]]
-        checkpoints = [m.id.identifier for m in default_checkpoints if m.arch in archs]
+        checkpoint_ids = [m.id.identifier for m in default_checkpoints if m.arch in archs]
     return dm.list_models(
         **dict.fromkeys(workloads, True),
-        checkpoints=checkpoints,
+        checkpoints=checkpoint_ids,
         backend=ModelRequirements.cuda,
     )
 
 
-async def report_progress(destination: Path, files: list, total: int):
-    while True:
-        done = sum(local_size(destination / f.path) for f in files)
-        write_status("downloading", "Downloading models", done, total)
-        await asyncio.sleep(2)
-
-
-async def main():
-    destination = Path(sys.argv[1])
-    write_status("downloading", "Checking models")
-    models = select_models()
+async def download(destination: Path, workloads: list[str], checkpoints: bool, report: Progress):
+    report("Checking models", 0, 0)
+    models = select_models(workloads, checkpoints)
     files = [f for m in models for f in m.files]
     with ThreadPoolExecutor(16) as pool:
         sizes = list(pool.map(remote_size, [dm._map_url(f.url) for f in files]))
     total = sum(sizes)
-    reporter = asyncio.create_task(report_progress(destination, files, total))
+
+    async def report_progress():
+        while True:
+            done = sum(local_size(destination / f.path) for f in files)
+            report("Downloading models", done, total)
+            await asyncio.sleep(2)
+
+    reporter = asyncio.create_task(report_progress())
     start = time.monotonic()
     try:
         # The download script only retries with continue_on_error, so check the result here
@@ -102,7 +104,18 @@ async def main():
     finally:
         reporter.cancel()
     print(f"[krita_download] {total / 1e9:.1f} GB checked in {time.monotonic() - start:.0f}s")
-    write_status("starting", "Starting ComfyUI", total, total)
+    report("Models ready", total, total)
+
+
+async def main():
+    workloads = [w for w in os.environ.get("KRITA_WORKLOADS", "sdxl").split(",") if w]
+    checkpoints = os.environ.get("KRITA_CHECKPOINTS", "1") == "1"
+
+    def report(message: str, done: int, total: int):
+        write_status("downloading", message, done, total)
+
+    await download(Path(sys.argv[1]), workloads, checkpoints, report)
+    write_status("starting", "Starting ComfyUI")
 
 
 if __name__ == "__main__":

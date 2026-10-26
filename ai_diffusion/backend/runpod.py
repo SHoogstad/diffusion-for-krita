@@ -1,9 +1,12 @@
-"""Run ComfyUI on a Runpod GPU pod, billed to the user's own Runpod account.
+"""Run ComfyUI on Runpod, billed to the user's own Runpod account.
 
-The pod runs the Diffusion for Krita image (scripts/runpod): ComfyUI behind a small proxy that
+GPU pod: the Diffusion for Krita image (scripts/runpod) runs ComfyUI behind a small proxy that
 requires a per-pod token, reports start-up progress and terminates the pod when it is no
 longer used. Models live on a network volume (kept between sessions) or on the container disk
 (downloaded on every start).
+
+Serverless: the same image runs as workers of a queue-based endpoint which scales to zero, see
+runpod_serverless.py. Models are always on a network volume.
 """
 
 from __future__ import annotations
@@ -18,12 +21,12 @@ from enum import Enum
 from pathlib import Path
 from typing import NamedTuple
 
-from ..settings import RunpodStorage
+from ..settings import RunpodMode, RunpodStorage
 from ..util import client_logger as log
 from .network import NetworkError, RequestManager
 
 api_url = os.getenv("RUNPOD_API_URL", "https://api.runpod.io/v2")
-image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.57.0")
+image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.58.0")
 pod_prefix = "diffusion-for-krita"
 comfy_port = 8188
 
@@ -51,25 +54,33 @@ class GpuType(NamedTuple):
     id: str
     name: str
     memory: int  # GB VRAM
-    price: float  # USD per hour, secure cloud
+    price: float  # USD per hour, secure cloud pod
     availability: str  # NONE, LOW, MEDIUM, HIGH
     data_centers: list[tuple[str, str]]  # (id, availability)
+    pool: str | None = None  # serverless GPU pool
+    serverless_price: float = 0.0  # USD per hour of worker time
 
     @property
     def label(self):
         return f"{self.name} ({self.memory} GB) - ${self.price:.2f}/h"
 
+    def hourly_price(self, mode: RunpodMode):
+        return self.serverless_price if mode is RunpodMode.serverless else self.price
+
     @staticmethod
     def parse(data: dict):
+        price = data.get("price") or {}
         return GpuType(
             id=data["id"],
             name=data.get("name") or data["id"],
             memory=int(data.get("memory", 0)),
-            price=float((data.get("price") or {}).get("secure") or 0),
+            price=float(price.get("secure") or 0),
             availability=data.get("availability", "NONE"),
             data_centers=[
                 (dc["id"], dc.get("availability", "NONE")) for dc in data.get("dataCenters", [])
             ],
+            pool=data.get("pool"),
+            serverless_price=float(price.get("serverless") or 0),
         )
 
     def best_data_center(self, allowed: set[str] | None = None):
@@ -111,13 +122,16 @@ class RunpodApi:
                     detail = "The Runpod API key is invalid"
                 raise RunpodError(f"Runpod: {detail}") from e
 
-    async def gpus(self) -> list[GpuType]:
-        result = await self._call(
-            "GET", "catalog/gpus?include=AVAILABILITY&product=POD&cloud=SECURE"
-        )
+    async def gpus(self, mode=RunpodMode.pod) -> list[GpuType]:
+        """GPU types with availability for pods or serverless workers."""
+        product = "SERVERLESS" if mode is RunpodMode.serverless else "POD&cloud=SECURE"
+        result = await self._call("GET", f"catalog/gpus?include=AVAILABILITY&product={product}")
         nvidia = [g for g in (result or {}).get("gpus", []) if g.get("manufacturer") == "NVIDIA"]
         gpus = [GpuType.parse(g) for g in nvidia]  # the image needs CUDA
-        return sorted([g for g in gpus if g.price > 0], key=lambda g: (g.price, g.memory))
+        if mode is RunpodMode.serverless:
+            gpus = [g for g in gpus if g.pool]
+        gpus = [g for g in gpus if g.hourly_price(mode) > 0]
+        return sorted(gpus, key=lambda g: (g.hourly_price(mode), g.memory))
 
     async def pods(self) -> list[dict]:
         return ((await self._call("GET", "pods")) or {}).get("pods", [])
@@ -145,6 +159,15 @@ class RunpodApi:
 
     async def delete_volume(self, id: str):
         await self._call("DELETE", f"network-volumes/{id}")
+
+    async def endpoint(self, id: str) -> dict | None:
+        return await self._call("GET", f"serverless/{id}")
+
+    async def create_endpoint(self, data: dict) -> dict:
+        return _ensure_result(await self._call("POST", "serverless", data), "create endpoint")
+
+    async def delete_endpoint(self, id: str):
+        await self._call("DELETE", f"serverless/{id}")
 
 
 def _is_temporary(e: NetworkError):
@@ -230,6 +253,24 @@ def estimate(storage: RunpodStorage, model_gb: float, gpu_price: float) -> Estim
 
 
 # Pod lifecycle ####################################################################################
+
+
+async def ensure_volume(api: RunpodApi, volume_id: str, gpu: GpuType, model_gb: float) -> dict:
+    """The existing network volume, or a new one where the GPU is available."""
+    if volume_id:
+        volume = await api.volume(volume_id)
+        if volume is not None:
+            return volume
+        log.warning(f"Runpod network volume {volume_id} no longer exists")
+    data_center = gpu.best_data_center(await api.volume_data_centers())
+    if data_center is None:
+        raise RunpodError(
+            f"No {gpu.name} is available right now in a data center with network volumes. "
+            "Choose another GPU, or download models on every start."
+        )
+    size = volume_size_gb(model_gb)
+    log.info(f"Creating {size} GB Runpod network volume in {data_center}")
+    return await api.create_volume(pod_prefix, size, data_center)
 
 
 class PodPhase(Enum):
@@ -319,20 +360,7 @@ class RunpodPod:
         return gpu
 
     async def _ensure_volume(self, gpu: GpuType, model_gb: float) -> dict:
-        if self.volume_id:
-            volume = await self.api.volume(self.volume_id)
-            if volume is not None:
-                return volume
-            log.warning(f"Runpod network volume {self.volume_id} no longer exists")
-        data_center = gpu.best_data_center(await self.api.volume_data_centers())
-        if data_center is None:
-            raise RunpodError(
-                f"No {gpu.name} is available right now in a data center with network volumes. "
-                "Choose another GPU, or download models on every start."
-            )
-        size = volume_size_gb(model_gb)
-        log.info(f"Creating {size} GB Runpod network volume in {data_center}")
-        volume = await self.api.create_volume(pod_prefix, size, data_center)
+        volume = await ensure_volume(self.api, self.volume_id, gpu, model_gb)
         self.volume_id = volume["id"]
         return volume
 

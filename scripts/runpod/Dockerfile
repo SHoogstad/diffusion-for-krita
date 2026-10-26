@@ -32,7 +32,7 @@ RUN git clone --depth 1 https://github.com/Fannovel16/comfyui_controlnet_aux \
         if [ -f "$d/requirements.txt" ]; then pip install -r "$d/requirements.txt" || exit 1; fi; \
     done
 
-RUN pip install aiohttp tqdm
+RUN pip install aiohttp tqdm runpod
 
 # Plugin code is only used for its model list and download script
 COPY ai_diffusion /opt/krita/ai_diffusion

@@ -169,15 +169,7 @@ class ComfyClient(Client):
         # Retrieve system info
         self.device_info = DeviceInfo.parse(await self._get("system_stats"))
 
-        # Try to establish websockets connection
-        wsurl = websocket_url(self.url)
-        wsargs = websocket_args(self._token)
-        try:
-            async with websockets.connect(f"{wsurl}/ws?clientId={self._id}", **wsargs):
-                pass
-        except Exception as e:
-            msg = _("Could not establish websocket connection at") + f" {wsurl}: {e!s}"
-            raise ServerError(msg)
+        await self._check_websocket()
 
         # Check custom nodes
         log.info("Checking for required custom nodes...")
@@ -269,6 +261,16 @@ class ComfyClient(Client):
     async def refresh(self):
         async for __ in self.discover_models(refresh=True):
             pass
+
+    async def _check_websocket(self):
+        wsurl = websocket_url(self.url)
+        wsargs = websocket_args(self._token)
+        try:
+            async with websockets.connect(f"{wsurl}/ws?clientId={self._id}", **wsargs):
+                pass
+        except Exception as e:
+            msg = _("Could not establish websocket connection at") + f" {wsurl}: {e!s}"
+            raise ServerError(msg)
 
     async def _get(self, op: str, timeout: float | None = 60):
         return await self._requests.get(f"{self.url}/{op}", timeout=timeout)

@@ -1,10 +1,13 @@
+import base64
 import json
+from collections.abc import Callable, Iterable
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 
 import pytest
 
-from ai_diffusion.backend import runpod
+from ai_diffusion.backend import runpod, runpod_serverless
+from ai_diffusion.backend.network import NetworkError
 from ai_diffusion.backend.runpod import (
     GpuType,
     PodConfig,
@@ -16,6 +19,14 @@ from ai_diffusion.backend.runpod import (
     model_size_gb,
     volume_size_gb,
 )
+from ai_diffusion.backend.runpod_serverless import (
+    RunpodServerless,
+    ServerlessConfig,
+    ServerlessJobs,
+    estimate_serverless,
+)
+from ai_diffusion.image import Extent, Image
+from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.settings import RunpodStorage
 
 from .conftest import qtapp
@@ -25,7 +36,8 @@ gpu_4090 = {
     "name": "RTX 4090",
     "manufacturer": "NVIDIA",
     "memory": 24,
-    "price": {"secure": 0.69, "community": 0.34},
+    "price": {"secure": 0.69, "community": 0.34, "serverless": 1.10},
+    "pool": "ADA_24",
     "availability": "HIGH",
     "dataCenters": [
         {"id": "EU-RO-1", "name": "Romania", "availability": "LOW"},
@@ -50,6 +62,11 @@ class FakeRunpod:
         self.create_pod_error: tuple[int, dict] | None = None
         self.volume_data_centers = ["EU-RO-1", "US-TX-3"]
         self.fail_next: dict[str, int] = {}  # "METHOD path-prefix" -> number of 504 replies
+        self.endpoints: dict[str, dict] = {}
+        self.endpoint_count = 0
+        self.jobs: dict[str, dict] = {}
+        # serverless worker: job input -> streamed items
+        self.worker: Callable[[dict], Iterable[dict]] = lambda input: []
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -140,6 +157,39 @@ class FakeRunpod:
             case "DELETE", ["network-volumes", id] if id in self.volumes:
                 del self.volumes[id]
                 return 204, {}
+            case "POST", ["serverless"]:
+                assert body is not None
+                self.endpoint_count += 1
+                endpoint = {**body, "id": f"ep{self.endpoint_count}"}
+                self.endpoints[endpoint["id"]] = endpoint
+                return 200, endpoint
+            case "GET", ["serverless", id] if id in self.endpoints:
+                return 200, self.endpoints[id]
+            case "DELETE", ["serverless", id] if id in self.endpoints:
+                del self.endpoints[id]
+                return 204, {}
+            case "POST", ["jobs", endpoint, "run"] if endpoint in self.endpoints:
+                assert body is not None
+                job_id = f"job{len(self.jobs) + 1}"
+                try:
+                    items, status = list(self.worker(body["input"])), "COMPLETED"
+                except Exception as e:
+                    items, status = [{"t": "error", "error": str(e)}], "FAILED"
+                self.jobs[job_id] = {"input": body["input"], "items": items, "status": status}
+                return 200, {"id": job_id, "status": "IN_QUEUE"}
+            case "GET", ["jobs", _, "stream", job_id] if job_id in self.jobs:
+                job = self.jobs[job_id]
+                if job.get("streamed") is None:  # first poll: half of the items, still running
+                    half = len(job["items"]) // 2
+                    job["streamed"] = half
+                    stream = [{"output": item} for item in job["items"][:half]]
+                    return 200, {"status": "IN_PROGRESS", "stream": stream}
+                stream = [{"output": item} for item in job["items"][job["streamed"] :]]
+                job["streamed"] = len(job["items"])
+                return 200, {"status": job["status"], "stream": stream}
+            case "POST", ["jobs", _, "cancel", job_id] if job_id in self.jobs:
+                self.jobs[job_id]["cancelled"] = True
+                return 200, {"id": job_id, "status": "CANCELLED"}
         return 404, {"title": "Not Found", "status": 404, "detail": f"{method} {path}"}
 
 
@@ -371,3 +421,182 @@ def test_terminate_blocking(fake_runpod: FakeRunpod):
     assert runpod.terminate_pod_blocking("test-key", "pod1", url=fake_runpod.url)
     assert "pod1" not in fake_runpod.pods
     assert not runpod.terminate_pod_blocking("wrong", "pod2", url=fake_runpod.url)
+
+
+# Serverless #######################################################################################
+
+
+def serverless_config(**kwargs):
+    defaults = {
+        "api_key": "test-key",
+        "gpu": "NVIDIA GeForce RTX 4090",
+        "workloads": ["sdxl"],
+        "checkpoints": True,
+        "keep_warm": 60,
+    }
+    return ServerlessConfig(**(defaults | kwargs))
+
+
+def serverless(fake: FakeRunpod, **kwargs):
+    api = RunpodApi("test-key", fake.url)
+    return RunpodServerless(serverless_config(**kwargs), api, jobs_url=f"{fake.url}/jobs")
+
+
+def body_items(data: bytes, status=200, ct="application/json", chunk=10):
+    parts = [data[i : i + chunk] for i in range(0, len(data), chunk)] or [b""]
+    for i, part in enumerate(parts):
+        yield {"t": "body", "i": i, "n": len(parts), "status": status, "ct": ct, "d": b64(part)}
+
+
+def b64(data: bytes):
+    return base64.b64encode(data).decode()
+
+
+@pytest.fixture()
+def fast_jobs(monkeypatch):
+    monkeypatch.setattr(ServerlessJobs, "poll_interval", 0.01)
+
+
+@qtapp
+async def test_serverless_start(fake_runpod: FakeRunpod, fast_jobs):
+    def worker(input):
+        assert input == {"op": "download", "workloads": ["sdxl"], "checkpoints": True}
+        yield {"t": "progress", "message": "Downloading models", "done": 1, "total": 4}
+        yield {"t": "progress", "message": "Models ready", "done": 4, "total": 4}
+
+    fake_runpod.worker = worker
+    sl = serverless(fake_runpod)
+    phases = [p async for p in sl.start()]
+    assert phases[0].phase is PodPhase.creating
+    assert (1, 4) in [p.progress for p in phases if p.phase is PodPhase.downloading]
+    assert phases[-1].phase is PodPhase.ready
+
+    endpoint = fake_runpod.endpoints[sl.endpoint_id]
+    assert endpoint["type"] == "QUEUE" and endpoint["env"] == {"KRITA_MODE": "serverless"}
+    assert endpoint["gpu"]["pools"] == ["ADA_24"]
+    assert endpoint["workers"] == {"min": 0, "max": 1, "idleTimeout": 60}
+    assert endpoint["mounts"]["network"] == [{"volumeId": sl.volume_id}]
+    assert endpoint["dataCenterIds"] == [fake_runpod.volumes[sl.volume_id]["dataCenter"]]
+
+
+@qtapp
+async def test_serverless_endpoint_reused_or_replaced(fake_runpod: FakeRunpod, fast_jobs):
+    first = serverless(fake_runpod)
+    _ = [p async for p in first.start()]
+    ids = {"volume_id": first.volume_id, "endpoint_id": first.endpoint_id}
+
+    same = serverless(fake_runpod, **ids)
+    _ = [p async for p in same.start()]
+    assert same.endpoint_id == first.endpoint_id and len(fake_runpod.endpoints) == 1
+
+    changed = serverless(fake_runpod, keep_warm=300, **ids)
+    _ = [p async for p in changed.start()]
+    assert changed.endpoint_id != first.endpoint_id
+    assert list(fake_runpod.endpoints) == [changed.endpoint_id]
+    assert fake_runpod.endpoints[changed.endpoint_id]["workers"]["idleTimeout"] == 300
+
+
+@qtapp
+async def test_serverless_download_error(fake_runpod: FakeRunpod, fast_jobs):
+    def worker(input):
+        raise RuntimeError("disk full")
+
+    fake_runpod.worker = worker
+    with pytest.raises(RunpodError, match="disk full"):
+        _ = [p async for p in serverless(fake_runpod).start()]
+
+
+async def connected_client(fake: FakeRunpod):
+    sl = serverless(fake)
+    _ = [p async for p in sl.start()]
+    return sl.client()
+
+
+@qtapp
+async def test_serverless_http(fake_runpod: FakeRunpod, fast_jobs):
+    stats = json.dumps({"system": {"python_version": "3.12"}, "devices": []}).encode()
+
+    def worker(input):
+        if input["op"] == "http" and input["path"] == "system_stats":
+            yield from body_items(stats, chunk=7)  # reassembled from many chunks
+        elif input["op"] == "http":
+            yield from body_items(b"not found", status=404, ct="text/plain")
+
+    client = await connected_client(fake_runpod)
+    fake_runpod.worker = worker
+    assert await client._get("system_stats") == json.loads(stats)
+    with pytest.raises(NetworkError, match="not found"):
+        await client._get("missing")
+
+
+@qtapp
+async def test_serverless_upload_in_parts(fake_runpod: FakeRunpod, fast_jobs, monkeypatch):
+    monkeypatch.setattr(runpod_serverless, "max_job_input", 10)
+    received: list[dict] = []
+
+    def worker(input):
+        received.append(input)
+        yield {"t": "body", "i": 0, "n": 1, "status": 200, "ct": "text/plain", "d": ""}
+
+    client = await connected_client(fake_runpod)
+    fake_runpod.worker = worker
+    await client._put("api/etn/image/small", b"0123456789")
+    data = bytes(range(25))
+    await client._put("api/etn/upload/loras/big", data)
+
+    assert received[0]["op"] == "http" and base64.b64decode(received[0]["data"]) == b"0123456789"
+    parts = received[1:]
+    assert [p["op"] for p in parts] == ["upload"] * 3 and len({p["id"] for p in parts}) == 1
+    assert b"".join(base64.b64decode(p["data"]) for p in parts) == data
+
+
+@qtapp
+async def test_serverless_prompt(fake_runpod: FakeRunpod, fast_jobs):
+    png = Image.create(Extent(8, 4), Qt.GlobalColor.red).to_bytes().data()
+    executed = {
+        "prompt_id": "p1",
+        "node": "9",
+        "output": {"images": [{"source": "http", "id": "img1"}]},
+    }
+
+    def worker(input):
+        assert input["op"] == "prompt" and input["data"]["prompt_id"] == "p1"
+        yield {"t": "ws", "m": json.dumps({"type": "execution_start", "data": {"prompt_id": "p1"}})}
+        for i, n, part in ((0, 2, png[:20]), (1, 2, png[20:])):
+            yield {"t": "img", "id": "img1", "i": i, "n": n, "d": b64(part)}
+        yield {"t": "ws", "m": json.dumps({"type": "executed", "data": executed})}
+
+    client = await connected_client(fake_runpod)
+    fake_runpod.worker = worker
+    assert client._start_prompt({"prompt": {}, "prompt_id": "p1"}) == {"prompt_id": "p1"}
+    assert client._prompt_task is not None
+    await client._prompt_task
+
+    messages = [json.loads(client._socket.queue.get_nowait()) for _ in range(2)]
+    assert [m["type"] for m in messages] == ["execution_start", "executed"]
+    image = await client._transfer_result_image("img1")
+    assert image.extent == Extent(8, 4)
+
+
+@qtapp
+async def test_serverless_prompt_error(fake_runpod: FakeRunpod, fast_jobs):
+    def worker(input):
+        raise RuntimeError("CUDA out of memory")
+
+    client = await connected_client(fake_runpod)
+    fake_runpod.worker = worker
+    client._start_prompt({"prompt": {}, "prompt_id": "p2"})
+    assert client._prompt_task is not None
+    await client._prompt_task
+    message = json.loads(client._socket.queue.get_nowait())
+    assert message["type"] == "execution_error"
+    assert message["data"]["prompt_id"] == "p2"
+    assert "CUDA out of memory" in message["data"]["exception_message"]
+
+
+def test_serverless_estimate():
+    estimate = estimate_serverless(18, 1.10, keep_warm=60)
+    assert estimate.storage_month == pytest.approx(30 * runpod.network_volume_gb_month)
+    assert estimate.per_100_images == pytest.approx(100 * 10 / 3600 * 1.10)
+    assert estimate.keep_warm_cost == pytest.approx(60 / 3600 * 1.10)
+    assert "per 100 images" in estimate.describe(18, 60)

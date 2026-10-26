@@ -78,10 +78,22 @@ been disconnected for 10 minutes, for example after a crash. Still check
 [your pods](https://www.runpod.io/console/pods) now and then. A network volume stays (and costs storage)
 until you click **Delete network volume** or delete it on Runpod.
 
+### Serverless (pay per image)
+Choose **Serverless - pay per image** as mode to use a Runpod serverless endpoint instead of a pod. Workers
+only run while they generate (plus a short "keep ready" time), so there's no cost while you're not
+generating, apart from the network volume that holds the models. Serverless GPU time costs more per hour
+than a pod, so it's cheapest for occasional use; for long sessions a pod is cheaper.
+
+* **Connect** creates the network volume and endpoint if needed and downloads the models once.
+* The first image after a pause waits for a worker to start (a cold start, about a minute).
+* **Live painting is not practical**: every update is a separate job. Generate, inpaint, refine and upscale work.
+* **Keep worker ready** sets how long a worker stays after a job: longer means fewer cold starts but more cost.
+* The endpoint costs nothing while idle. **Delete endpoint** removes it; the network volume stays.
+
 **Security.** Runpod makes the pod reachable on a public URL. The pod only accepts requests with a secret
 token that the plugin generates for each pod.
 
-The pod runs the image built from [`scripts/runpod`](scripts/runpod): ComfyUI with the required custom
+Pods and serverless workers run the image built from [`scripts/runpod`](scripts/runpod): ComfyUI with the required custom
 nodes, a small gatekeeper that checks the token and reports start-up progress, and the plugin's model
 download script.
 

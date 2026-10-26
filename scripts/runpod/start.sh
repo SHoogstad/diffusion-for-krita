@@ -4,7 +4,12 @@
 #   KRITA_STORAGE    "network": keep models on the network volume at /workspace
 #                    "container": download into the container disk on every start
 #   KRITA_WORKLOADS, KRITA_CHECKPOINTS: which models to download (see krita_download.py)
+#   KRITA_MODE       "serverless": run as a Runpod serverless worker (krita_serverless.py)
 set -uo pipefail
+
+if [ "${KRITA_MODE:-pod}" = "serverless" ]; then
+    exec python /opt/krita/runpod/krita_serverless.py
+fi
 
 export KRITA_STATUS_FILE=/tmp/krita_status.json
 export COMFY_PORT=8189
