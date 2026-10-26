@@ -5,7 +5,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from PyQt5.QtNetwork import QNetworkAccessManager
 
 from ai_diffusion.backend import network, resources, server
 from ai_diffusion.backend.resources import VerificationState
@@ -17,6 +16,7 @@ from ai_diffusion.backend.server import (
     model_dirs,
 )
 from ai_diffusion.platform_tools import get_cuda_devices
+from ai_diffusion.qt.QtNetwork import QNetworkAccessManager
 from ai_diffusion.style import Arch
 
 from .config import server_dir

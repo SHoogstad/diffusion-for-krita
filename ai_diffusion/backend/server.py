@@ -11,8 +11,6 @@ from itertools import chain
 from pathlib import Path
 from typing import NamedTuple
 
-from PyQt5.QtNetwork import QNetworkAccessManager
-
 from .. import eventloop
 from ..localization import translate as _
 from ..platform_tools import (
@@ -25,6 +23,7 @@ from ..platform_tools import (
     is_windows,
     platform_id,
 )
+from ..qt.QtNetwork import QNetworkAccessManager
 from ..settings import ServerBackend, settings
 from ..util import client_logger as log
 from ..util import server_logger as server_log

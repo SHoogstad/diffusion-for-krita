@@ -1,5 +1,3 @@
-from PyQt5.QtCore import Qt
-
 from ai_diffusion.backend.api import (
     ConditioningInput,
     ControlInput,
@@ -13,6 +11,7 @@ from ai_diffusion.backend.api import (
 )
 from ai_diffusion.backend.resources import ControlMode
 from ai_diffusion.image import Bounds, Extent, Image, ImageFileFormat
+from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.util import ensure
 
 

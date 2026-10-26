@@ -4,9 +4,16 @@ from pathlib import Path
 from typing import cast
 
 from krita import Krita
-from PyQt5.QtCore import Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import QColor, QDesktopServices, QPalette
-from PyQt5.QtWidgets import (
+
+from ..backend.client import filter_supported_styles, resolve_arch
+from ..backend.resources import Arch, ResourceId, ResourceKind, search_paths
+from ..backend.server import Server
+from ..files import File, FileFilter, FileFormat, FileSource
+from ..localization import translate as _
+from ..model.root import root
+from ..qt.QtCore import Qt, QUrl, pyqtSignal
+from ..qt.QtGui import QColor, QDesktopServices, QPalette
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -22,13 +29,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..backend.client import filter_supported_styles, resolve_arch
-from ..backend.resources import Arch, ResourceId, ResourceKind, search_paths
-from ..backend.server import Server
-from ..files import File, FileFilter, FileFormat, FileSource
-from ..localization import translate as _
-from ..model.root import root
 from ..settings import ServerMode, Setting, settings
 from ..style import SamplerPresets, Style, Styles, StyleSettings
 from . import theme

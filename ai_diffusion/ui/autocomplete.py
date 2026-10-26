@@ -3,12 +3,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, cast
 
-from PyQt5.QtCore import QAbstractProxyModel, QRect, QSize, QStringListModel, Qt
-from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPalette, QPen, QTextCursor
-from PyQt5.QtWidgets import QApplication, QCompleter, QPlainTextEdit, QStyle, QStyledItemDelegate
-
 from ..files import FileFilter
 from ..model.root import root
+from ..qt.QtCore import QAbstractProxyModel, QRect, QSize, QStringListModel, Qt
+from ..qt.QtGui import QColor, QFont, QFontMetrics, QPalette, QPen, QTextCursor
+from ..qt.QtWidgets import QApplication, QCompleter, QPlainTextEdit, QStyle, QStyledItemDelegate
 from ..settings import settings
 from ..text import char16_index_to_str_index
 from ..util import ensure, plugin_dir, user_data_dir

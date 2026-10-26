@@ -118,7 +118,7 @@ def test_fibo2_edit():
 
 
 def rect_mask(extent: Extent, rect: tuple[int, int, int, int]):
-    from PyQt5.QtGui import QColor, QPainter
+    from ai_diffusion.qt.QtGui import QColor, QPainter
 
     mask = Image.create(extent, fill=0)
     mask._qimage = mask._qimage.convertToFormat(mask._qimage.Format.Format_Grayscale8)

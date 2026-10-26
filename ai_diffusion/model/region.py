@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from enum import Enum
 
-from PyQt5.QtCore import QMetaObject, QObject, QUuid, pyqtSignal
-
 from .. import eventloop
 from ..backend import workflow
 from ..backend.api import ConditioningInput, RegionInput
 from ..backend.client import Client
 from ..document import Layer, LayerType
 from ..image import Bounds, Extent, Image
+from ..qt.QtCore import QMetaObject, QObject, QUuid, pyqtSignal
 from ..settings import settings
 from ..style import Style
 from . import model

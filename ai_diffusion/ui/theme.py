@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QSize, Qt
-from PyQt5.QtGui import QFontMetrics, QGuiApplication, QIcon, QPalette, QPixmap
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
-
 from ..backend.client import Client
 from ..files import FileFormat
 from ..localization import translate as _
 from ..platform_tools import is_windows
+from ..qt.QtCore import QObject, QSize, Qt
+from ..qt.QtGui import QFontMetrics, QGuiApplication, QIcon, QPalette, QPixmap
+from ..qt.QtWidgets import QLabel, QVBoxLayout, QWidget
 from ..settings import Setting
 from ..style import Arch
 from ..util import client_logger as log

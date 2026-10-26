@@ -7,10 +7,6 @@ from enum import Enum
 from time import time
 from typing import Any
 
-from PyQt5.QtCore import QByteArray, QObject
-from PyQt5.QtGui import QImageReader
-from PyQt5.QtWidgets import QMessageBox
-
 from . import eventloop
 from .backend.api import FillMode, InpaintMode
 from .image import Image, ImageCollection
@@ -21,6 +17,9 @@ from .model.jobs import Job, JobKind, JobParams, JobQueue
 from .model.model import DocumentModel, InpaintContext
 from .model.properties import deserialize, serialize
 from .model.region import Region, RootRegion
+from .qt.QtCore import QByteArray, QObject
+from .qt.QtGui import QImageReader
+from .qt.QtWidgets import QMessageBox
 from .settings import settings
 from .style import Style, Styles
 from .util import client_logger as log

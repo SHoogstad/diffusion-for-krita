@@ -4,9 +4,6 @@ import asyncio
 from collections.abc import Iterable
 from enum import Enum
 
-from PyQt5.QtCore import QObject, QUrl, pyqtSignal
-from PyQt5.QtGui import QDesktopServices
-
 from .. import eventloop, util
 from ..backend.client import (
     Client,
@@ -20,6 +17,8 @@ from ..backend.cloud_client import CloudClient
 from ..backend.comfy_client import ComfyClient
 from ..backend.network import NetworkError
 from ..localization import translate as _
+from ..qt.QtCore import QObject, QUrl, pyqtSignal
+from ..qt.QtGui import QDesktopServices
 from ..settings import PerformancePreset, ServerMode, Settings, settings
 from .properties import ObservableProperties, Property
 

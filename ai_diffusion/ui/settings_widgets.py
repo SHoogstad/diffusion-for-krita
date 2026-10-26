@@ -3,9 +3,10 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from PyQt5.QtCore import QAbstractItemModel, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from ..localization import translate as _
+from ..qt.QtCore import QAbstractItemModel, QSize, Qt, pyqtSignal
+from ..qt.QtGui import QIcon
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
@@ -19,8 +20,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..localization import translate as _
 from ..settings import Setting, settings
 from .slider_spinbox import DoubleSliderSpinBox
 from .switch import SwitchWidget

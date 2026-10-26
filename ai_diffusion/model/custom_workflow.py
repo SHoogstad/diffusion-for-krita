@@ -8,18 +8,6 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from PyQt5.QtCore import (
-    QAbstractListModel,
-    QMetaObject,
-    QModelIndex,
-    QObject,
-    QSortFilterProxyModel,
-    Qt,
-    QTimer,
-    QUuid,
-    pyqtSignal,
-)
-
 from .. import eventloop
 from ..backend.api import CustomStyleInput, InpaintContext, WorkflowInput
 from ..backend.client import (
@@ -34,6 +22,17 @@ from ..backend.comfy_workflow import ComfyNode, ComfyWorkflow
 from ..backend.workflow import sampling_from_style
 from ..image import Bounds, Image, Mask
 from ..localization import translate as _
+from ..qt.QtCore import (
+    QAbstractListModel,
+    QMetaObject,
+    QModelIndex,
+    QObject,
+    QSortFilterProxyModel,
+    Qt,
+    QTimer,
+    QUuid,
+    pyqtSignal,
+)
 from ..style import Styles
 from ..ui import theme
 from ..util import PluginError, base_type_match, parse_enum, user_data_dir

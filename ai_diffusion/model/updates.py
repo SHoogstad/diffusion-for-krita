@@ -7,11 +7,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import NamedTuple
 
-from PyQt5.QtCore import QObject, pyqtSignal
-
 from .. import __release__, eventloop
 from ..backend.network import RequestManager
 from ..platform_tools import ZipFile
+from ..qt.QtCore import QObject, pyqtSignal
 from ..settings import settings
 from ..util import client_logger as log
 from .properties import ObservableProperties, Property
@@ -36,16 +35,16 @@ class UpdatePackage(NamedTuple):
 
 
 def parse_release_tag(tag: str) -> tuple[int, ...] | None:
-    """Parse "v1.54.1-krita5.3" into the plugin version (1, 54, 1). The suffix is the Krita
-    version the build targets, which must be 5.x."""
-    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)-krita5(?:\.\d+)?", tag.strip())
+    """Parse "v1.56.0" into the plugin version (1, 56, 0). Builds run on Krita 5 and 6.
+    Older Krita 5 only releases were tagged "v1.54.1-krita5.3" and are still recognized."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-krita5(?:\.\d+)?)?", tag.strip())
     if m is None:
         return None
     return tuple(int(x) for x in m.groups())
 
 
 class AutoUpdate(QObject, ObservableProperties):
-    # Updates come from GitHub releases of Diffusion for Krita. Upstream packages target Krita 6.
+    # Updates come from GitHub releases of Diffusion for Krita.
     default_api_url = os.getenv(
         "KRITA5_UPDATE_URL", "https://api.github.com/repos/SHoogstad/diffusion-for-krita"
     )

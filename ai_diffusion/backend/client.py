@@ -9,12 +9,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Generic, NamedTuple, TypeVar
 
-from PyQt5.QtCore import QObject, pyqtSignal
-
 from ..files import FileFormat, FileLibrary
 from ..image import ImageCollection, Point
 from ..localization import translate as _
 from ..model.properties import ObservableProperties, Property
+from ..qt.QtCore import QObject, pyqtSignal
 from ..settings import PerformanceSettings
 from ..style import Style
 from ..util import PluginError, ensure

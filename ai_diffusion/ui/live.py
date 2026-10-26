@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QMetaObject, QRectF, Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QPainter, QPen
-from PyQt5.QtWidgets import (
+from ..image import Extent, Image
+from ..localization import translate as _
+from ..model.model import DocumentModel
+from ..model.properties import Bind, Binding, bind
+from ..model.root import root
+from ..qt.QtCore import QMetaObject, QRectF, Qt, QTimer
+from ..qt.QtGui import QColor, QFont, QPainter, QPen
+from ..qt.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -11,12 +16,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..image import Extent, Image
-from ..localization import translate as _
-from ..model.model import DocumentModel
-from ..model.properties import Bind, Binding, bind
-from ..model.root import root
 from . import theme
 from .control import ControlListWidget
 from .region import ActiveRegionWidget, PromptHeader

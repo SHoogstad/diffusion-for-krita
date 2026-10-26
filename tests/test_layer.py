@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from krita import Document
-from PyQt5.QtCore import Qt
 
 from ai_diffusion.eventloop import process_python_events
 from ai_diffusion.image import BlendMode, Bounds, Extent, Image
 from ai_diffusion.layer import LayerManager
+from ai_diffusion.qt.QtCore import Qt
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -12,7 +12,8 @@ from typing import Any
 import aiohttp
 import psutil
 import pytest
-from PyQt5.QtCore import QCoreApplication
+
+from ai_diffusion.qt.QtCore import QCoreApplication
 
 sys.path.append(str(Path(__file__).parent.parent))
 from ai_diffusion import eventloop, util

@@ -79,4 +79,7 @@ jobs:
         run: python -m pytest tests/test_server.py -vs --test-install
       - name: Test
         run: python -m pytest tests -vs --ci
-
+      - name: Test with PyQt5 (Krita 5)
+        env:
+          DIFFUSION_QT: '5'
+        run: python -m pytest tests -vs --ignore=tests/test_server.py --ignore=tests/test_client.py --ignore=tests/test_workflow.py --ignore=tests/test_service.py

@@ -3,8 +3,21 @@ from __future__ import annotations
 from typing import cast
 
 from krita import Krita
-from PyQt5.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import (
+
+from .. import __release__, eventloop, util
+from ..backend import resources
+from ..backend.client import Client, MissingResources, User
+from ..backend.cloud_client import CloudClient
+from ..backend.resources import Arch, ResourceId
+from ..backend.server import Server, ServerState
+from ..localization import Localization
+from ..localization import translate as _
+from ..model.connection import ConnectionState, apply_performance_preset
+from ..model.properties import Binding
+from ..model.root import collect_diagnostics, root
+from ..model.updates import UpdateState
+from ..qt.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtGui import (
     QColor,
     QCursor,
     QDesktopServices,
@@ -13,7 +26,7 @@ from PyQt5.QtGui import (
     QGuiApplication,
     QPainter,
 )
-from PyQt5.QtWidgets import (
+from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -33,19 +46,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from .. import __release__, eventloop, util
-from ..backend import resources
-from ..backend.client import Client, MissingResources, User
-from ..backend.cloud_client import CloudClient
-from ..backend.resources import Arch, ResourceId
-from ..backend.server import Server, ServerState
-from ..localization import Localization
-from ..localization import translate as _
-from ..model.connection import ConnectionState, apply_performance_preset
-from ..model.properties import Binding
-from ..model.root import collect_diagnostics, root
-from ..model.updates import UpdateState
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
 from ..style import Style
 from .server import ServerWidget

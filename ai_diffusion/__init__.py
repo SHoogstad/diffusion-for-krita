@@ -1,8 +1,8 @@
 """Generative AI plugin for Krita"""
 
 __version__ = "1.55.3"
-# Release tag of this Krita 5 build on GitHub, used by the auto-updater: v<version>-krita<5.x>
-__release__ = f"v{__version__}-krita5.3"
+# Release tag on GitHub, used by the auto-updater. One build runs on Krita 5 and Krita 6.
+__release__ = f"v{__version__}"
 
 import importlib.util
 
@@ -19,9 +19,15 @@ if importlib.util.find_spec("krita"):
     import krita
 
     if not getattr(krita, "IS_MOCK", False):
+        from .qt import QT6, binding
+
         krita_ver = krita.Krita.instance().version()
-        if not krita_ver.startswith("5"):
-            raise ImportError(f"This Plugin is for Krita 5.x, but you are using Krita {krita_ver}.")
+        if not krita_ver.startswith(("5", "6")):
+            raise ImportError(
+                f"This Plugin is for Krita 5 and 6, but you are using Krita {krita_ver}."
+            )
+        if krita_ver.startswith("6") != QT6:
+            raise ImportError(f"Krita {krita_ver} does not match the Qt binding {binding}.")
 
         from .extension import AIToolsExtension as AIToolsExtension
 

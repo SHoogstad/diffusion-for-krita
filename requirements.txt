@@ -1,7 +1,8 @@
 # This file is for development and running tests.
 #
 # The plugin itself will run inside Krita's embedded Python, and only has access
-# to the Python standard library and Qt5.
+# to the Python standard library and Qt (PyQt5 on Krita 5, PyQt6 on Krita 6).
+# Tests use PyQt6 if installed, set DIFFUSION_QT=5 to run them with PyQt5.
 
 # Development
 ruff
@@ -22,6 +23,7 @@ pytest-asyncio
 psutil
 tqdm
 PyQt5
+PyQt6
 Pillow
 
 # Service

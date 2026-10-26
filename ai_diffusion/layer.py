@@ -5,11 +5,11 @@ from enum import Enum
 from typing import ClassVar
 
 import krita
-from PyQt5.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
-from PyQt5.QtGui import QImage
 
 from . import eventloop
 from .image import BlendMode, Bounds, Extent, Image, ImageCollection
+from .qt.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
+from .qt.QtGui import QImage
 from .util import acquire_elements, ensure, maybe
 from .util import client_logger as log
 

@@ -1,7 +1,6 @@
 from enum import Enum
 
 import pytest
-from PyQt5.QtCore import QObject, pyqtSignal
 
 from ai_diffusion.model.properties import (
     ObservableProperties,
@@ -10,6 +9,7 @@ from ai_diffusion.model.properties import (
     deserialize,
     serialize,
 )
+from ai_diffusion.qt.QtCore import QObject, pyqtSignal
 
 
 class Piong(Enum):

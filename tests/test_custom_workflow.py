@@ -5,7 +5,6 @@ from copy import copy
 from pathlib import Path
 
 import pytest
-from PyQt5.QtCore import Qt
 
 from ai_diffusion.backend import workflow
 from ai_diffusion.backend.api import (
@@ -38,6 +37,7 @@ from ai_diffusion.model.custom_workflow import (
     workflow_parameters,
 )
 from ai_diffusion.model.jobs import Job, JobKind, JobParams, JobQueue
+from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.settings import PerformanceSettings
 from ai_diffusion.style import Style, Styles
 from ai_diffusion.util import PluginError

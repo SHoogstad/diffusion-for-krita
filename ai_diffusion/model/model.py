@@ -13,9 +13,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, NamedTuple
 
-from PyQt5.QtCore import QMetaObject, QObject, Qt, QUuid, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QPainter
-
 from .. import eventloop, util
 from ..backend import resolution, workflow
 from ..backend.api import (
@@ -50,6 +47,8 @@ from ..image import BlendMode, Bounds, DummyImage, Extent, Image, Mask
 from ..layer import Layer, LayerType, RestoreActiveLayer
 from ..localization import translate as _
 from ..pose import Pose
+from ..qt.QtCore import QMetaObject, QObject, Qt, QUuid, pyqtSignal
+from ..qt.QtGui import QBrush, QColor, QPainter
 from ..settings import (
     ApplyBehavior,
     ApplyRegionBehavior,

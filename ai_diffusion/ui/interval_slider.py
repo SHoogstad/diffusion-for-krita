@@ -13,10 +13,10 @@
 # [GPL-3.0]: https://www.gnu.org/licenses/gpl-3.0.en.html
 
 
-from PyQt5.QtCore import QRect, QSize, Qt
-from PyQt5.QtCore import pyqtSignal as Signal
-from PyQt5.QtGui import QBrush, QMouseEvent, QPainter, QPalette
-from PyQt5.QtWidgets import QSizePolicy, QSlider, QStyle, QStyleOptionSlider, QWidget
+from ..qt.QtCore import QRect, QSize, Qt
+from ..qt.QtCore import pyqtSignal as Signal
+from ..qt.QtGui import QBrush, QMouseEvent, QPainter, QPalette
+from ..qt.QtWidgets import QSizePolicy, QSlider, QStyle, QStyleOptionSlider, QWidget
 
 # Based on idea and in part the code from
 # https://stackoverflow.com/questions/47342158/porting-range-slider-widget-to-pyqt5

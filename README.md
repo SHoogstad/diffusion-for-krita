@@ -1,22 +1,24 @@
 <h1><img width="64px" src="ai_diffusion/icons/logo-128.png"> Diffusion <i>for Krita</i></h1>
 
-Generative AI painting in **Krita 5.3** with diffusion models: inpaint, outpaint, refine, live painting,
+Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
 regions, control layers and upscaling, with ComfyUI as the backend.
 
 > [!NOTE]
 > Diffusion for Krita is an independent project **based on [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
 > by [Acly](https://github.com/Acly)**. Most of the plugin is their work, and the credit for it goes to them and
-> the upstream contributors. It started as a port of upstream 1.54 back to Krita 5 (PyQt5) and now follows its own
+> the upstream contributors. It started as a port of upstream 1.54 back to Krita 5 and now follows its own
 > path with its own models and releases. It is not affiliated with or endorsed by the upstream project or Interstice.
 
 ⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | 🔀 [Differences from upstream](#fork) | ✨[Features](#features) | 🖼️[Gallery](#gallery) | 📖[User Guide (upstream)](https://docs.interstice.cloud) | 🏠 [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion)
 
 ## <a name="fork"></a> Differences from Krita AI Diffusion
 
-### Runs on Krita 5
-* PyQt5 instead of PyQt6, so it runs on Krita 5.3 (the tested version).
-* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so the plugin has its own version for
-  the strength and settings sliders: drag the bar to change the value, or double-click it to type one.
+### Runs on Krita 5 and Krita 6
+* One download for both. At startup the plugin uses the Qt binding Krita was built with: PyQt5 on
+  Krita 5, PyQt6 on Krita 6. All Qt imports go through `ai_diffusion/qt`.
+* Krita 5 doesn't expose its `DoubleSliderSpinBox` to Python, so on Krita 5 the plugin has its own version
+  for the strength and settings sliders: drag the bar to change the value, or double-click it to type one.
+  Krita 6 uses the native slider.
 * Useful upstream changes are still merged when they come.
 
 ### Own releases and updates
@@ -38,8 +40,9 @@ Not in Krita AI Diffusion, included since 1.55:
   supports them; otherwise you get an "update ComfyUI" hint.
 
 ### Versioning
-Release tags look like `v<plugin version>-krita5.3`, for example `v1.54.1-krita5.3`. The plugin version
-follows upstream (own features bump the minor version, as in 1.55), and the suffix names the **target Krita version**, not a build number.
+Release tags look like `v<plugin version>`, for example `v1.56.0`. The plugin version follows upstream
+(own features bump the minor version, as in 1.55). Releases up to 1.55.3 were Krita 5 only and tagged
+`v<version>-krita5.3`; the updater still understands those tags, so they update to newer releases.
 
 | Release | Based on | Channel |
 |---|---|---|
@@ -115,8 +118,8 @@ insufficient memory!
 
 ### Installation
 
-1. Install [Krita](https://krita.org/) **5.3** (5.2 may work; on Krita 6 use [upstream](https://github.com/Acly/krita-ai-diffusion/releases/latest) instead).
-1. Download `diffusion_for_krita-<version>-krita5.3.zip` from the [releases](https://github.com/SHoogstad/diffusion-for-krita/releases).
+1. Install [Krita](https://krita.org/) **5.3** or **6** (5.2 may work).
+1. Download `diffusion_for_krita-<version>.zip` from the [releases](https://github.com/SHoogstad/diffusion-for-krita/releases).
    It replaces Krita AI Diffusion if that's installed (same `ai_diffusion` folder). Your settings and server stay.
 2. Start Krita and install the plugin via Tools ▸ Scripts ▸ Import Python Plugin from File...
     * Point it to the ZIP archive you downloaded in the previous step.

@@ -4,16 +4,6 @@ import asyncio
 
 import krita
 from krita import DockWidget, Krita
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QCheckBox,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
 
 from .. import eventloop
 from ..backend.server import Server, ServerState
@@ -23,6 +13,16 @@ from ..model.connection import ConnectionState
 from ..model.model import DocumentModel, Workspace
 from ..model.root import root
 from ..model.updates import UpdateState
+from ..qt.QtCore import Qt, pyqtSignal
+from ..qt.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 from ..settings import ServerMode, settings
 from . import theme
 from .animation import AnimationWidget

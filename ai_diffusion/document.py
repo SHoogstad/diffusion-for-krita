@@ -7,12 +7,12 @@ from weakref import WeakValueDictionary
 
 import krita
 from krita import Krita
-from PyQt5.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
 
 from .image import Bounds, Extent, Image, Mask
 from .layer import Layer, LayerManager, LayerType
 from .localization import translate as _
 from .pose import Pose
+from .qt.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
 from .util import acquire_elements
 
 

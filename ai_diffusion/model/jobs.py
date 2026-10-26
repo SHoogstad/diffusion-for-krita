@@ -6,10 +6,9 @@ from datetime import datetime, timezone
 from enum import Enum, Flag
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from PyQt5.QtCore import QObject, pyqtSignal
-
 from ..backend.api import InpaintMode, WorkflowKind
 from ..image import Bounds, ImageCollection
+from ..qt.QtCore import QObject, pyqtSignal
 from ..settings import settings
 from ..style import Style
 from ..util import ensure

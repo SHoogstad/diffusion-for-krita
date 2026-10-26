@@ -5,8 +5,26 @@ from itertools import chain
 from typing import Any, ClassVar, cast
 
 from krita import Krita
-from PyQt5.QtCore import QEvent, QMetaObject, QSize, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import (
+
+from ..backend.client import filter_supported_styles, resolve_arch
+from ..backend.workflow import apply_strength, snap_to_percent
+from ..localization import translate as _
+from ..model.connection import ConnectionState
+from ..model.jobs import JobKind, JobState
+from ..model.model import (
+    DocumentModel,
+    Error,
+    ErrorKind,
+    ProgressKind,
+    QueueMode,
+    SamplingQuality,
+    Workspace,
+    no_error,
+)
+from ..model.properties import Bind, Binding, bind, bind_combo
+from ..model.root import root
+from ..qt.QtCore import QEvent, QMetaObject, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtGui import (
     QCloseEvent,
     QColor,
     QDesktopServices,
@@ -25,7 +43,7 @@ from PyQt5.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from PyQt5.QtWidgets import (
+from ..qt.QtWidgets import (
     QAction,
     QCheckBox,
     QComboBox,
@@ -47,24 +65,6 @@ from PyQt5.QtWidgets import (
     QWidget,
     QWidgetAction,
 )
-
-from ..backend.client import filter_supported_styles, resolve_arch
-from ..backend.workflow import apply_strength, snap_to_percent
-from ..localization import translate as _
-from ..model.connection import ConnectionState
-from ..model.jobs import JobKind, JobState
-from ..model.model import (
-    DocumentModel,
-    Error,
-    ErrorKind,
-    ProgressKind,
-    QueueMode,
-    SamplingQuality,
-    Workspace,
-    no_error,
-)
-from ..model.properties import Bind, Binding, bind, bind_combo
-from ..model.root import root
 from ..settings import Settings, settings
 from ..style import Style, Styles, sort_recent_styles
 from ..text import (
