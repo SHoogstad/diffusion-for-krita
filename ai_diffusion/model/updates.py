@@ -45,9 +45,9 @@ def parse_release_tag(tag: str) -> tuple[int, ...] | None:
 
 
 class AutoUpdate(QObject, ObservableProperties):
-    # Updates come from GitHub releases of the Krita 5 fork. Upstream packages target Krita 6.
+    # Updates come from GitHub releases of Diffusion for Krita. Upstream packages target Krita 6.
     default_api_url = os.getenv(
-        "KRITA5_UPDATE_URL", "https://api.github.com/repos/SHoogstad/krita-ai-diffusion-qt5"
+        "KRITA5_UPDATE_URL", "https://api.github.com/repos/SHoogstad/diffusion-for-krita"
     )
 
     state = Property(UpdateState.unknown)

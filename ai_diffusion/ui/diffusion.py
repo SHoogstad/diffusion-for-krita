@@ -227,7 +227,7 @@ class WelcomeWidget(QWidget):
         header_logo = QLabel(self)
         header_logo.setPixmap(theme.logo().scaled(64, 64))
         header_logo.setMaximumSize(64, 64)
-        header_text = QLabel("AI Image\nGeneration", self)
+        header_text = QLabel("Diffusion\nfor Krita", self)
         header_text.setStyleSheet("font-size: 12pt")
         header_layout.addWidget(header_logo)
         header_layout.addWidget(header_text)
@@ -239,9 +239,9 @@ class WelcomeWidget(QWidget):
         self._connection_widget = ConnectionWidget(server, self)
 
         info = QLabel(
-            "<a href='https://www.interstice.cloud'>Interstice.cloud</a> | "
-            + "<a href='https://github.com/Acly/krita-ai-diffusion'>GitHub Project</a> | "
-            + "<a href='https://discord.gg/pWyzHfHHhU'>Discord</a>",
+            "<a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub Project</a> | "
+            + "<a href='https://www.interstice.cloud'>Interstice.cloud</a> | "
+            + "Based on <a href='https://github.com/Acly/krita-ai-diffusion'>Krita AI Diffusion</a>",
             self,
         )
         info.setOpenExternalLinks(True)
@@ -279,7 +279,7 @@ class WelcomeWidget(QWidget):
 class ImageDiffusionWidget(DockWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(_("AI Image Generation"))
+        self.setWindowTitle(_("Diffusion for Krita"))
         self._welcome = WelcomeWidget(root.server)
         self._generation = GenerationWidget()
         self._upscaling = UpscaleWidget()

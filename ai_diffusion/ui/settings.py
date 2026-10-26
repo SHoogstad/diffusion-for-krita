@@ -1143,15 +1143,13 @@ class AboutSettings(SettingsTab):
 
 
 _links_text = """
-<a href='https://www.interstice.cloud'>Website</a><br><br>
-<a href='https://docs.interstice.cloud'>Handbook: Guides and Tips</a><br><br>
-<a href='https://github.com/Acly/krita-ai-diffusion'>GitHub</a>
+<a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub</a><br><br>
+<a href='https://docs.interstice.cloud'>Handbook: Guides and Tips (upstream)</a><br><br>
+<a href='https://github.com/Acly/krita-ai-diffusion'>Based on Krita AI Diffusion by Acly</a>
 """
 
 _contact_text = """
-<a href='https://github.com/Acly/krita-ai-diffusion/issues'>Issues</a><br><br>
-<a href='https://github.com/Acly/krita-ai-diffusion/discussions'>Discussions</a><br><br>
-<a href='https://discord.gg/pWyzHfHHhU'>Discord</a>
+<a href='https://github.com/SHoogstad/diffusion-for-krita/issues'>Issues</a>
 """
 
 
@@ -1167,7 +1165,7 @@ class SettingsDialog(QDialog):
         super().__init__()
         type(self)._instance = self
 
-        self.setWindowTitle(_("Configure Image Diffusion"))
+        self.setWindowTitle(_("Configure Diffusion for Krita"))
         self.setMinimumSize(QSize(960, 480))
         if screen := QGuiApplication.screenAt(QCursor.pos()):
             size = screen.availableSize()
