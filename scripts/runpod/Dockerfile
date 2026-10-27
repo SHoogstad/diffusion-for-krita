@@ -3,7 +3,7 @@
 #   docker build -f scripts/runpod/Dockerfile -t ghcr.io/shoogstad/diffusion-for-krita-runpod:<version> .
 FROM pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
 
-ARG COMFYUI_REF=master
+ARG COMFYUI_REF=426f5eea52a7ece1dd599fff4cb6cd1f352ddd24
 ARG RUNPODCTL_VERSION=3.0.1
 ARG H3_STUDIO_REF=9834e55976cd1d0572b55a3453de0e1b3c5d3dad
 

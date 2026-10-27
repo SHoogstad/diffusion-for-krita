@@ -26,7 +26,7 @@ from ..util import client_logger as log
 from .network import NetworkError, RequestManager
 
 api_url = os.getenv("RUNPOD_API_URL", "https://api.runpod.io/v2")
-image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.60.0")
+image = os.getenv("RUNPOD_IMAGE", "ghcr.io/shoogstad/diffusion-for-krita-runpod:1.61.0")
 pod_prefix = "diffusion-for-krita"
 comfy_port = 8188
 
