@@ -1,20 +1,22 @@
 # Image generation plugin for Krita
 
-Krita is an image editor and painting app. `krita-ai-diffusion` is a Python plugin that adds
+Krita is an image editor and painting app. Diffusion for Krita is a Python plugin that adds
 image generation functionality via diffusion models.
 
 
 ## Overview
 
 The plugin runs within Krita's embedded Python interpreter. It may not use 3rd party
-libraries except for Qt and the websockets library.
+libraries except for Qt and the websockets library. It supports Krita 5.3 (PyQt5) and Krita 6 (PyQt6):
+always import Qt through `ai_diffusion/qt` (eg. `from ..qt.QtWidgets import QLabel`), never from PyQt5/PyQt6 directly.
 
 ### Architecture
 
 * `ai_diffusion/backend/` - code related to run AI models via ComfyUI
   * `api.py` - serializable data structures for an inference request (`WorkflowInput`) - everything relevant to image generation MUST be contained here
   * `comfy_client.py` - HTTP/WebSocket client that connects to a ComfyUI server to fulfill requests
-  * `cloud_client.py` - HTTP client that connects to an image generation service to fulfill requests
+  * `runpod.py` - creates and manages Runpod GPU pods that run ComfyUI
+  * `runpod_serverless.py` - ComfyUI client that runs jobs on a Runpod serverless endpoint
   * `workflow.py` - transforms `WorkflowInput` into ComfyUI workflows
   * `server.py` - installer for a ComfyUI server that will run in the background alongside the plugin
   * `resources.py` - central location that enumerates supported AI models and extensions
@@ -57,7 +59,7 @@ Run tests with these priorities:
 1. specific files with `pytest tests/{test_file.py}`
 2. all fast (no inference) tests with `pytest tests --ci`
 3. *only after changing workflows* (includes inference): `pytest tests/test_workflow.py`
-4. *only after changing cloud client* (includes inference): `pytest tests/test_workflow.py --cloud`
+4. run fast tests with both Qt versions: `DIFFUSION_QT=5 pytest tests --ci` and `DIFFUSION_QT=6 pytest tests --ci`
 5. *only after changing installer* (slow tests): `pytest tests/test_server.py --test-install`
 
 ### UI Tests
@@ -70,12 +72,10 @@ python scripts/design.py --exit
 
 ### Creating a worktree
 
-1. create a worktree of the `krita-ai-diffusion` repository (this repository)
-2. create a worktree of the `diffusion-service` repository located in `service` folder if present.
-   place it inside the worktree from step 1, as a folder named `service`, so that the structure matches.
+1. create a worktree of this repository
+2. run `git submodule update --init` inside it (the plugin needs the `websockets` submodule)
 3. symlink the `scripts/downloads` folder into the new worktree.
-4. symlink `service/web/.env.local` and `service/api/.dev.vars` if they exist.
-5. create a fresh venv with `uv` inside the new worktree. match python version and packages from the venv
+4. create a fresh venv with `uv` inside the new worktree. match python version and packages from the venv
    in the main clone rather than installing from requirements.
 
 

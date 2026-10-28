@@ -4,7 +4,7 @@ Patches and contributions are very welcome!
 
 ## Reporting issues
 
-If you are facing an issue or want to report a bug, please check [existing issues](https://github.com/Acly/krita-ai-diffusion/issues).
+If you are facing an issue or want to report a bug, please check [existing issues](https://github.com/SHoogstad/diffusion-for-krita/issues).
 
 Having a look at the log files can provide additional information for troubleshooting. You can find them in the `.logs` subfolder of the plugin installation folder (`ai_diffusion`). There is also a link in the plugin's connection settings.
 
@@ -13,12 +13,12 @@ When you open a new issue, please attach the log files. Other useful information
 ## Translations (Localization)
 
 You can create or improve a translation for the plugin interface into your language.
-Language files are stored in the `ai_diffusion/langauge` folder. Each translation has its own
+Language files are stored in the `ai_diffusion/language` folder. Each translation has its own
 file, typically named using a language code (eg. `en.json` for English).
 If no file for your language exists, you can use the `new_language.json.template` file and
 rename it. It will show up in the plugin's language settings after a restart.
 
-You can check [existing translations here](https://github.com/Acly/krita-ai-diffusion/tree/main/ai_diffusion/language) - this might be more up-to-date than your local installation!
+You can check [existing translations here](https://github.com/SHoogstad/diffusion-for-krita/tree/main/ai_diffusion/language) - this might be more up-to-date than your local installation!
 
 To edit a localization file, open the file in a text editor and provide translations for
 each of the english text strings. For example, to provide a German translation, it could look
@@ -45,9 +45,9 @@ simply search for entries which are `null`. These are valid, but not translated 
 
 ## Contributing code
 
-For bigger changes, it makes sense to create an issue first to discuss a proposal before time is comitted.
+For bigger changes, it makes sense to create an issue first to discuss a proposal before time is committed.
 
-You can submit your changes by opening a [pull request](https://github.com/Acly/krita-ai-diffusion/pulls).
+You can submit your changes by opening a [pull request](https://github.com/SHoogstad/diffusion-for-krita/pulls).
 
 ### Plugin development
 
@@ -75,21 +75,36 @@ Type annotations should be used where types can't be inferred. Basic type checks
 
 The `Krita` module is special in that it is usually only available when running inside Krita. To make type checking work an interface file is located in `scripts/typeshed`.
 
-You can run `pyright` from the repository root to perform type checks on the entire codebase. This is also done by the CI.
+You can run `pyright` from the repository root to perform type checks on the entire codebase. Please do this before opening a pull request.
 
 ### Debug
 
-The project includes a `launch.json` for VSCode which is configured to attach to
-a running Krita process. This allows to use the visual debugger for exceptions,
-breakpoints, inspecting and stepping through the code. Start debugging via the
-"Run and Debug" tab (F5).
+You can attach a debugger to a running Krita process. This allows to use the visual
+debugger for exceptions, breakpoints, inspecting and stepping through the code.
 
 The way it works is:
 1. `debugpy` is added to the `ai_diffusion` folder as a git submodule to make it
    available inside Krita's embedded Python
-1. `extension.py` starts a debug server if the `debugpy` module is present
+1. `extension.py` starts a debug server on port 5678 if the `debugpy` module is present
    (skipped for release deployments)
 2. VSCode (or more generally any `debugpy` client) attaches to the server
+
+For VSCode, add this configuration to your own `.vscode/launch.json` and start it via the
+"Run and Debug" tab (F5). On Windows, use `${env:APPDATA}/krita/pykrita` as `remoteRoot`.
+```json
+{
+  "name": "Attach to Krita",
+  "type": "debugpy",
+  "request": "attach",
+  "connect": { "host": "localhost", "port": 5678 },
+  "pathMappings": [
+    {
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "${env:HOME}/.local/share/krita/pykrita"
+    }
+  ]
+}
+```
 
 You can also add breakpoints inside the code with `import debugpy; debugpy.breakpoint()`.
 
