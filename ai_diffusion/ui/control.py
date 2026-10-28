@@ -5,6 +5,7 @@ from ..localization import translate as _
 from ..model.control import ControlLayer, ControlLayerList
 from ..model.properties import Binding, bind, bind_combo, bind_toggle
 from ..model.root import root
+from ..qt import sip
 from ..qt.QtCore import QMetaObject, Qt, pyqtSignal
 from ..qt.QtGui import QResizeEvent
 from ..qt.QtWidgets import (
@@ -237,6 +238,9 @@ class ControlWidget(QWidget):
         root.active_model.document.add_pose_character(self._control.layer)
 
     def _update_visibility(self):
+        # Resize events can still arrive while the widget is being torn down
+        if sip.isdeleted(self.error_text):
+            return
         is_small = self.width() < 420
         is_pose = self._control.mode is ControlMode.pose
         is_segmentation = self._control.mode is ControlMode.segmentation
@@ -391,4 +395,6 @@ class ControlListWidget(QWidget):
             widget = next(w for w in self._widgets if w._control == widget)
         self._widgets.remove(widget)
         widget.disconnect_all()
+        widget.hide()
+        self._layout.removeWidget(widget)
         widget.deleteLater()
