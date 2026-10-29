@@ -3,7 +3,7 @@
 Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
 regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the backend.
 
-⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | ❓ [Common issues](#common-issues)
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | 🦴 [Poses](#poses) | ❓ [Common issues](#common-issues)
 
 ## <a name="features"></a> Features
 
@@ -13,6 +13,7 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 * **Diffusion models**: Flux 2, Z-Image, Qwen Image, MOSS-Image, Fibo 2, Anima, Stable Diffusion 1.5 / XL, Illustrious and more.
 * **Edit models**: change images with text instructions.
 * **Control layers**: scribble, line art, canny edge, pose, depth, normals, segmentation and more.
+* **Pose transfer**: take a pose from any image and keep your character's body proportions with [Match Proportions](#poses).
 * **Reference images**: style and composition transfer, face swap.
 * **Regions**: give image areas defined by layers their own text descriptions.
 * **Job queue and history**: queue and cancel jobs, browse earlier results and prompts.
@@ -164,6 +165,142 @@ When you install the managed server you choose "workloads": the minimal set of m
 ### <a name="custom-sampler-presets"></a> Custom sampler presets
 Add your own sampler presets in `presets/samplers.json` in the plugin's settings folder (the file has examples).
 Restart Krita for changes to take effect.
+
+## <a name="poses"></a> Poses and pose transfer
+
+A **pose layer** is a vector layer with an OpenPose skeleton: colored dots are **joints** (nose, neck,
+shoulders, elbows, wrists, hips, knees, ankles, eyes, ears) and the lines between them are **bones**. A control
+layer in **Pose** mode turns this skeleton into a pose ControlNet input, so the generated figure takes that pose.
+You need a pose ControlNet for your base model. If it's missing, the control layer shows a "model not found"
+warning.
+
+This section covers making skeletons, editing them, and **pose transfer**, which puts the pose from one image
+onto your own character.
+
+### Making a pose layer
+
+**From an image.** Add a control layer, set its mode to **Pose**, and click **From Image** (the generate icon
+in the control layer bar, or the button under ⋯ when the docker is narrow). The plugin sends the **whole
+visible canvas** to ComfyUI (DWPose), so hide every layer except the image you want the pose from. A selection
+does not limit the area for poses. The result is a new vector layer, and the control layer switches to it.
+
+* New layers are numbered: `[Control] Pose`, `[Control] Pose 2`, `[Control] Pose 3` and so on, so you can
+  tell several pose layers apart in the Layers docker and in the control layer's layer dropdown.
+* Only the body skeleton (18 joints per person) goes into the layer. Hands and face are detected but not used.
+* Joints the detector isn't sure about are left out, together with their bones.
+* Several people in the image become several skeletons in the same layer (person 1, 2, ...).
+
+**By hand.** Create a vector layer (*Layer ▸ New ▸ Add Vector Layer*), pick it in a Pose control layer, and
+click **Add Skeleton** (the add-pose icon). This adds a standing default figure on the left side of the canvas,
+sized to the canvas. Every click adds another person. Then move the joints to the pose you want.
+
+### Editing a skeleton
+
+* **Select the pose layer in the Layers docker first.** The plugin only updates bones for the *active* layer,
+  about twice per second.
+* Use Krita's **Select Shapes Tool** (the vector selection arrow). Drag **joints**; their bones follow.
+* **Move, scale or rotate several joints at once**: select them (drag a rectangle or Shift+click) and use the
+  handles of the selection. Including the bones in the selection works too. When you *scale* bones along,
+  their line width scales as well, so select only the joints if you scale a lot.
+* **Groups work.** You can group a skeleton (Ctrl+G) and then move, scale or rotate the whole group.
+* **Undo and redo** (Ctrl+Z / Ctrl+Shift+Z) step through your own edits. Bones following their joints don't
+  add undo steps.
+* **Add a second person** by copying and pasting a whole skeleton (joints and bones). The pasted joints are
+  renumbered as a new person automatically.
+* **Leave out a body part** by selecting its joints *and* bones and deleting them.
+* **Bones always follow the joints.** If you drag a bone line by itself, it snaps back onto its joints. A
+  bone line you deleted by accident comes back when you nudge one of its joints a little.
+
+Things to avoid:
+
+* **Don't rename shapes.** Joints and bones are recognized by their names (`P00_J04` = person 0, joint 4).
+* **Scaling joints also scales the dots.** The joint position stays exact, but much bigger or smaller dots
+  change the control image a bit. Scale a selection mostly for positions, not to resize single dots.
+
+### Pose transfer with your character's proportions (Match Proportions)
+
+When you take a pose from another image, its skeleton also carries **that person's body proportions**:
+leg length, arm length, shoulder width, head size. If you use it as-is, your character is drawn with those
+proportions. **Match Proportions** keeps the pose but uses your character's proportions.
+
+You need two pose layers:
+
+* a **character skeleton**: your character, ideally standing upright and facing the camera, so every bone is
+  seen at full length;
+* a **target pose**: the pose you want.
+
+Step by step:
+
+1. Show only the image of your character. In a Pose control layer, click **From Image**. You get
+   `[Control] Pose`, the character skeleton. Check it and fix joints by hand if needed (see
+   [Editing a skeleton](#poses)).
+2. Hide the character image **and** the new `[Control] Pose` layer, and show only the image with the target
+   pose. Click **From Image** again. You get `[Control] Pose 2`, the target pose. The control layer now uses
+   this layer.
+3. Make sure the control layer's layer dropdown shows the **target pose** (`[Control] Pose 2`).
+4. Click **Match Proportions** (the pose icon next to *Add Skeleton*, or the button under ⋯ when the docker is
+   narrow) and pick the **character skeleton** (`[Control] Pose`) from the menu.
+5. A new layer `[Control] Pose 2 (proportions of [Control] Pose)` appears above the target pose, and the
+   control layer switches to it. The original target pose is not changed.
+6. Hide the character skeleton and the original target pose (or delete them). If the character skeleton is
+   still used by **another** control layer, remove that control layer, otherwise both poses steer the image.
+7. Generate.
+
+To undo, press Ctrl+Z twice (the new layer's shapes, then the layer), or simply delete the new layer. Like
+any control layer whose layer disappears, the control layer entry that used it is removed too. Add a Pose
+control layer again and pick the original target pose in its dropdown.
+
+**How it works.** The skeleton is rebuilt from the neck outwards. Every bone keeps the **direction** from the
+target pose and gets its **length** from the character skeleton. The neck stays where it is in the target, and
+the overall size is matched to the target (from the median ratio between the two skeletons' bones), so the
+figure fills about the same space as the target pose. The face (nose, eyes, ears) is matched the same way.
+
+**Foreshortening.** A limb that points towards the camera looks short in the target pose. Stretching it to the
+character's full length would undo that depth. So bones that are shorter than **half** of their expected length
+are treated as foreshortened and only partly stretched: a forearm showing 30% of its length becomes 60%
+(30% ÷ 0.5). Bones longer than half are set to the character's full length.
+
+**Several people.** Person 1 of the target gets the proportions of person 1 of the character layer, person 2
+of person 2, and so on. If the character layer has fewer people, the remaining people get person 1's
+proportions. For full control, keep one person per layer.
+
+**Missing joints.**
+
+* A joint missing in the target stays missing.
+* A bone missing in the character skeleton keeps its length from the target.
+* A joint whose parent joint is missing in the target stays where it was.
+
+**Tips and limits.**
+
+* The character skeleton is the "ruler". If your character sits, crouches or has legs towards the camera in
+  its image, those bones are measured too short. Use a standing, front-facing image, or fix the character
+  skeleton by hand before matching.
+* Proportions are measured in 2D. Turning or leaning in either image changes the measured lengths.
+* Very stylized proportions (chibi, very large heads) work, but they can look odd on poses with lots of
+  foreshortening.
+* You can run Match Proportions again on the result, for example with a corrected character skeleton.
+
+### Troubleshooting poses
+
+**"From Image" gives an empty layer (no skeleton).** DWPose first looks for people with a person detector.
+When it finds no one, the result is empty. This happens with very stylized art, extreme foreshortening, tight
+crops or small figures. The ComfyUI log then shows `DWPose: Bbox ...ms` with no `DWPose: Pose ...` line after
+it. Try a clearer full-body image, make the figure bigger on the canvas, or place a skeleton by hand with
+**Add Skeleton**.
+
+**The first pose estimation is slow.** ComfyUI downloads the DWPose models (about 350 MB) on first use.
+
+**Bones don't follow the joints.** Select the pose layer in the Layers docker; only the active layer is
+updated.
+
+**Match Proportions or Add Skeleton is missing or grayed out.** Both only show up in **Pose** mode, and they
+only work when the control layer's layer is a **vector layer** (a pose layer from "From Image" is one).
+
+**The Match Proportions menu says "No other vector layers with a skeleton".** There is no other vector layer
+in the document. Create the character skeleton first.
+
+**"Both layers must contain a pose skeleton."** The layer you picked, or the control layer's own layer, has no
+joints (for example an empty result from "From Image").
 
 ## <a name="common-issues"></a> Common issues
 
