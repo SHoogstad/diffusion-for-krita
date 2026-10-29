@@ -167,6 +167,29 @@ class ControlLayer(QObject, ObservableProperties):
         else:
             self._model.clear_error()
 
+    def match_pose_proportions(self, source: Layer):
+        """Create a copy of the pose layer with the body proportions of the skeleton in
+        `source`. The original layer is kept, the control layer switches to the copy."""
+        from ..pose import match_proportions
+
+        assert self.mode is ControlMode.pose
+        try:
+            target = self.layer
+            target_pose = self._model.document.read_pose(target)
+            source_pose = self._model.document.read_pose(source)
+            if not target_pose.joints or not source_pose.joints:
+                self._model.report_error(_("Both layers must contain a pose skeleton."))
+                return
+
+            matched = match_proportions(target_pose, source_pose)
+            name = _("{layer} (proportions of {source})", layer=target.name, source=source.name)
+            layer = self._model.layers.create_vector(name, matched.to_svg(), above=target)
+            self.layer_id = layer.id
+        except Exception as e:
+            self._model.report_error(util.log_error(e))
+        else:
+            self._model.clear_error()
+
     def _segmentation_image_from_regions(self, bounds: Bounds):
         from .region import RegionLink
 

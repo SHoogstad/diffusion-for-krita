@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from ai_diffusion.image import Extent
@@ -7,7 +9,10 @@ from ai_diffusion.pose import (
     Point,
     Pose,
     Shape,
+    bone_connection,
+    default_positions,
     get_connected_bones,
+    match_proportions,
     parse_id,
 )
 
@@ -162,3 +167,147 @@ def test_stroke_width():
     svg = pose.to_svg()
     assert 'stroke-width="11.' in svg
     assert 'r="11.' in svg
+
+
+def _person(positions: list[Point] | dict[int, Point], person=0):
+    items = enumerate(positions) if isinstance(positions, list) else positions.items()
+    return {JointIndex(person, i): p for i, p in items}
+
+
+def _length(joints: dict[JointIndex, Point], bone: int, person=0):
+    a, b = bone_connection[bone]
+    pa, pb = joints[JointIndex(person, a)], joints[JointIndex(person, b)]
+    return math.hypot(pb.x - pa.x, pb.y - pa.y)
+
+
+def _direction(joints: dict[JointIndex, Point], bone: int, person=0):
+    a, b = bone_connection[bone]
+    pa, pb = joints[JointIndex(person, a)], joints[JointIndex(person, b)]
+    return math.atan2(pb.y - pa.y, pb.x - pa.x)
+
+
+def _scaled(positions: list[Point], s: float, offset: Point | None = None):
+    offset = offset or Point()
+    return [Point(p.x * s + offset.x, p.y * s + offset.y) for p in positions]
+
+
+def _long_legs(positions: list[Point]):
+    # Stretch thighs and shins of the default skeleton (bones 7, 8, 10, 11)
+    result = list(positions)
+    for hip, knee, ankle in ((8, 9, 10), (11, 12, 13)):
+        h, k, a = positions[hip], positions[knee], positions[ankle]
+        k2 = Point(h.x + (k.x - h.x) * 1.5, h.y + (k.y - h.y) * 1.5)
+        result[knee] = k2
+        result[ankle] = Point(k2.x + (a.x - k.x) * 1.5, k2.y + (a.y - k.y) * 1.5)
+    return result
+
+
+def test_match_proportions_identical():
+    joints = _person(default_positions)
+    target = Pose(Extent(400, 400), 1, joints)
+    result = match_proportions(target, Pose(Extent(400, 400), 1, dict(joints)))
+    for index, p in joints.items():
+        assert result.joints[index].x == pytest.approx(p.x)
+        assert result.joints[index].y == pytest.approx(p.y)
+
+
+def test_match_proportions_keeps_target_directions_and_size():
+    # Target: default skeleton, twice as big and moved. Source: long legs, original size.
+    offset = Point(300, 50)
+    target = Pose(Extent(1000, 1000), 1, _person(_scaled(default_positions, 2, offset)))
+    source = Pose(Extent(400, 400), 1, _person(_long_legs(default_positions)))
+    result = match_proportions(target, source)
+
+    neck = JointIndex(0, 1)
+    assert result.joints[neck] == target.joints[neck]
+    assert result.people_count == 1 and len(result.joints) == len(target.joints)
+    for bone in range(len(bone_connection)):
+        assert _direction(result.joints, bone) == pytest.approx(_direction(target.joints, bone))
+        source_ratio = _length(source.joints, bone) / _length(source.joints, 2)  # vs shoulder
+        result_ratio = _length(result.joints, bone) / _length(result.joints, 2)
+        assert result_ratio == pytest.approx(source_ratio)
+    # Most bones are unchanged, so the size stays that of the target
+    assert _length(result.joints, 2) == pytest.approx(_length(target.joints, 2))
+    assert _length(result.joints, 7) == pytest.approx(_length(target.joints, 7) * 1.5)
+
+
+def test_match_proportions_foreshortened():
+    positions = list(default_positions)
+    elbow, wrist = positions[3], positions[4]
+    # Right forearm points at the camera: only 30% of its length is visible
+    positions[4] = Point(elbow.x + (wrist.x - elbow.x) * 0.3, elbow.y + (wrist.y - elbow.y) * 0.3)
+    target = Pose(Extent(400, 400), 1, _person(positions))
+    source = Pose(Extent(400, 400), 1, _person(default_positions))
+
+    result = match_proportions(target, source)
+    full = _length(source.joints, 3)
+    assert _length(result.joints, 3) == pytest.approx(full * 0.3 / 0.5)
+
+    result = match_proportions(target, source, foreshortening=0)
+    assert _length(result.joints, 3) == pytest.approx(full)
+
+
+def test_match_proportions_missing_joints():
+    target_positions = dict(enumerate(default_positions))
+    del target_positions[3]  # right elbow
+    target = Pose(Extent(400, 400), 1, _person(target_positions))
+    source_positions = dict(enumerate(_long_legs(default_positions)))
+    del source_positions[9]  # right knee
+    source = Pose(Extent(400, 400), 1, _person(source_positions))
+
+    result = match_proportions(target, source)
+    assert JointIndex(0, 3) not in result.joints
+    # Wrist has no parent in the target, it stays where it was
+    assert result.joints[JointIndex(0, 4)] == target.joints[JointIndex(0, 4)]
+    # Right leg has no source length, keeps the target's
+    assert _length(result.joints, 7) == pytest.approx(_length(target.joints, 7))
+    assert _length(result.joints, 10) == pytest.approx(_length(target.joints, 10) * 1.5)
+
+
+def test_match_proportions_people():
+    target_joints = _person(default_positions, 0)
+    target_joints.update(_person(_scaled(default_positions, 1, Point(200, 0)), 1))
+    target_joints.update(_person(_scaled(default_positions, 1, Point(400, 0)), 2))
+    target = Pose(Extent(800, 400), 3, target_joints)
+    source_joints = _person(_long_legs(default_positions), 0)
+    source_joints.update(_person(default_positions, 1))
+    source = Pose(Extent(400, 400), 2, source_joints)
+
+    result = match_proportions(target, source)
+    assert result.people_count == 3
+    leg = _length(target.joints, 7)
+    assert _length(result.joints, 7, person=0) == pytest.approx(leg * 1.5)
+    assert _length(result.joints, 7, person=1) == pytest.approx(leg)
+    assert _length(result.joints, 7, person=2) == pytest.approx(leg * 1.5)  # uses person 0
+
+
+def test_match_proportions_empty_source():
+    target = Pose(Extent(400, 400), 1, _person(default_positions))
+    result = match_proportions(target, Pose(Extent(400, 400)))
+    assert result.joints == target.joints
+
+
+def test_pose_from_shapes():
+    shapes = [
+        Shape("P00_J00", Point(11, 12)),
+        Shape("P00_J01", Point(21, 22)),
+        Shape("P00_B12", Point(21, 22)),
+        Shape("P01_J01", Point(31, 32)),
+        Shape("P01_J01", Point(41, 42)),  # duplicate, first one wins
+        Shape("Not a joint", Point(1, 2)),
+    ]
+    pose = Pose.from_shapes(Extent(123, 456), shapes)
+    assert pose.people_count == 2
+    assert pose.joints == {
+        JointIndex(0, 0): Point(11, 12),
+        JointIndex(0, 1): Point(21, 22),
+        JointIndex(1, 1): Point(31, 32),
+    }
+    assert not any(s.removed for s in shapes)
+    assert [s.name() for s in shapes][3:5] == ["P01_J01", "P01_J01"]
+
+
+def test_pose_to_svg_without_bones():
+    joints = {JointIndex(0, 0): Point(11, 12), JointIndex(0, 1): Point(21, 22)}
+    svg = Pose(Extent(123, 456), 1, joints).to_svg(bones=False)
+    assert "<circle" in svg and "<line" not in svg

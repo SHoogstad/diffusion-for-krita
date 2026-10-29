@@ -1,4 +1,6 @@
+import math
 import operator
+import statistics
 from functools import reduce
 from typing import NamedTuple
 
@@ -206,6 +208,17 @@ class Pose:
         poses = (parse_keypoints(i, p.get("pose_keypoints_2d", [])) for i, p in enumerate(people))
         return Pose(extent, len(people), reduce(operator.ior, poses, {}))
 
+    @staticmethod
+    def from_shapes(extent: Extent, shapes: list[Shape], resolution=1.0):
+        """Read joint positions from vector layer shapes without modifying them."""
+        pose = Pose(extent)
+        for shape in shapes:
+            index = parse_id(shape.name())
+            if isinstance(index, JointIndex) and index not in pose.joints:
+                pose.joints[index] = pose._joint_position(shape, resolution)
+                pose.people_count = max(pose.people_count, index.person + 1)
+        return pose
+
     def scale(self, target: Extent):
         s = Point(target.width / self.extent.width, target.height / self.extent.height)
         self.joints = {i: Point(p.x * s.x, p.y * s.y) for i, p in self.joints.items()}
@@ -224,8 +237,7 @@ class Pose:
         for shape in shapes:
             index = parse_id(shape.name())
             if isinstance(index, JointIndex):
-                pos = (shape.position() + QPointF(self._radius, self._radius)) * resolution
-                pos = Point.from_qt(pos)
+                pos = self._joint_position(shape, resolution)
                 previous_pos = self.joints.get(index)
                 if previous_pos is None:
                     self.people_count = max(self.people_count, index.person + 1)
@@ -274,14 +286,14 @@ class Pose:
 
         return new_bones + "</svg>"
 
-    def to_svg(self):
+    def to_svg(self, bones=True):
         width, height = self.extent.width, self.extent.height
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"'
             f' viewBox="0 0 {width} {height}">'
         )
 
-        for person in range(self.people_count):
+        for person in range(self.people_count if bones else 0):
             for i, bone in enumerate(bone_connection):
                 beg = self.joints.get(JointIndex(person, bone[0]))
                 end = self.joints.get(JointIndex(person, bone[1]))
@@ -303,6 +315,10 @@ class Pose:
         self._stroke_width = 4 + max(0, (self.extent.diagonal / 250) - 4)
         self._radius = self._stroke_width
 
+    def _joint_position(self, shape: Shape, resolution: float):
+        pos = (shape.position() + QPointF(self._radius, self._radius)) * resolution
+        return Point.from_qt(pos)
+
     def _draw_bone(self, index: BoneIndex, a: Point, b: Point):
         return (
             f'<line id="{index.id}" x1="{a.x}" y1="{a.y}" x2="{b.x}" y2="{b.y}"'
@@ -315,3 +331,68 @@ class Pose:
             f'<circle id="{index.id}" cx="{pos.x}" cy="{pos.y}" r="{self._radius}"'
             f' fill="#{colors[index.joint]}"/>'
         )
+
+
+def _distance(a: Point, b: Point):
+    return math.hypot(b.x - a.x, b.y - a.y)
+
+
+def _bone_length(joints: dict[int, Point], bone: tuple[int, int]):
+    a, b = joints.get(bone[0]), joints.get(bone[1])
+    return _distance(a, b) if a and b else None
+
+
+def _match_person_proportions(
+    target: dict[int, Point], source: dict[int, Point], foreshortening: float
+):
+    # Overall size comes from the target, the median ignores outliers (foreshortened limbs)
+    ratios = []
+    for bone in bone_connection:
+        source_len, target_len = _bone_length(source, bone), _bone_length(target, bone)
+        if source_len and target_len:
+            ratios.append(target_len / source_len)
+    if not ratios:
+        return dict(target)
+    scale = statistics.median(ratios)
+
+    # Walk the skeleton outwards from the neck: keep the target's bone directions and
+    # take bone lengths from the source. Bones are ordered so parents come first.
+    result = dict(target)
+    for bone in bone_connection:
+        parent, child = bone
+        target_len = _bone_length(target, bone)
+        if target_len is None:
+            continue
+        if target_len == 0:
+            result[child] = result[parent]
+            continue
+        new_len = target_len
+        if source_len := _bone_length(source, bone):
+            new_len = source_len * scale
+            # Bones much shorter than expected likely point towards the camera. Keep some
+            # of that foreshortening instead of stretching them to full length.
+            ratio = target_len / new_len
+            if ratio < foreshortening:
+                new_len *= ratio / foreshortening
+        a, b, p = target[parent], target[child], result[parent]
+        f = new_len / target_len
+        result[child] = Point(p.x + (b.x - a.x) * f, p.y + (b.y - a.y) * f)
+    return result
+
+
+def match_proportions(target: Pose, source: Pose, foreshortening=0.5):
+    """Returns a copy of the target pose with the body proportions (bone lengths) of the
+    source pose. Bone directions, neck position and overall size of the target are kept.
+    Source person N is applied to target person N, or person 0 if there is no person N."""
+
+    def person_joints(pose: Pose, person: int):
+        return {i.joint: p for i, p in pose.joints.items() if i.person == person}
+
+    joints: dict[JointIndex, Point] = {}
+    for person in range(target.people_count):
+        source_joints = person_joints(source, person) or person_joints(source, 0)
+        matched = _match_person_proportions(
+            person_joints(target, person), source_joints, foreshortening
+        )
+        joints.update({JointIndex(person, j): p for j, p in matched.items()})
+    return Pose(target.extent, target.people_count, joints)

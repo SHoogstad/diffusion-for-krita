@@ -78,6 +78,9 @@ class Document(QObject):
     def add_pose_character(self, layer: Layer):
         raise NotImplementedError
 
+    def read_pose(self, layer: Layer) -> Pose:
+        raise NotImplementedError
+
     def import_animation(self, files: list[Path], offset: int = 0):
         raise NotImplementedError
 
@@ -268,6 +271,11 @@ class KritaDocument(Document):
     def add_pose_character(self, layer: Layer):
         assert layer.type is LayerType.vector
         _pose_layers.add_character(cast(krita.VectorLayer, layer.node))
+
+    def read_pose(self, layer: Layer):
+        assert layer.type is LayerType.vector
+        shapes = acquire_elements(cast(krita.VectorLayer, layer.node).shapes())
+        return Pose.from_shapes(self.extent, shapes, self.resolution)
 
     def import_animation(self, files: list[Path], offset: int = 0):
         success = self._doc.importAnimation([str(f) for f in files], offset, 1)

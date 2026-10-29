@@ -491,10 +491,11 @@ class LayerManager(QObject):
             parent.node.addChildNode(node, above.node if above else None)
             return self.updated().wrap(node)
 
-    def create_vector(self, name: str, svg: str):
+    def create_vector(self, name: str, svg: str, above: Layer | None = None):
         doc = ensure(self._doc)
         node = doc.createVectorLayer(name)
-        doc.rootNode().addChildNode(node, None)
+        parent = above.parent_layer.node if above and above.parent_layer else doc.rootNode()
+        parent.addChildNode(node, above.node if above else None)
         node.addShapesFromSvg(svg)
         layer = self.updated().wrap(node)
         layer.refresh()

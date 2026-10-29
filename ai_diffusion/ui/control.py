@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..backend.resources import ControlMode
+from ..layer import LayerType
 from ..localization import translate as _
 from ..model.control import ControlLayer, ControlLayerList
 from ..model.properties import Binding, bind, bind_combo, bind_toggle
@@ -15,6 +16,7 @@ from ..qt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QSlider,
     QToolButton,
     QVBoxLayout,
@@ -83,6 +85,11 @@ class ControlWidget(QWidget):
         )
         self.add_pose_tool_button.clicked.connect(self._add_pose_character)
 
+        self.match_pose_tool_button = _create_match_pose_button(
+            self, Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        self._init_match_pose_menu(self.match_pose_tool_button)
+
         self.expand_button = QToolButton(self)
         self.expand_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.expand_button.setIcon(theme.icon("more"))
@@ -98,6 +105,7 @@ class ControlWidget(QWidget):
         bar_layout.addWidget(self.generate_tool_button)
         bar_layout.addWidget(self.generate_regions_tool_button)
         bar_layout.addWidget(self.add_pose_tool_button)
+        bar_layout.addWidget(self.match_pose_tool_button)
         bar_layout.addWidget(self.preset_slider, 1)
         bar_layout.addWidget(self.error_text, 3)
         bar_layout.addWidget(self.expand_button)
@@ -145,6 +153,11 @@ class ControlWidget(QWidget):
         )
         self.add_pose_button.clicked.connect(self._add_pose_character)
 
+        self.match_pose_button = _create_match_pose_button(
+            self.extended_widget, Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self._init_match_pose_menu(self.match_pose_button)
+
         self.custom_checkbox = QCheckBox(self.extended_widget)
         self.custom_checkbox.setText(_("Use custom values"))
         self.custom_checkbox.setChecked(control.use_custom_strength)
@@ -154,6 +167,7 @@ class ControlWidget(QWidget):
         actions_layout.addWidget(self.generate_button)
         actions_layout.addWidget(self.generate_regions_button)
         actions_layout.addWidget(self.add_pose_button)
+        actions_layout.addWidget(self.match_pose_button)
         extended_layout.addLayout(actions_layout)
 
         self.strength_slider = QSlider(self.extended_widget)
@@ -237,6 +251,28 @@ class ControlWidget(QWidget):
     def _add_pose_character(self):
         root.active_model.document.add_pose_character(self._control.layer)
 
+    def _init_match_pose_menu(self, button: QToolButton):
+        menu = QMenu(button)
+        menu.aboutToShow.connect(lambda: self._fill_match_pose_menu(menu))
+        button.setMenu(menu)
+
+    def _fill_match_pose_menu(self, menu: QMenu):
+        menu.clear()
+        target = self._control.layer
+        sources = [
+            layer
+            for layer in reversed(root.active_model.layers.all)
+            if layer.type is LayerType.vector and layer.id != target.id
+        ]
+        for layer in sources:
+            action = menu.addAction(layer.name)
+            action.triggered.connect(
+                lambda _checked=False, l=layer: self._control.match_pose_proportions(l)
+            )
+        if not sources:
+            action = menu.addAction(_("No other vector layers with a skeleton"))
+            action.setEnabled(False)
+
     def _update_visibility(self):
         # Resize events can still arrive while the widget is being torn down
         if sip.isdeleted(self.error_text):
@@ -260,6 +296,8 @@ class ControlWidget(QWidget):
             )
             self.add_pose_button.setVisible(is_pose and is_small)
             self.add_pose_tool_button.setVisible(is_pose and not is_small)
+            self.match_pose_button.setVisible(is_pose and is_small)
+            self.match_pose_tool_button.setVisible(is_pose and not is_small)
             self.range_label.setVisible(self._control.has_range)
             self.range_slider.setVisible(self._control.has_range)
             self.range_start_label.setVisible(self._control.has_range)
@@ -311,6 +349,16 @@ class ControlWidget(QWidget):
                 if self._control.is_pose_vector
                 else _("Disabled: selected layer must be a vector layer to add a pose")
             )
+        for button in (self.match_pose_button, self.match_pose_tool_button):
+            button.setEnabled(self._control.is_pose_vector)
+            button.setToolTip(
+                _(
+                    "Match proportions: keep this pose, but use the body proportions (bone"
+                    " lengths) of the character skeleton in another layer"
+                )
+                if self._control.is_pose_vector
+                else _("Disabled: selected layer must be a vector layer with a pose")
+            )
 
     def _toggle_extended(self):
         self.extended_widget.setVisible(self.expand_button.isChecked())
@@ -347,6 +395,15 @@ def _create_add_pose_button(parent, style: Qt.ToolButtonStyle):
     button.setToolButtonStyle(style)
     button.setText(_("Add Skeleton"))
     button.setIcon(theme.icon("add-pose"))
+    return button
+
+
+def _create_match_pose_button(parent, style: Qt.ToolButtonStyle):
+    button = QToolButton(parent)
+    button.setToolButtonStyle(style)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    button.setText(_("Match Proportions"))
+    button.setIcon(theme.icon("control-pose"))
     return button
 
 
