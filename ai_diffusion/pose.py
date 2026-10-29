@@ -170,8 +170,8 @@ class Shape:
     def __init__(self, name: str, position: Point):
         self._name = name
         self._position = QPointF(*position)
+        self._transform = QTransform()
         self.removed = False
-        self.line: tuple[Point, Point] | None = None
 
     def name(self):
         return self._name
@@ -185,12 +185,12 @@ class Shape:
     def set_position(self, x, y):
         self._position = QPointF(x, y)
 
-    def move_line(self, old: tuple[Point, Point], new: tuple[Point, Point]):
-        """Move a bone (line) from its old to its new end points without re-creating it."""
-        if segment_transform(old, new) is None:
-            return False
-        self.line = new
-        return True
+    def layer_transform(self):
+        """Maps the shape's own coordinates to layer pixels."""
+        return self._transform
+
+    def set_layer_transform(self, transform: QTransform):
+        self._transform = transform
 
     def remove(self):
         self.removed = True
@@ -213,6 +213,8 @@ class Pose:
         self.extent = extent
         self.people_count = people_count
         self.joints = joint_positions or {}
+        # Where each bone was placed, and the bone shape's transform at that time
+        self._bones: dict[BoneIndex, tuple[QTransform, tuple[Point, Point]]] = {}
 
     @staticmethod
     def create_default(extent: Extent, person=0):
@@ -258,7 +260,7 @@ class Pose:
         self.extent = target
 
     def update(self, shapes: list[Shape]):
-        """Sync with the joint shapes of a layer. Bones of moved joints are moved in place
+        """Sync with the joint shapes of a layer. Bones are moved onto their joints in place
         where possible (this doesn't create undo steps). Returns SVG with bones that have
         to be (re-)created, or None."""
         previous = dict(self.joints)
@@ -294,9 +296,12 @@ class Pose:
             elif isinstance(index, BoneIndex):
                 if duplicate := bones.get(index):
                     duplicate.remove()
+                    self._bones.pop(index, None)
                 bones[index] = shape
 
         self.people_count += len(new_people)
+        # Forget joints which were deleted, so their bones aren't drawn again
+        self.joints = {i: p for i, p in self.joints.items() if i in duplicates or i in copied}
 
         def connected_bones(joints: set[JointIndex]):
             return {
@@ -309,17 +314,46 @@ class Pose:
             a, b = bone_connection[bone.bone]
             return joints.get(JointIndex(bone.person, a)), joints.get(JointIndex(bone.person, b))
 
+        def current_line(bone: BoneIndex, shape: Shape):
+            # Where the bone line is now: where it was placed, plus anything the user did
+            # to the shape since then (eg. moving it together with the joints, or undo)
+            transform = shape.layer_transform()
+            if cached := self._bones.get(bone):
+                placed_transform, line = cached
+                inverse, ok = placed_transform.inverted()
+                if not ok:
+                    return None
+                delta = inverse * transform
+                return tuple(Point.from_qt(delta.map(QPointF(*p))) for p in line)
+            # Not seen before: it was drawn at the joints' previous positions
+            old = end_points(previous, bone)
+            return old if all(old) else end_points(self.joints, bone)
+
         to_draw = connected_bones(copied)
-        to_draw |= {b for b in connected_bones(added) if b not in bones}
-        for bone in connected_bones(moved) - to_draw:
-            shape = bones.get(bone)
-            old, new = end_points(previous, bone), end_points(self.joints, bone)
-            if shape and all(old) and all(new) and shape.move_line(old, new):  # type: ignore
+        to_draw |= {b for b in connected_bones(added | moved) if b not in bones}  # missing
+        for bone, shape in bones.items():
+            if bone in to_draw:
                 continue
-            to_draw.add(bone)
+            line, target = current_line(bone, shape), end_points(self.joints, bone)
+            if not (line and all(line) and all(target)):
+                to_draw.add(bone)
+                continue
+            if all(_distance(p, q) < 0.01 for p, q in zip(line, target)):  # type: ignore
+                if bone not in self._bones:
+                    self._bones[bone] = (shape.layer_transform(), target)  # type: ignore
+                continue
+            # Move the line onto its joints. Setting the transformation doesn't create undo
+            # steps, unlike removing the line and adding a new one.
+            m = segment_transform(line, target)  # type: ignore
+            if m is None:
+                to_draw.add(bone)
+                continue
+            shape.set_layer_transform(shape.layer_transform() * m)
+            self._bones[bone] = (shape.layer_transform(), target)  # type: ignore
 
         svg = ""
         for bone in to_draw:
+            self._bones.pop(bone, None)
             if shape := bones.get(bone):
                 shape.remove()
             a, b = end_points(self.joints, bone)

@@ -11,7 +11,7 @@ from krita import Krita
 from .image import Bounds, Extent, Image, Mask
 from .layer import Layer, LayerManager, LayerType
 from .localization import translate as _
-from .pose import Point, Pose, segment_transform
+from .pose import Point, Pose
 from .qt.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
 from .qt.QtGui import QTransform
 from .util import acquire_elements
@@ -375,22 +375,20 @@ class PoseShape:
         pos = (shape.transformation() * self._parent).map(local) * self._resolution
         return Point.from_qt(pos)
 
-    def move_line(self, old: tuple[Point, Point], new: tuple[Point, Point]):
-        def to_pt(p: Point):
-            return Point(p.x / self._resolution, p.y / self._resolution)
+    def layer_transform(self):
+        """Maps the shape's own coordinates to layer pixels."""
+        to_pixels = QTransform.fromScale(self._resolution, self._resolution)
+        return self._shape.transformation() * self._parent * to_pixels
 
-        m = segment_transform((to_pt(old[0]), to_pt(old[1])), (to_pt(new[0]), to_pt(new[1])))
-        if m is None:
-            return False
-        # Setting the transformation directly doesn't create an undo command, unlike
-        # removing the line and adding a new one.
+    def set_layer_transform(self, transform: QTransform):
+        # Doesn't create an undo command (unlike removing the shape and adding a new one)
         parent_inv, ok = self._parent.inverted()
         if not ok:
-            return False
+            return
+        to_points = QTransform.fromScale(1 / self._resolution, 1 / self._resolution)
         self._shape.update()
-        self._shape.setTransformation(self._shape.transformation() * self._parent * m * parent_inv)
+        self._shape.setTransformation(transform * to_points * parent_inv)
         self._shape.update()
-        return True
 
 
 def pose_shapes(shapes: list[krita.Shape], resolution: float, parent: QTransform | None = None):
@@ -434,8 +432,8 @@ class PoseLayers:
         assert doc is not None
         pose = self._layers.setdefault(layer.uniqueId(), Pose(doc.extent))
         svg = Pose.create_default(doc.extent, pose.people_count).to_svg()
-        shapes = acquire_elements(layer.addShapesFromSvg(svg))
-        self._update(layer, pose_shapes(shapes, doc.resolution), pose)
+        acquire_elements(layer.addShapesFromSvg(svg))
+        self._update(layer, pose_shapes(acquire_elements(layer.shapes()), doc.resolution), pose)
 
     def _update(self, layer: krita.VectorLayer, shapes: list[PoseShape], pose: Pose):
         changes = pose.update(shapes)  # type: ignore

@@ -17,6 +17,7 @@ from ai_diffusion.pose import (
     segment_transform,
 )
 from ai_diffusion.qt.QtCore import QPointF
+from ai_diffusion.qt.QtGui import QTransform
 
 
 def test_bone_id():
@@ -97,15 +98,37 @@ def test_pose_to_svg():
     assert '<line id="P00_B13" x1="11" y1="12" x2="31" y2="32"' in svg
 
 
-def test_pose_update():
-    pose = Pose(Extent(123, 456))
-    shapes = [
+def _bone_line(shape: Shape, drawn_at: tuple[Point, Point]):
+    """Where a mock bone line drawn at `drawn_at` is now, after transformations."""
+    t = shape.layer_transform()
+    return tuple(Point.from_qt(t.map(QPointF(*p))) for p in drawn_at)
+
+
+def _approx_line(line: tuple[Point, ...], expected: tuple[Point, Point]):
+    return all(
+        a.x == pytest.approx(b.x, abs=1e-6) and a.y == pytest.approx(b.y, abs=1e-6)
+        for a, b in zip(line, expected)
+    )
+
+
+def _pose_shapes():
+    # Bone 12 connects neck (J01) and nose (J00), bone 13 nose and right eye (J14)
+    return [
         Shape("P00_J00", Point(11, 12)),
         Shape("P00_J01", Point(21, 22)),
         Shape("P00_J14", Point(31, 32)),
         Shape("P00_B12", Point(21, 22)),
         Shape("P00_B13", Point(11, 12)),
     ]
+
+
+B12 = (Point(21, 22), Point(11, 12))
+B13 = (Point(11, 12), Point(31, 32))
+
+
+def test_pose_update():
+    pose = Pose(Extent(123, 456))
+    shapes = _pose_shapes()
     changes = pose.update(shapes)
     assert changes is None  # bones exist already, nothing to redraw
     assert pose.people_count == 1
@@ -116,36 +139,73 @@ def test_pose_update():
     shapes[2].set_position(31, 38)
     changes = pose.update(shapes)
     assert changes is None
-    assert shapes[3].line is None
-    assert shapes[4].line == (Point(11, 12), Point(31, 38))
+    assert _approx_line(_bone_line(shapes[3], B12), B12)
+    assert _approx_line(_bone_line(shapes[4], B13), (Point(11, 12), Point(31, 38)))
     assert not any(s.removed for s in shapes)
 
     shapes[0].set_position(11, 18)
     changes = pose.update(shapes)
     assert changes is None
-    assert shapes[3].line == (Point(21, 22), Point(11, 18))
-    assert shapes[4].line == (Point(11, 18), Point(31, 38))
+    assert _approx_line(_bone_line(shapes[3], B12), (Point(21, 22), Point(11, 18)))
+    assert _approx_line(_bone_line(shapes[4], B13), (Point(11, 18), Point(31, 38)))
     assert not any(s.removed for s in shapes)
 
     # Unchanged positions don't do anything
-    shapes[3].line = shapes[4].line = None
+    transforms = [s.layer_transform() for s in shapes]
     assert pose.update(shapes) is None
-    assert shapes[3].line is None and shapes[4].line is None
+    assert [s.layer_transform() for s in shapes] == transforms
+
+    # Undo: joint goes back, bones follow
+    shapes[0].set_position(11, 12)
+    shapes[2].set_position(31, 32)
+    assert pose.update(shapes) is None
+    assert _approx_line(_bone_line(shapes[3], B12), B12)
+    assert _approx_line(_bone_line(shapes[4], B13), B13)
+
+
+def test_pose_update_bones_moved_with_joints():
+    # User selects joints and bones and drags them all by (100, 50)
+    pose = Pose(Extent(500, 500))
+    shapes = _pose_shapes()
+    pose.update(shapes)
+    for s in shapes[:3]:
+        c = s.center()
+        s.set_position(c.x + 100, c.y + 50)
+    for s in shapes[3:]:
+        s.set_layer_transform(s.layer_transform() * QTransform.fromTranslate(100, 50))
+
+    assert pose.update(shapes) is None
+    moved_b12 = (Point(121, 72), Point(111, 62))
+    moved_b13 = (Point(111, 62), Point(131, 82))
+    assert _approx_line(_bone_line(shapes[3], B12), moved_b12)  # not moved twice
+    assert _approx_line(_bone_line(shapes[4], B13), moved_b13)
+
+
+def test_pose_update_bone_moved_alone():
+    # A bone line dragged away by itself snaps back to its joints
+    pose = Pose(Extent(500, 500))
+    shapes = _pose_shapes()
+    pose.update(shapes)
+    shapes[3].set_layer_transform(QTransform.fromTranslate(40, -5))
+    assert pose.update(shapes) is None
+    assert _approx_line(_bone_line(shapes[3], B12), B12)
 
 
 def test_pose_update_redraw():
     pose = Pose(Extent(123, 456))
-    shapes = [
-        Shape("P00_J00", Point(11, 12)),
-        Shape("P00_J01", Point(21, 22)),
-        Shape("P00_J14", Point(31, 32)),
-        Shape("P00_B12", Point(21, 22)),
-    ]
+    shapes = _pose_shapes()[:4]
     # Bone 13 is missing, it is drawn when the joints are first seen
     changes = pose.update(shapes)
     assert changes is not None
     assert "B12" not in changes
     assert '<line id="P00_B13" x1="11.0" y1="12.0" x2="31.0" y2="32.0"' in changes
+
+    # A bone deleted by the user is drawn again when one of its joints moves
+    assert pose.update(shapes) is None  # not redrawn on every update
+    shapes[2].set_position(31, 33)
+    changes = pose.update(shapes)
+    assert changes is not None
+    assert '<line id="P00_B13" x1="11.0" y1="12.0" x2="31.0" y2="33.0"' in changes
 
     # Collapsing a bone to zero length can't be done with a transform, it's redrawn
     shapes[0].set_position(21, 22)
@@ -357,3 +417,17 @@ def test_pose_to_svg_without_bones():
     joints = {JointIndex(0, 0): Point(11, 12), JointIndex(0, 1): Point(21, 22)}
     svg = Pose(Extent(123, 456), 1, joints).to_svg(bones=False)
     assert "<circle" in svg and "<line" not in svg
+
+
+def test_pose_update_deleted_joint():
+    # Deleting a joint and its bones leaves that body part out for good
+    pose = Pose(Extent(123, 456))
+    shapes = _pose_shapes()
+    pose.update(shapes)
+    shapes = [s for s in shapes if s.name() not in ("P00_J14", "P00_B13")]
+    assert pose.update(shapes) is None
+    assert JointIndex(0, 14) not in pose.joints
+
+    shapes[0].set_position(11, 18)  # nose, connected to the deleted bone 13
+    assert pose.update(shapes) is None
+    assert _approx_line(_bone_line(shapes[2], B12), (Point(21, 22), Point(11, 18)))
