@@ -297,3 +297,15 @@ def test_update_layer_image():
     expected = Image.copy(initial)
     expected.draw_image(new_img, write_bounds.offset, BlendMode.replace)
     assert Image.compare(replacement.get_pixels(), expected) <= 0.001
+
+
+def test_unique_name():
+    mgr, doc = make_manager()
+    assert mgr.unique_name("[Control] Pose") == "[Control] Pose"
+
+    for name in ("[Control] Pose", "[Control] Pose 2", "[Control] Depth"):
+        doc.rootNode().addChildNode(doc.createNode(name, "paintlayer"), None)
+    mgr.update()
+    assert mgr.unique_name("[Control] Pose") == "[Control] Pose 3"
+    assert mgr.unique_name("[Control] Depth") == "[Control] Depth 2"
+    assert mgr.unique_name("[Control] Canny") == "[Control] Canny"

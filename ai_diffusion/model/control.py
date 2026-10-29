@@ -160,7 +160,8 @@ class ControlLayer(QObject, ObservableProperties):
                 self._model.report_error(_("Text prompt regions have not been set up."))
                 return
 
-            layer = self._model.layers.create(f"[Control] {self.mode.text}", image, bounds)
+            name = self._model.layers.unique_name(f"[Control] {self.mode.text}")
+            layer = self._model.layers.create(name, image, bounds)
             self.layer_id = layer.id
         except Exception as e:
             self._model.report_error(util.log_error(e))
@@ -183,6 +184,7 @@ class ControlLayer(QObject, ObservableProperties):
 
             matched = match_proportions(target_pose, source_pose)
             name = _("{layer} (proportions of {source})", layer=target.name, source=source.name)
+            name = self._model.layers.unique_name(name)
             layer = self._model.layers.create_vector(name, matched.to_svg(), above=target)
             self.layer_id = layer.id
         except Exception as e:

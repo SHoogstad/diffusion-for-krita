@@ -533,6 +533,14 @@ class LayerManager(QObject):
         layer.remove_later()
         return replacement
 
+    def unique_name(self, name: str):
+        """Returns `name`, or `name 2`, `name 3`... if a layer with that name exists."""
+        existing = {layer.name for layer in self.all}
+        result, n = name, 2
+        while result in existing:
+            result, n = f"{name} {n}", n + 1
+        return result
+
     _image_types: ClassVar[list[str]] = [t.value for t in LayerType if t.is_image]
     _mask_types: ClassVar[list[str]] = [t.value for t in LayerType if t.is_mask]
 

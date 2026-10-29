@@ -882,12 +882,13 @@ class DocumentModel(QObject, ObservableProperties):
 
     def add_control_layer(self, job: Job, result: ClientOutput | None):
         assert job.kind is JobKind.control_layer and job.control
+        name = self.layers.unique_name(job.params.name)
         if job.control.mode is ControlMode.pose and isinstance(result, (dict, list)):
             pose = Pose.from_open_pose_json(result)
             pose.scale(job.params.bounds.extent)
-            return self.layers.create_vector(job.params.name, pose.to_svg())
+            return self.layers.create_vector(name, pose.to_svg())
         elif len(job.results) > 0:
-            return self.layers.create(job.params.name, job.results[0], job.params.bounds)
+            return self.layers.create(name, job.results[0], job.params.bounds)
         return self.layers.active  # Execution was cached and no image was produced
 
     def add_upscale_layer(self, job: Job):
