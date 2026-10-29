@@ -6,6 +6,7 @@ from typing import NamedTuple
 
 from .image import Extent
 from .qt.QtCore import QPointF
+from .qt.QtGui import QTransform
 from .util import batched
 
 
@@ -141,11 +142,36 @@ def get_connected_bones(joint_id: int):
     return [i for i, (a, b) in enumerate(bone_connection) if joint_id in (a, b)]
 
 
+def segment_transform(old: tuple[Point, Point], new: tuple[Point, Point]):
+    """Transform which maps the line segment `old` onto `new`. It only stretches along the
+    line, so the stroke width of a line shape stays the same."""
+    (a0, b0), (a1, b1) = old, new
+    l0, l1 = _distance(a0, b0), _distance(a1, b1)
+    if l0 < 1e-6 or l1 < 1e-6:
+        return None
+    u0 = Point((b0.x - a0.x) / l0, (b0.y - a0.y) / l0)
+    u1 = Point((b1.x - a1.x) / l1, (b1.y - a1.y) / l1)
+    v0, v1 = Point(-u0.y, u0.x), Point(-u1.y, u1.x)
+    k = l1 / l0
+    # Linear part maps direction u0 to k*u1 and the perpendicular v0 to v1
+    m11 = k * u1.x * u0.x + v1.x * v0.x
+    m21 = k * u1.x * u0.y + v1.x * v0.y
+    m12 = k * u1.y * u0.x + v1.y * v0.x
+    m22 = k * u1.y * u0.y + v1.y * v0.y
+    dx = a1.x - (m11 * a0.x + m21 * a0.y)
+    dy = a1.y - (m12 * a0.x + m22 * a0.y)
+    return QTransform(m11, m12, m21, m22, dx, dy)
+
+
 class Shape:
+    """Interface of the shapes passed to `Pose`, positions are in pixels.
+    Also used as test mock, see `document.PoseShape` for the Krita implementation."""
+
     def __init__(self, name: str, position: Point):
         self._name = name
         self._position = QPointF(*position)
         self.removed = False
+        self.line: tuple[Point, Point] | None = None
 
     def name(self):
         return self._name
@@ -153,11 +179,18 @@ class Shape:
     def setName(self, name):
         self._name = name
 
-    def position(self):
-        return self._position - QPointF(4, 4)
+    def center(self):
+        return Point.from_qt(self._position)
 
     def set_position(self, x, y):
         self._position = QPointF(x, y)
+
+    def move_line(self, old: tuple[Point, Point], new: tuple[Point, Point]):
+        """Move a bone (line) from its old to its new end points without re-creating it."""
+        if segment_transform(old, new) is None:
+            return False
+        self.line = new
+        return True
 
     def remove(self):
         self.removed = True
@@ -209,13 +242,13 @@ class Pose:
         return Pose(extent, len(people), reduce(operator.ior, poses, {}))
 
     @staticmethod
-    def from_shapes(extent: Extent, shapes: list[Shape], resolution=1.0):
+    def from_shapes(extent: Extent, shapes: list[Shape]):
         """Read joint positions from vector layer shapes without modifying them."""
         pose = Pose(extent)
         for shape in shapes:
             index = parse_id(shape.name())
             if isinstance(index, JointIndex) and index not in pose.joints:
-                pose.joints[index] = pose._joint_position(shape, resolution)
+                pose.joints[index] = shape.center()
                 pose.people_count = max(pose.people_count, index.person + 1)
         return pose
 
@@ -224,35 +257,39 @@ class Pose:
         self.joints = {i: Point(p.x * s.x, p.y * s.y) for i, p in self.joints.items()}
         self.extent = target
 
-    def update(self, shapes: list[Shape], resolution=1.0):
-        changed = set()
+    def update(self, shapes: list[Shape]):
+        """Sync with the joint shapes of a layer. Bones of moved joints are moved in place
+        where possible (this doesn't create undo steps). Returns SVG with bones that have
+        to be (re-)created, or None."""
+        previous = dict(self.joints)
+        moved = set()  # joints moved by the user
+        added = set()  # joints seen for the first time, eg. after opening the document
+        copied = set()  # joints which were duplicated, and their copies
         duplicates = set()
         bones: dict[BoneIndex, Shape] = {}
         new_people: dict[int, int] = {}
 
-        def update_position(index, position):
-            self.joints[index] = position
-            changed.add(index)
-
         for shape in shapes:
             index = parse_id(shape.name())
             if isinstance(index, JointIndex):
-                pos = self._joint_position(shape, resolution)
+                pos = shape.center()
                 previous_pos = self.joints.get(index)
                 if previous_pos is None:
                     self.people_count = max(self.people_count, index.person + 1)
-                    update_position(index, pos)
+                    self.joints[index] = pos
+                    added.add(index)
                 elif index not in duplicates:
                     if pos != previous_pos:
-                        update_position(index, pos)
+                        self.joints[index] = pos
+                        moved.add(index)
                 else:  # shape with same id exists already, probably it was copied
                     person = new_people.setdefault(
                         index.person, self.people_count + len(new_people)
                     )
                     new_index = JointIndex(person, index.joint)
                     shape.setName(new_index.id)
-                    update_position(new_index, pos)
-                    changed.add(index)
+                    self.joints[new_index] = pos
+                    copied.update((index, new_index))
                 duplicates.add(index)
             elif isinstance(index, BoneIndex):
                 if duplicate := bones.get(index):
@@ -260,31 +297,42 @@ class Pose:
                 bones[index] = shape
 
         self.people_count += len(new_people)
-        if len(changed) == 0:
+
+        def connected_bones(joints: set[JointIndex]):
+            return {
+                BoneIndex(index.person, bone)
+                for index in joints
+                for bone in get_connected_bones(index.joint)
+            }
+
+        def end_points(joints: dict[JointIndex, Point], bone: BoneIndex):
+            a, b = bone_connection[bone.bone]
+            return joints.get(JointIndex(bone.person, a)), joints.get(JointIndex(bone.person, b))
+
+        to_draw = connected_bones(copied)
+        to_draw |= {b for b in connected_bones(added) if b not in bones}
+        for bone in connected_bones(moved) - to_draw:
+            shape = bones.get(bone)
+            old, new = end_points(previous, bone), end_points(self.joints, bone)
+            if shape and all(old) and all(new) and shape.move_line(old, new):  # type: ignore
+                continue
+            to_draw.add(bone)
+
+        svg = ""
+        for bone in to_draw:
+            if shape := bones.get(bone):
+                shape.remove()
+            a, b = end_points(self.joints, bone)
+            if a and b:
+                svg += self._draw_bone(bone, a, b)
+        if not svg:
             return None
 
         width, height = self.extent.width, self.extent.height
-        bones_to_draw = {
-            BoneIndex(index.person, connected_bone)
-            for index in changed
-            for connected_bone in get_connected_bones(index.joint)
-        }
-        new_bones = (
+        return (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"'
-            f' viewBox="0 0 {width} {height}">'
+            f' viewBox="0 0 {width} {height}">{svg}</svg>'
         )
-
-        for bone_index in bones_to_draw:
-            bone_shape = bones.get(bone_index)
-            if bone_shape:
-                bone_shape.remove()
-            bone_joints = bone_connection[bone_index.bone]
-            joint_a = self.joints.get(JointIndex(bone_index.person, bone_joints[0]))
-            joint_b = self.joints.get(JointIndex(bone_index.person, bone_joints[1]))
-            if joint_a and joint_b:
-                new_bones += self._draw_bone(bone_index, joint_a, joint_b)
-
-        return new_bones + "</svg>"
 
     def to_svg(self, bones=True):
         width, height = self.extent.width, self.extent.height
@@ -314,10 +362,6 @@ class Pose:
         self._extent = extent
         self._stroke_width = 4 + max(0, (self.extent.diagonal / 250) - 4)
         self._radius = self._stroke_width
-
-    def _joint_position(self, shape: Shape, resolution: float):
-        pos = (shape.position() + QPointF(self._radius, self._radius)) * resolution
-        return Point.from_qt(pos)
 
     def _draw_bone(self, index: BoneIndex, a: Point, b: Point):
         return (

@@ -14,7 +14,9 @@ from ai_diffusion.pose import (
     get_connected_bones,
     match_proportions,
     parse_id,
+    segment_transform,
 )
+from ai_diffusion.qt.QtCore import QPointF
 
 
 def test_bone_id():
@@ -105,24 +107,68 @@ def test_pose_update():
         Shape("P00_B13", Point(11, 12)),
     ]
     changes = pose.update(shapes)
+    assert changes is None  # bones exist already, nothing to redraw
     assert pose.people_count == 1
     assert len(pose.joints) == 3
     assert pose.joints[JointIndex(0, 0)] == Point(11, 12)
 
-    shapes[3].removed = shapes[4].removed = False
+    # Bones of moved joints are moved in place
     shapes[2].set_position(31, 38)
     changes = pose.update(shapes)
-    assert changes is not None
-    assert "B12" not in changes
-    assert '<line id="P00_B13" x1="11.0" y1="12.0" x2="31.0" y2="38.0"' in changes
-    assert not shapes[3].removed and shapes[4].removed
+    assert changes is None
+    assert shapes[3].line is None
+    assert shapes[4].line == (Point(11, 12), Point(31, 38))
+    assert not any(s.removed for s in shapes)
 
     shapes[0].set_position(11, 18)
     changes = pose.update(shapes)
+    assert changes is None
+    assert shapes[3].line == (Point(21, 22), Point(11, 18))
+    assert shapes[4].line == (Point(11, 18), Point(31, 38))
+    assert not any(s.removed for s in shapes)
+
+    # Unchanged positions don't do anything
+    shapes[3].line = shapes[4].line = None
+    assert pose.update(shapes) is None
+    assert shapes[3].line is None and shapes[4].line is None
+
+
+def test_pose_update_redraw():
+    pose = Pose(Extent(123, 456))
+    shapes = [
+        Shape("P00_J00", Point(11, 12)),
+        Shape("P00_J01", Point(21, 22)),
+        Shape("P00_J14", Point(31, 32)),
+        Shape("P00_B12", Point(21, 22)),
+    ]
+    # Bone 13 is missing, it is drawn when the joints are first seen
+    changes = pose.update(shapes)
     assert changes is not None
-    assert '<line id="P00_B12" x1="21.0" y1="22.0" x2="11.0" y2="18.0"' in changes
-    assert '<line id="P00_B13" x1="11.0" y1="18.0" x2="31.0" y2="38.0"' in changes
-    assert shapes[3].removed and shapes[4].removed
+    assert "B12" not in changes
+    assert '<line id="P00_B13" x1="11.0" y1="12.0" x2="31.0" y2="32.0"' in changes
+
+    # Collapsing a bone to zero length can't be done with a transform, it's redrawn
+    shapes[0].set_position(21, 22)
+    changes = pose.update(shapes)
+    assert changes is not None
+    assert '<line id="P00_B12" x1="21.0" y1="22.0" x2="21.0" y2="22.0"' in changes
+    assert shapes[3].removed
+
+
+def test_segment_transform():
+    old = (Point(10, 10), Point(20, 10))
+    new = (Point(50, 50), Point(50, 80))
+    m = segment_transform(old, new)
+    assert m is not None
+    for a, b in zip(old, new):
+        p = m.map(QPointF(a.x, a.y))
+        assert p.x() == pytest.approx(b.x) and p.y() == pytest.approx(b.y)
+    # Perpendicular direction is rotated but not scaled (stroke width stays the same)
+    p0, p1 = m.map(QPointF(10, 10)), m.map(QPointF(10, 14))
+    assert math.hypot(p1.x() - p0.x(), p1.y() - p0.y()) == pytest.approx(4)
+
+    assert segment_transform((Point(1, 1), Point(1, 1)), new) is None
+    assert segment_transform(old, (Point(1, 1), Point(1, 1))) is None
 
 
 @pytest.mark.parametrize("scenario", ["with_bones", "without_bones"])

@@ -11,8 +11,9 @@ from krita import Krita
 from .image import Bounds, Extent, Image, Mask
 from .layer import Layer, LayerManager, LayerType
 from .localization import translate as _
-from .pose import Pose
+from .pose import Point, Pose, segment_transform
 from .qt.QtCore import QByteArray, QObject, QTimer, QUuid, pyqtSignal
+from .qt.QtGui import QTransform
 from .util import acquire_elements
 
 
@@ -275,7 +276,7 @@ class KritaDocument(Document):
     def read_pose(self, layer: Layer):
         assert layer.type is LayerType.vector
         shapes = acquire_elements(cast(krita.VectorLayer, layer.node).shapes())
-        return Pose.from_shapes(self.extent, shapes, self.resolution)
+        return Pose.from_shapes(self.extent, pose_shapes(shapes, self.resolution))
 
     def import_animation(self, files: list[Path], offset: int = 0):
         success = self._doc.importAnimation([str(f) for f in files], offset, 1)
@@ -348,6 +349,63 @@ def _selection_is_entire_document(selection: krita.Selection, extent: Extent):
     return all(x == b"\xff" for x in mask)
 
 
+class PoseShape:
+    """Wraps a krita.Shape for `pose.Pose`. Positions are in pixels relative to the layer,
+    and include the transformations of any groups the shape is in."""
+
+    def __init__(self, shape: krita.Shape, parent: QTransform, resolution: float):
+        self._shape = shape
+        self._parent = parent  # combined transformation of parent groups
+        self._resolution = resolution
+
+    def name(self):
+        return self._shape.name()
+
+    def setName(self, name: str):
+        self._shape.setName(name)
+
+    def remove(self):
+        self._shape.remove()
+
+    def center(self):
+        # Use the center of the bounding box rather than position() (the top-left corner of
+        # the untransformed shape), which is off once a joint is scaled or rotated.
+        shape = self._shape
+        local = shape.absoluteTransformation().inverted()[0].map(shape.boundingBox().center())
+        pos = (shape.transformation() * self._parent).map(local) * self._resolution
+        return Point.from_qt(pos)
+
+    def move_line(self, old: tuple[Point, Point], new: tuple[Point, Point]):
+        def to_pt(p: Point):
+            return Point(p.x / self._resolution, p.y / self._resolution)
+
+        m = segment_transform((to_pt(old[0]), to_pt(old[1])), (to_pt(new[0]), to_pt(new[1])))
+        if m is None:
+            return False
+        # Setting the transformation directly doesn't create an undo command, unlike
+        # removing the line and adding a new one.
+        parent_inv, ok = self._parent.inverted()
+        if not ok:
+            return False
+        self._shape.update()
+        self._shape.setTransformation(self._shape.transformation() * self._parent * m * parent_inv)
+        self._shape.update()
+        return True
+
+
+def pose_shapes(shapes: list[krita.Shape], resolution: float, parent: QTransform | None = None):
+    """Flattens groups, so joints still work after they have been grouped."""
+    parent = parent or QTransform()
+    result: list[PoseShape] = []
+    for shape in shapes:
+        if shape.type() == "groupshape":
+            children = acquire_elements(cast("krita.GroupShape", shape).children())
+            result += pose_shapes(children, resolution, shape.transformation() * parent)
+        else:
+            result.append(PoseShape(shape, parent, resolution))
+    return result
+
+
 class PoseLayers:
     def __init__(self):
         self._layers: dict[QUuid, Pose] = {}
@@ -369,7 +427,7 @@ class PoseLayers:
 
         layer = cast(krita.VectorLayer, layer.node)
         pose = self._layers.setdefault(layer.uniqueId(), Pose(doc.extent))
-        self._update(layer, acquire_elements(layer.shapes()), pose, doc.resolution)
+        self._update(layer, pose_shapes(acquire_elements(layer.shapes()), doc.resolution), pose)
 
     def add_character(self, layer: krita.VectorLayer):
         doc = KritaDocument.active_instance()
@@ -377,12 +435,10 @@ class PoseLayers:
         pose = self._layers.setdefault(layer.uniqueId(), Pose(doc.extent))
         svg = Pose.create_default(doc.extent, pose.people_count).to_svg()
         shapes = acquire_elements(layer.addShapesFromSvg(svg))
-        self._update(layer, shapes, pose, doc.resolution)
+        self._update(layer, pose_shapes(shapes, doc.resolution), pose)
 
-    def _update(
-        self, layer: krita.VectorLayer, shapes: list[krita.Shape], pose: Pose, resolution: float
-    ):
-        changes = pose.update(shapes, resolution)  # type: ignore
+    def _update(self, layer: krita.VectorLayer, shapes: list[PoseShape], pose: Pose):
+        changes = pose.update(shapes)  # type: ignore
         if changes:
             shapes = layer.addShapesFromSvg(changes)
             for shape in shapes:
