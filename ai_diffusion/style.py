@@ -86,20 +86,6 @@ class StyleSettings:
         _("Pay more attention to difficult parts of the image. Can improve fine details."),
     )
 
-    skip_layer_guidance = Setting(
-        _("Skip Layer Guidance (SLG)"),
-        0.0,
-        _(
-            "Steers away from a prediction with some layers skipped during the first steps. Can improve anatomy and structure. 0 = off."
-        ),
-    )
-
-    skip_layer_guidance_layers = Setting(
-        _("Skip Layers"),
-        "7, 8, 9",
-        _("Comma separated numbers of the transformer layers to skip for Skip Layer Guidance"),
-    )
-
     preferred_resolution = Setting(
         _("Preferred Resolution"), 0, _("Image resolution the checkpoint was trained on")
     )
@@ -143,8 +129,6 @@ class Style(QObject):
     v_prediction_zsnr: bool = StyleSettings.v_prediction_zsnr.default
     rescale_cfg: float = StyleSettings.rescale_cfg.default
     self_attention_guidance: bool = StyleSettings.self_attention_guidance.default
-    skip_layer_guidance: float = StyleSettings.skip_layer_guidance.default
-    skip_layer_guidance_layers: str = StyleSettings.skip_layer_guidance_layers.default
     preferred_resolution: int = StyleSettings.preferred_resolution.default
     linked_edit_style: str = StyleSettings.linked_edit_style.default
     sampler: str = StyleSettings.sampler.default
@@ -241,8 +225,6 @@ class Style(QObject):
             rescale_cfg=self.rescale_cfg,
             loras=[LoraInput.from_dict(l) for l in self.loras if l.get("enabled", True)],
             self_attention_guidance=self.self_attention_guidance,
-            skip_layer_guidance=self.skip_layer_guidance,
-            skip_layer_guidance_layers=self.skip_layer_guidance_layers,
         )
 
     def get_steps(self, is_live: bool) -> tuple[int, int]:
