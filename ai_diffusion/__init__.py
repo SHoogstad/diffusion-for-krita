@@ -1,6 +1,6 @@
 """Generative AI plugin for Krita"""
 
-__version__ = "1.58.1.1"
+__version__ = "1.58.2"
 # Release tag on GitHub, used by the auto-updater. One build runs on Krita 5 and Krita 6.
 __release__ = f"v{__version__}"
 
