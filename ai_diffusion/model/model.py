@@ -1270,6 +1270,7 @@ class LiveWorkspace(QObject, ObservableProperties):
         self._keyframe_start = 0
         self._keyframe_index = 0
         self._keyframes: list[Path] = []
+        self._pending_result: tuple[Image, JobParams] | None = None
         model.jobs.job_finished.connect(self.handle_job_finished)
         model.jobs.selection_changed.connect(self._handle_selection_changed)
 
@@ -1278,21 +1279,45 @@ class LiveWorkspace(QObject, ObservableProperties):
         return ensure(self._model())
 
     def toggle_preview(self, active: bool):
+        # The preview layer is a snapshot of the current result. Live generation pauses while it
+        # is visible: reading the canvas would have to hide and show the layer on every poll.
         active = active and self._result is not None
         if self.is_previewing != active:
             self._is_previewing = active
             if active:
-                self._update_preview_layer()
+                self._show_preview_layer()
+                eventloop.run(_report_errors(self.model, self._watch_canvas()))
             else:
                 self.model.hide_preview()
             self.is_previewing_changed.emit(active)
+            if not active and self._pending_result is not None:
+                self.set_result(*self._pending_result)
+                self._pending_result = None
 
-    def _update_preview_layer(self):
+    def _show_preview_layer(self):
         assert self._result is not None and self._result_params is not None
         params = self._result_params
         name = f"[Live Preview] {trim_text(params.name, 77)}"
         bounds = Bounds(*params.bounds.offset, *self._result.extent)
         self.model.show_preview_image(name, self._result, bounds)
+
+    async def _watch_canvas(self):
+        """Hide the preview layer when the user starts drawing. Compares the pixels of the
+        active layer, the projection can't be read without flickering the preview layer."""
+        layer_id, pixels = None, None
+        while self.is_previewing:
+            layer = self.model.layers.active
+            preview = self.model._layer
+            if preview is None or preview.was_removed or not preview.is_visible:
+                self.is_previewing = False  # removed or hidden by the user
+                return
+            if layer.id != preview.id:
+                current = layer.get_pixels(Bounds(0, 0, *self.model.document.extent))
+                if layer.id == layer_id and current != pixels:
+                    self.is_previewing = False
+                    return
+                layer_id, pixels = layer.id, current
+            await asyncio.sleep(0.25)
 
     def _handle_selection_changed(self):
         if self.is_previewing and self.model.jobs.selection:
@@ -1305,6 +1330,8 @@ class LiveWorkspace(QObject, ObservableProperties):
             self._is_active = active
             self.is_active_changed.emit(active)
             if active:
+                self.is_previewing = False
+                self.model.hide_preview()  # don't flicker a generate preview on every poll
                 eventloop.run(_report_errors(self.model, self._continue_generating()))
             else:
                 self.is_recording = False
@@ -1324,7 +1351,9 @@ class LiveWorkspace(QObject, ObservableProperties):
 
     def handle_job_finished(self, job: Job):
         if job.kind is JobKind.live_preview:
-            if len(job.results) > 0:
+            if len(job.results) > 0 and self.is_previewing:
+                self._pending_result = (job.results[0], job.params)  # shown after preview
+            elif len(job.results) > 0:
                 self.set_result(job.results[0], job.params)
             self.is_active = self._is_active and self.model.document.is_active
             self._scheduler.notify_generation_finished()
@@ -1332,7 +1361,7 @@ class LiveWorkspace(QObject, ObservableProperties):
 
     async def _continue_generating(self):
         while self.is_active:
-            if self.model.document.is_active:
+            if self.model.document.is_active and not self.is_previewing:
                 new_input, job_params = self.model._prepare_live_workflow()
                 if self._scheduler.should_generate(new_input):
                     await self.model._generate_live(new_input, job_params)
@@ -1384,8 +1413,6 @@ class LiveWorkspace(QObject, ObservableProperties):
         self._result_params = params
         self.result_available.emit(canvas)
         self.has_result = True
-        if self.is_previewing:
-            self._update_preview_layer()
 
         if self.is_recording:
             self._save_frame(value, params.bounds)

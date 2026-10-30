@@ -87,6 +87,9 @@ def test_parse_release_tag():
     assert parse_release_tag("v1.54.0-pre") is None
     assert parse_release_tag("v1.54.0-krita5") < parse_release_tag("v1.54.1-krita5.3")  # type: ignore
     assert parse_release_tag("v1.55.3-krita5.3") < parse_release_tag("v1.56.0")  # type: ignore
+    assert parse_release_tag("v1.58.1.1") == (1, 58, 1, 1)
+    assert parse_release_tag("v1.58.1") < parse_release_tag("v1.58.1.1")  # type: ignore
+    assert parse_release_tag("v1.58.1.1") < parse_release_tag("v1.58.2")  # type: ignore
 
 
 @qtapp

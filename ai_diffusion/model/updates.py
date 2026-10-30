@@ -36,11 +36,12 @@ class UpdatePackage(NamedTuple):
 
 def parse_release_tag(tag: str) -> tuple[int, ...] | None:
     """Parse "v1.56.0" into the plugin version (1, 56, 0). Builds run on Krita 5 and 6.
+    Hotfixes have a fourth number, "v1.58.1.1" -> (1, 58, 1, 1), which sorts after (1, 58, 1).
     Older Krita 5 only releases were tagged "v1.54.1-krita5.3" and are still recognized."""
-    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-krita5(?:\.\d+)?)?", tag.strip())
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-krita5(?:\.\d+)?)?", tag.strip())
     if m is None:
         return None
-    return tuple(int(x) for x in m.groups())
+    return tuple(int(x) for x in m.groups() if x is not None)
 
 
 class AutoUpdate(QObject, ObservableProperties):

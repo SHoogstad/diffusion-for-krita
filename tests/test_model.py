@@ -584,32 +584,39 @@ async def test_apply_preview(workflows_dir: Path):
 
 @qtapp
 async def test_live_preview_layer(workflows_dir: Path):
-    """Clicking the live result shows it as a preview layer, which follows new results, is never
-    part of the live input image, and is removed on apply."""
+    """Clicking the live result shows a snapshot as preview layer. Live generation pauses (new
+    results wait) until the preview is hidden. Applying removes the layer."""
     krita_doc = Krita.instance().openDocument("test")
     async with _model_env(krita_doc, workflows_dir) as (model, _client):
         await asyncio.sleep(0)  # let _handle_messages task start before disconnect
         live = model.live
         params = JobParams(bounds=_DOC_BOUNDS, name="live", seed=3)
+        red = Image.create(_DOC_EXTENT, fill=_RED)
+        green = Image.create(_DOC_EXTENT, fill=_GREEN)
 
         live.is_previewing = True
         assert not live.is_previewing, "cannot preview without a result"
 
-        live.set_result(Image.create(_DOC_EXTENT, fill=_RED), params)
+        live.set_result(red, params)
         live.is_previewing = True
         assert live.is_previewing
         preview_layers = [l for l in _paint_layers(model) if l.is_locked]
         assert len(preview_layers) == 1
-        assert _layer_matches(preview_layers[0], Image.create(_DOC_EXTENT, fill=_RED), _DOC_BOUNDS)
+        assert _layer_matches(preview_layers[0], red, _DOC_BOUNDS)
 
-        # A new result updates the same layer
-        green = Image.create(_DOC_EXTENT, fill=_GREEN)
-        live.set_result(green, params)
-        preview_layers = [l for l in _paint_layers(model) if l.is_locked]
-        assert len(preview_layers) == 1
-        assert _layer_matches(preview_layers[0], green, _DOC_BOUNDS)
+        # A result that arrives while previewing waits, the snapshot stays
+        job = model.jobs.add(JobKind.live_preview, params)
+        model.jobs.set_results(job, ImageCollection([green]))
+        live.handle_job_finished(job)
+        assert live.result is red
+        assert _layer_matches(preview_layers[0], red, _DOC_BOUNDS)
 
-        # Live reads the canvas including internal layers, but never the preview layer
+        live.is_previewing = False
+        assert not preview_layers[0].is_visible
+        assert live.result is green, "pending result is shown after the preview"
+
+        # The preview layer is never part of the input image
+        live.is_previewing = True
         excluded: list[Layer] = []
         get_image = model.document.get_image
 
@@ -622,14 +629,26 @@ async def test_live_preview_layer(workflows_dir: Path):
         model.document.get_image = get_image
         assert [l.id for l in excluded] == [preview_layers[0].id]
 
-        live.is_previewing = False
-        assert not preview_layers[0].is_visible
-
-        live.is_previewing = True
         live.apply_result()
         assert not live.is_previewing
         assert model.layers.updated().find(preview_layers[0].id) is None
         assert any(_layer_matches(l, green, _DOC_BOUNDS) for l in _paint_layers(model))
+
+
+@qtapp
+async def test_live_preview_hides_when_drawing(workflows_dir: Path):
+    krita_doc = Krita.instance().openDocument("test")
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)  # let _handle_messages task start before disconnect
+        live = model.live
+        live.set_result(Image.create(_DOC_EXTENT, fill=_RED), JobParams(_DOC_BOUNDS, "live"))
+        live.is_previewing = True
+        await asyncio.sleep(0.3)
+        assert live.is_previewing, "nothing drawn yet"
+
+        model.layers.active.write_pixels(Image.create(_DOC_EXTENT, fill=_GREEN))
+        await asyncio.sleep(0.6)
+        assert not live.is_previewing, "drawing hides the preview"
 
 
 @qtapp

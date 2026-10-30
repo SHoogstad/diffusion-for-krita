@@ -125,7 +125,9 @@ class LivePreviewArea(QWidget):
         if self._is_previewing:
             self.setToolTip(_("Click to hide the preview layer on the canvas"))
         else:
-            self.setToolTip(_("Click to show the result as a preview layer on the canvas"))
+            self.setToolTip(
+                _("Click to show the result on the canvas. Live painting pauses until you draw.")
+            )
 
     def image_rect(self):
         if self._pixmap is None or self._pixmap.isNull():
