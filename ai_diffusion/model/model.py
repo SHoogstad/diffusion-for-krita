@@ -600,8 +600,8 @@ class DocumentModel(QObject, ObservableProperties):
             exclude = [  # exclude control layers from projection
                 c.layer for c in self.regions.control if not c.mode.is_part_of_image
             ]
-            if self._layer:  # exclude preview layer
-                exclude.append(self._layer)
+        if self._layer and not self._layer.was_removed:  # always exclude preview layer
+            exclude.append(self._layer)
 
         if not any(l.is_visible and l not in exclude for l in self.layers.images):
             warning = _(
@@ -730,6 +730,9 @@ class DocumentModel(QObject, ObservableProperties):
         name = f"[{name_prefix}] {trim_text(job.params.name, 77)}"
         image = job.results[index]
         bounds = Bounds(*job.params.bounds.offset, *image.extent)
+        self.show_preview_image(name, image, bounds)
+
+    def show_preview_image(self, name: str, image: Image, bounds: Bounds):
         if self._layer and self._layer.was_removed:
             self._layer = None  # layer was removed by user
         if self._layer is not None:
@@ -741,6 +744,8 @@ class DocumentModel(QObject, ObservableProperties):
             self._layer.is_locked = True
 
     def hide_preview(self, delete_layer=False):
+        if self._layer and self._layer.was_removed:
+            self._layer = None  # layer was removed by user
         if self._layer is not None:
             if delete_layer:
                 self._layer.remove()
@@ -908,6 +913,7 @@ class DocumentModel(QObject, ObservableProperties):
     def set_workspace(self, workspace: Workspace):
         if self.workspace is Workspace.live:
             self.live.is_active = False
+            self.live.is_previewing = False
         self._workspace = workspace
         self.workspace_changed.emit(workspace)
         self.modified.emit(self, "workspace")
@@ -1240,11 +1246,13 @@ class LiveScheduler:
 class LiveWorkspace(QObject, ObservableProperties):
     is_active = Property(False, setter="toggle")
     is_recording = Property(False, setter="toggle_record")
+    is_previewing = Property(False, setter="toggle_preview")
     strength = Property(0.3, persist=True)
     has_result = Property(False)
 
     is_active_changed = pyqtSignal(bool)
     is_recording_changed = pyqtSignal(bool)
+    is_previewing_changed = pyqtSignal(bool)
     strength_changed = pyqtSignal(float)
     seed_changed = pyqtSignal(int)
     has_result_changed = pyqtSignal(bool)
@@ -1263,10 +1271,34 @@ class LiveWorkspace(QObject, ObservableProperties):
         self._keyframe_index = 0
         self._keyframes: list[Path] = []
         model.jobs.job_finished.connect(self.handle_job_finished)
+        model.jobs.selection_changed.connect(self._handle_selection_changed)
 
     @property
     def model(self):
         return ensure(self._model())
+
+    def toggle_preview(self, active: bool):
+        active = active and self._result is not None
+        if self.is_previewing != active:
+            self._is_previewing = active
+            if active:
+                self._update_preview_layer()
+            else:
+                self.model.hide_preview()
+            self.is_previewing_changed.emit(active)
+
+    def _update_preview_layer(self):
+        assert self._result is not None and self._result_params is not None
+        params = self._result_params
+        name = f"[Live Preview] {trim_text(params.name, 77)}"
+        bounds = Bounds(*params.bounds.offset, *self._result.extent)
+        self.model.show_preview_image(name, self._result, bounds)
+
+    def _handle_selection_changed(self):
+        if self.is_previewing and self.model.jobs.selection:
+            # a generated image took over the preview layer
+            self._is_previewing = False
+            self.is_previewing_changed.emit(False)
 
     def toggle(self, active: bool):
         if self.is_active != active:
@@ -1322,6 +1354,10 @@ class LiveWorkspace(QObject, ObservableProperties):
             behavior = ApplyBehavior.layer
             region_behavior = ApplyRegionBehavior.layer_group
         self.model.apply_result(self.result, params, behavior, region_behavior)
+        if self.is_previewing:
+            self._is_previewing = False
+            self.model.hide_preview(delete_layer=True)
+            self.is_previewing_changed.emit(False)
 
         if settings.new_seed_after_apply:
             self.model.generate_seed()
@@ -1348,6 +1384,8 @@ class LiveWorkspace(QObject, ObservableProperties):
         self._result_params = params
         self.result_available.emit(canvas)
         self.has_result = True
+        if self.is_previewing:
+            self._update_preview_layer()
 
         if self.is_recording:
             self._save_frame(value, params.bounds)

@@ -583,6 +583,56 @@ async def test_apply_preview(workflows_dir: Path):
 
 
 @qtapp
+async def test_live_preview_layer(workflows_dir: Path):
+    """Clicking the live result shows it as a preview layer, which follows new results, is never
+    part of the live input image, and is removed on apply."""
+    krita_doc = Krita.instance().openDocument("test")
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)  # let _handle_messages task start before disconnect
+        live = model.live
+        params = JobParams(bounds=_DOC_BOUNDS, name="live", seed=3)
+
+        live.is_previewing = True
+        assert not live.is_previewing, "cannot preview without a result"
+
+        live.set_result(Image.create(_DOC_EXTENT, fill=_RED), params)
+        live.is_previewing = True
+        assert live.is_previewing
+        preview_layers = [l for l in _paint_layers(model) if l.is_locked]
+        assert len(preview_layers) == 1
+        assert _layer_matches(preview_layers[0], Image.create(_DOC_EXTENT, fill=_RED), _DOC_BOUNDS)
+
+        # A new result updates the same layer
+        green = Image.create(_DOC_EXTENT, fill=_GREEN)
+        live.set_result(green, params)
+        preview_layers = [l for l in _paint_layers(model) if l.is_locked]
+        assert len(preview_layers) == 1
+        assert _layer_matches(preview_layers[0], green, _DOC_BOUNDS)
+
+        # Live reads the canvas including internal layers, but never the preview layer
+        excluded: list[Layer] = []
+        get_image = model.document.get_image
+
+        def spy(bounds=None, exclude_layers=None):
+            excluded.extend(exclude_layers or [])
+            return get_image(bounds, exclude_layers)
+
+        model.document.get_image = spy
+        model._get_current_image(_DOC_BOUNDS, exclude_internal=False)
+        model.document.get_image = get_image
+        assert [l.id for l in excluded] == [preview_layers[0].id]
+
+        live.is_previewing = False
+        assert not preview_layers[0].is_visible
+
+        live.is_previewing = True
+        live.apply_result()
+        assert not live.is_previewing
+        assert model.layers.updated().find(preview_layers[0].id) is None
+        assert any(_layer_matches(l, green, _DOC_BOUNDS) for l in _paint_layers(model))
+
+
+@qtapp
 async def test_apply_region_replace(workflows_dir: Path):
     """ApplyRegionBehavior.replace updates the linked region layers in place and re-links regions."""
     krita_doc = Krita.instance().openDocument("test")

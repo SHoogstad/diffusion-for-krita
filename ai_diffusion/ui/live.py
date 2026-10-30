@@ -5,12 +5,11 @@ from ..localization import translate as _
 from ..model.model import DocumentModel
 from ..model.properties import Bind, Binding, bind
 from ..model.root import root
-from ..qt.QtCore import QMetaObject, QRectF, Qt, QTimer
-from ..qt.QtGui import QColor, QFont, QPainter, QPen
+from ..qt.QtCore import QMetaObject, QRectF, QSize, Qt, QTimer, pyqtSignal
+from ..qt.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from ..qt.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
-    QLabel,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -85,17 +84,74 @@ class SpinnerWidget(QWidget):
         )
 
 
-class LivePreviewArea(QLabel):
+class LivePreviewArea(QWidget):
+    """Shows the live result scaled to fit the available space. Click to toggle a preview
+    layer on the canvas."""
+
+    clicked = pyqtSignal()
+
     def __init__(self, parent: QWidget):
         super().__init__(parent)
+        self._pixmap: QPixmap | None = None
+        self._is_previewing = False
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setAlignment(Qt.AlignmentFlag(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft))
+        self.setMinimumSize(64, 64)
+        self._update_tooltip()
+
+    def sizeHint(self):
+        return QSize(256, 256)
 
     def show_image(self, image: Image):
-        target = Extent.from_qsize(self.size())
-        img = Image.scale_to_fit(image, target)
-        self.setPixmap(img.to_pixmap())
-        self.setMinimumSize(256, 256)
+        self._pixmap = image.to_pixmap()
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update()
+
+    def clear(self):
+        self._pixmap = None
+        self.unsetCursor()
+        self.update()
+
+    @property
+    def is_previewing(self):
+        return self._is_previewing
+
+    @is_previewing.setter
+    def is_previewing(self, value: bool):
+        self._is_previewing = value
+        self._update_tooltip()
+        self.update()
+
+    def _update_tooltip(self):
+        if self._is_previewing:
+            self.setToolTip(_("Click to hide the preview layer on the canvas"))
+        else:
+            self.setToolTip(_("Click to show the result as a preview layer on the canvas"))
+
+    def image_rect(self):
+        if self._pixmap is None or self._pixmap.isNull():
+            return QRectF()
+        extent = Extent(self._pixmap.width(), self._pixmap.height())
+        scale = min(self.width() / extent.width, self.height() / extent.height)
+        w, h = extent.width * scale, extent.height * scale
+        return QRectF((self.width() - w) / 2, 0, w, h)
+
+    def mousePressEvent(self, a0):
+        if a0 and a0.button() == Qt.MouseButton.LeftButton and self._pixmap is not None:
+            self.clicked.emit()
+        else:
+            super().mousePressEvent(a0)
+
+    def paintEvent(self, a0):
+        if self._pixmap is None:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = self.image_rect()
+        painter.drawPixmap(rect, self._pixmap, QRectF(self._pixmap.rect()))
+        if self._is_previewing:
+            painter.setPen(QPen(QColor(theme.active), 2))
+            painter.drawRect(rect.adjusted(1, 1, -1, -1))
+        painter.end()
 
 
 class LiveWidget(QWidget):
@@ -231,7 +287,8 @@ class LiveWidget(QWidget):
         layout.addWidget(self.error_box)
 
         self.preview_area = LivePreviewArea(self)
-        layout.addWidget(self.preview_area)
+        self.preview_area.clicked.connect(self.toggle_preview)
+        layout.addWidget(self.preview_area, 1)
 
         self.spinner = SpinnerWidget(self.preview_area)
         self.spinner.hide()
@@ -257,6 +314,7 @@ class LiveWidget(QWidget):
                 bind(model, "error", self.error_box, "error", Bind.one_way),
                 model.live.is_active_changed.connect(self.update_is_active),
                 model.live.is_recording_changed.connect(self.update_is_recording),
+                bind(model.live, "is_previewing", self.preview_area, "is_previewing", Bind.one_way),
                 model.live.has_result_changed.connect(self.apply_button.setEnabled),
                 model.live.has_result_changed.connect(self.apply_layer_button.setEnabled),
                 self.random_seed_button.clicked.connect(model.generate_seed),
@@ -282,6 +340,9 @@ class LiveWidget(QWidget):
 
     def toggle_record(self):
         self.model.live.is_recording = not self.model.live.is_recording
+
+    def toggle_preview(self):
+        self.model.live.is_previewing = not self.model.live.is_previewing
 
     def toggle_edit(self):
         self.model.edit_mode = not self.model.edit_mode
@@ -343,8 +404,7 @@ class LiveWidget(QWidget):
         super().resizeEvent(a0)
 
         # Position spinner in top-right corner of preview area
-        preview_rect = self.preview_area.geometry()
-        spinner_x = preview_rect.right() - self.spinner.width() - 4
+        spinner_x = self.preview_area.width() - self.spinner.width() - 4
         self.spinner.move(spinner_x, 4)
 
     def apply_result(self):
