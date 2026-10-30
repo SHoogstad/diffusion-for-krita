@@ -215,6 +215,10 @@ class Arch(Enum):
         return self in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v, Arch.anima]
 
     @property
+    def supports_skip_layer_guidance(self):
+        return self is Arch.moss
+
+    @property
     def supports_cfg(self):
         return self not in [Arch.flux, Arch.flux_k]
 

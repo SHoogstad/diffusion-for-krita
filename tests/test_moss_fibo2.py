@@ -70,11 +70,15 @@ def test_workload_requires_comfy_support(arch: Arch):
     assert len(missing) == 1 and missing[0].kind is ResourceKind.node
 
 
-def create(arch: Arch, kind: WorkflowKind, canvas: Image | Extent, cond: ConditioningInput):
+def create(
+    arch: Arch, kind: WorkflowKind, canvas: Image | Extent, cond: ConditioningInput, **style_args
+):
     models = client_models(arch)
     style = Style(Path("default.json"))
     style.checkpoints = [checkpoints[arch]]
     style.cfg_scale = 3.0
+    for key, value in style_args.items():
+        setattr(style, key, value)
     files = FileLibrary(FileCollection(), FileCollection())
     perf = PerformanceSettings()
     job = workflow.prepare(kind, canvas, cond, style, 1, models, files, perf, strength=1.0)
@@ -91,6 +95,35 @@ def test_moss_generate():
     assert find(nodes, "CLIPLoader")[0]["inputs"]["type"] == "moss_image"
     assert len(find(nodes, "EmptyFlux2LatentImage")) == 1
     assert len(find(nodes, "CLIPTextEncode")) >= 1
+
+
+def test_moss_skip_layer_guidance():
+    extent, cond = Extent(1024, 1024), ConditioningInput("cat")
+    nodes = create(Arch.moss, WorkflowKind.generate, extent, cond)
+    assert find(nodes, "SkipLayerGuidanceDiT") == [], "off by default"
+
+    nodes = create(
+        Arch.moss, WorkflowKind.generate, extent, cond,
+        skip_layer_guidance=2.5, skip_layer_guidance_layers="10, 11",
+    )  # fmt: skip
+    slg = find(nodes, "SkipLayerGuidanceDiT")
+    assert len(slg) == 1
+    assert slg[0]["inputs"]["single_layers"] == "10, 11"
+    assert slg[0]["inputs"]["double_layers"] == ""
+    assert slg[0]["inputs"]["scale"] == pytest.approx(2.5)
+    slg_id = next(id for id, n in nodes.items() if n["class_type"] == "SkipLayerGuidanceDiT")
+    sampler = find(nodes, "SamplerCustomAdvanced") + find(nodes, "KSampler")
+    assert len(sampler) == 1
+    guider = sampler[0]["inputs"].get("guider")
+    model = nodes[guider[0]]["inputs"]["model"] if guider else sampler[0]["inputs"]["model"]
+    while model[0] != slg_id:  # the sampler's model goes through the SLG node
+        model = nodes[model[0]]["inputs"]["model"]
+
+    nodes = create(
+        Arch.fibo2, WorkflowKind.generate, extent, cond,
+        skip_layer_guidance=2.5, skip_layer_guidance_layers="10, 11",
+    )  # fmt: skip
+    assert find(nodes, "SkipLayerGuidanceDiT") == [], "only for MOSS-Image"
 
 
 def test_fibo2_generate():

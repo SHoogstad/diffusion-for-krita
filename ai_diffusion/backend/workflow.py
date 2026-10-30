@@ -210,6 +210,10 @@ def load_checkpoint_with_lora(w: ComfyWorkflow, checkpoint: CheckpointInput, mod
     if arch.supports_attention_guidance and checkpoint.self_attention_guidance:
         model = w.apply_self_attention_guidance(model)
 
+    slg_layers = checkpoint.skip_layer_guidance_layers.strip()
+    if arch.supports_skip_layer_guidance and checkpoint.skip_layer_guidance > 0 and slg_layers:
+        model = w.skip_layer_guidance(model, slg_layers, checkpoint.skip_layer_guidance)
+
     return model, Clip(clip, arch), vae
 
 
