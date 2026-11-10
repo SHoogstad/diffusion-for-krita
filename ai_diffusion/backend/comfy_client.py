@@ -50,6 +50,7 @@ from .resources import (
     ResourceId,
     ResourceKind,
     UpscalerName,
+    is_minimax_h3_video,
     resource_id,
 )
 from .workflow import create as create_workflow
@@ -737,14 +738,14 @@ class ComfyClient(Client):
                 continue
             if models.find(id) is None:
                 missing.append(id)
-        has_checkpoint = any(cp.arch is sdver for cp in models.checkpoints.values())
+        checkpoints = [cp for cp in models.checkpoints.values() if cp.arch is sdver]
+        if sdver is Arch.ph3:  # MiniMax-H3 video models only count with the P-H3-Image LoRA
+            has_lora = models.find(ResourceId(ResourceKind.lora, Arch.ph3, "p_h3_image"))
+            if has_lora is None:
+                checkpoints = [cp for cp in checkpoints if not is_minimax_h3_video(cp.filename)]
+        has_checkpoint = len(checkpoints) > 0
         if not has_checkpoint and sdver is Arch.illu:  # Illu checkpoints are detected as SDXL
             has_checkpoint = any(cp.arch is Arch.sdxl for cp in models.checkpoints.values())
-        if not has_checkpoint and sdver is Arch.ph3:  # P-H3-Image as a LoRA on MiniMax-H3 FL2VA
-            has_lora = models.find(ResourceId(ResourceKind.lora, Arch.ph3, "p_h3_image"))
-            has_checkpoint = has_lora is not None and any(
-                cp.arch is Arch.h3_e for cp in models.checkpoints.values()
-            )
         if not has_checkpoint:
             missing.append(ResourceId(ResourceKind.checkpoint, sdver, "model"))
         clip_type = sdver.comfy_clip_type

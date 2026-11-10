@@ -106,13 +106,13 @@ def list_models(
         versions.append(Arch.moss)
     if fibo2 or all:
         versions.extend((Arch.fibo2, Arch.fibo2_e))
-    if h3:  # experimental, not part of --all
-        versions.append(Arch.h3_e)
+    if h3:  # very large, not part of --all
+        versions.append(Arch.h3)
     if ph3:  # very large, not part of --all
         versions.append(Arch.ph3)
 
     def include_checkpoint(m: ModelResource):
-        large = (Arch.h3_e, Arch.ph3)
+        large = (Arch.h3, Arch.ph3)
         return (all and m.arch not in large) or m.id.identifier in checkpoints
 
     models: set[ModelResource] = set()
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     parser.add_argument("--krea2", action="store_true", help="[Workload] everything needed to run Krea 2 (no checkpoints)")
     parser.add_argument("--moss", action="store_true", help="[Workload] everything needed to run MOSS-Image (no checkpoints)")
     parser.add_argument("--fibo2", action="store_true", help="[Workload] everything needed to run Fibo 2 and Fibo 2 Edit (no checkpoints)")
-    parser.add_argument("--h3", action="store_true", help="[Workload] everything needed to run H3 Edit, experimental (no checkpoints)")
+    parser.add_argument("--h3", action="store_true", help="[Workload] everything needed to run MiniMax-H3-Image (17 GB; with --checkpoints +21 GB)")
     parser.add_argument("--ph3", action="store_true", help="[Workload] everything needed to run P-H3-Image (20 GB incl. prompt upsampler and LoRA; with --checkpoints +21 GB)")
     parser.add_argument("--checkpoints", action="store_true", dest="checkpoints", help="download all checkpoints for selected workloads")
     parser.add_argument("--controlnet", action="store_true", help="download ControlNet models for selected workloads")
@@ -358,7 +358,7 @@ if __name__ == "__main__":
         "krea2": (Arch.krea2,),
         "moss": (Arch.moss,),
         "fibo2": (Arch.fibo2, Arch.fibo2_e),
-        "h3": (Arch.h3_e,),
+        "h3": (Arch.h3,),
         "ph3": (Arch.ph3,),
     }
     for name, archs in extra_workloads.items():

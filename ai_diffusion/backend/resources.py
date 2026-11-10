@@ -13,7 +13,7 @@ from typing import Any, NamedTuple
 version = "1.54.0"
 
 comfy_url = "https://github.com/comfyanonymous/ComfyUI"
-comfy_version = "2c75dc1b379a59e0880619d029607af5169a62ef"
+comfy_version = "989d93d0d968e704c589ce0146bb18c77f6b50cc"  # v0.45.0
 
 
 class CustomNode(NamedTuple):
@@ -68,13 +68,6 @@ optional_custom_nodes = [
         "01f8845bf30d89fff293c7bd50187bc59d9d53ea",
         ["UnetLoaderGGUF", "DualCLIPLoaderGGUF"],
     ),
-    CustomNode(
-        "MiniMax H3 Image Studio",
-        "ComfyUI-MiniMax-H3-Image-Studio",
-        "https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio",
-        "9834e55976cd1d0572b55a3453de0e1b3c5d3dad",
-        ["H3ImageToImagePrepare", "H3SamplingSettings", "H3StudioEdit", "H3StudioRender"],
-    ),
 ]
 
 
@@ -103,7 +96,7 @@ class Arch(Enum):
     moss = "MOSS-Image"
     fibo2 = "Fibo 2"
     fibo2_e = "Fibo 2 Edit"
-    h3_e = "H3 Edit (experimental)"
+    h3 = "MiniMax-H3-Image"
     ph3 = "P-H3-Image"
 
     auto = "Automatic"
@@ -163,10 +156,14 @@ class Arch(Enum):
             and any(s in filename for s in ("p-h3-image", "p_h3_image", "ph3"))
         ):
             return Arch.ph3
-        if string in {"minimax-h3", "minimax_h3"} or (
-            string == "unknown" and any(s in filename for s in ("minimax_h3", "minimaxh3"))
+        if string in {"minimax-h3-image", "minimax_h3_image"} or (
+            string in {"unknown", "minimax-h3", "minimax_h3"}
+            and any(s in filename for s in _h3_image_names)
         ):
-            return Arch.h3_e
+            return Arch.h3
+        if string in {"minimax-h3", "minimax_h3"} or is_minimax_h3_video(filename):
+            # MiniMax-H3 video models (FL2VA, Ref2VA) only run as a base for the P-H3-Image LoRA
+            return Arch.ph3
         return None
 
     @staticmethod
@@ -188,7 +185,6 @@ class Arch(Enum):
             or (a.is_sdxl_like and b.is_sdxl_like)
             or (a.is_flux_like and b.is_flux_like)
             or (a.is_qwen_like and b.is_qwen_like)
-            or {a, b} == {Arch.h3_e, Arch.ph3}  # P-H3-Image as a LoRA on MiniMax-H3 FL2VA
         )
 
     def matches(self, checkpoint: str):
@@ -237,12 +233,11 @@ class Arch(Enum):
             Arch.qwen_e_p,
             Arch.qwen_l,
             Arch.fibo2_e,
-            Arch.h3_e,
         ]
 
     @property
     def supports_edit(self):  # includes text-to-image models that can also edit
-        return self.is_edit or self.is_flux2 or self in [Arch.qwen2, Arch.fibo2, Arch.ph3]
+        return self.is_edit or self.is_flux2 or self in [Arch.qwen2, Arch.fibo2, Arch.h3, Arch.ph3]
 
     @property
     def is_sdxl_like(self):
@@ -264,8 +259,8 @@ class Arch(Enum):
     @property
     def comfy_nodes(self) -> list[str]:
         """Custom nodes the arch's workflows need, it is only supported if the server has them."""
-        if self is Arch.h3_e:
-            return ["H3ImageToImagePrepare", "H3SamplingSettings", "H3StudioEdit", "H3StudioRender"]
+        if self is Arch.h3:  # ComfyUI 0.45+
+            return ["MiniMaxH3ImageConditioning"]
         if self is Arch.ph3:  # ComfyUI 0.44+
             return ["PH3ImageConditioning", "MiniMaxH3SigmaShift"]
         return []
@@ -279,7 +274,7 @@ class Arch(Enum):
                 return "moss_image"
             case Arch.fibo2 | Arch.fibo2_e:
                 return "fibo2"
-            case Arch.h3_e | Arch.ph3:
+            case Arch.h3 | Arch.ph3:
                 return "minimax"
         return None
 
@@ -318,7 +313,7 @@ class Arch(Enum):
                 return ["qwen_3vl_4b"]
             case Arch.moss:
                 return ["qwen_3_5_9b"]
-            case Arch.h3_e:
+            case Arch.h3:
                 return ["qwen_3vl_32b_h3"]
             case Arch.ph3:
                 return ["p_h3_image"]
@@ -356,7 +351,7 @@ class Arch(Enum):
                 return "moss_image"
             case Arch.fibo2 | Arch.fibo2_e:
                 return "fibo2"
-            case Arch.h3_e | Arch.ph3:
+            case Arch.h3 | Arch.ph3:
                 return "minimax"
         return None
 
@@ -394,9 +389,21 @@ class Arch(Enum):
             Arch.moss,
             Arch.fibo2,
             Arch.fibo2_e,
-            Arch.h3_e,
+            Arch.h3,
             Arch.ph3,
         ]
+
+
+_h3_image_names = ("minimax_h3_image", "minimax-h3-image", "minimaxh3image", "minimaxh3_image")
+
+
+def is_minimax_h3_video(filename: str):
+    """MiniMax-H3 video checkpoints (FL2VA, Ref2VA, merges). They are not offered as an architecture
+    of their own, only as the base model P-H3-Image runs on as a LoRA."""
+    name = filename.lower()
+    if any(s in name for s in ("p-h3-image", "p_h3_image", "ph3") + _h3_image_names):
+        return False
+    return any(s in name for s in ("minimax_h3", "minimaxh3", "minimax-h3"))
 
 
 class ResourceKind(Enum):
@@ -539,7 +546,7 @@ class ControlMode(Enum):
 
     def can_substitute_instruction(self, arch: Arch):
         """True if this control mode is covered by instruction-following edit models."""
-        if arch.is_flux2 or arch.is_fibo2 or arch in (Arch.qwen2, Arch.ph3):
+        if arch.is_flux2 or arch.is_fibo2 or arch in (Arch.qwen2, Arch.h3, Arch.ph3):
             return self in [
                 ControlMode.style,
                 ControlMode.composition,
@@ -921,7 +928,6 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.lora, Arch.flux_k, "turbo"): ["flux.1-turbo"],
     resource_id(ResourceKind.lora, Arch.anima, "turbo"): ["anima-turbo-lora"],
     resource_id(ResourceKind.lora, Arch.ph3, "p_h3_image"): ["p-h3-image_lora"],
-    resource_id(ResourceKind.lora, Arch.h3_e, "turbo"): ["minimax_h3_turbo_v4_step600_ema", "minimax_h3_turbo_4step_ckpt600_ema_v4"],
     resource_id(ResourceKind.lora, Arch.sd15, ControlMode.face): ["ip-adapter-faceid-plusv2_sd15_lora", "ip-adapter-faceid-plus_sd15_lora"],
     resource_id(ResourceKind.lora, Arch.sdxl, ControlMode.face): ["ip-adapter-faceid-plusv2_sdxl_lora", "ip-adapter-faceid_sdxl_lora"],
     resource_id(ResourceKind.lora, Arch.flux, ControlMode.depth): ["flux1-depth"],
@@ -972,7 +978,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.vae, Arch.moss, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.fibo2, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.fibo2_e, "default"): ["flux2"],
-    resource_id(ResourceKind.vae, Arch.h3_e, "default"): ["minimax_h3_video_vae"],
+    resource_id(ResourceKind.vae, Arch.h3, "default"): ["minimax_h3_image_vae"],
     resource_id(ResourceKind.vae, Arch.ph3, "default"): ["p-h3-image_vae"],
 }
 # fmt: on
@@ -1019,8 +1025,8 @@ required_resource_ids = {
     ResourceId(ResourceKind.vae, Arch.fibo2, "default"),
     ResourceId(ResourceKind.text_encoder, Arch.fibo2_e, "qwen_3vl_4b"),
     ResourceId(ResourceKind.vae, Arch.fibo2_e, "default"),
-    ResourceId(ResourceKind.text_encoder, Arch.h3_e, "qwen_3vl_32b_h3"),
-    ResourceId(ResourceKind.vae, Arch.h3_e, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.h3, "qwen_3vl_32b_h3"),
+    ResourceId(ResourceKind.vae, Arch.h3, "default"),
     ResourceId(ResourceKind.text_encoder, Arch.ph3, "p_h3_image"),
     ResourceId(ResourceKind.vae, Arch.ph3, "default"),
 }

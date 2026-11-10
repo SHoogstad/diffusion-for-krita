@@ -985,8 +985,8 @@ def generate(
     misc: MiscParams,
     models: ModelDict,
 ):
-    if models.arch is Arch.ph3:
-        return ph3_generate(w, checkpoint, extent, cond, sampling, misc, models)
+    if models.arch in (Arch.h3, Arch.ph3):
+        return h3_generate(w, checkpoint, extent, cond, sampling, misc, models)
 
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
     model = apply_ip_adapter(w, model, cond.control, models)
@@ -1124,7 +1124,7 @@ def inpaint(
     misc: MiscParams,
     models: ModelDict,
 ):
-    if models.arch is Arch.ph3:  # an edit of the area around the selection, composited by mask
+    if models.arch in (Arch.h3, Arch.ph3):  # an edit of the area around the selection, by mask
         args = (w, images, checkpoint, cond, sampling, params, misc, models)
         return h3_refine_region(*args)
 
@@ -1263,54 +1263,53 @@ def inpaint(
     return w
 
 
-def h3_edit(
+def h3_image_sample(
     w: ComfyWorkflow,
     checkpoint: CheckpointInput,
     cond: Conditioning,
     sampling: SamplingInput,
-    image: Output,
+    image: Output | None,
     extent: Extent,
     misc: MiscParams,
     models: ModelDict,
 ):
-    """MiniMax H3 edits through the H3 Image Studio nodes, like H3 Studio does.
-    Without reference images "Keep source" anchors the image as the first frame of a short clip,
-    which keeps identity, pose and background. With references "Creative" (H3StudioEdit) redraws
-    the scene using all of them."""
-    instruction = cond.positive.prepare(w, cond.style_prompt)
-    references = [c.image.load(w) for c in cond.all_control if c.mode.is_ip_adapter]
-    steps, seed = sampling.actual_steps, sampling.seed
+    """MiniMax-H3-Image: text-to-image without `image`, otherwise an edit of `image` (<Picture 1>),
+    with reference images after it. The checkpoint is distilled to 6 steps without CFG on a fixed
+    sigma grid (the model's sampling walks it), and always starts from pure noise: denoise
+    strength does not apply, edits keep the image instead."""
+    model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
+    images = [image] if image is not None else []
+    images += [c.image.load(w) for c in cond.all_control if c.mode.is_ip_adapter]
+    prompt = cond.positive.prepare(w, cond.style_prompt)
+    positive, latent = w.minimax_h3_image_conditioning(clip.model, vae, prompt, extent, images[:16])
+    return _h3_sample_batch(w, model, vae, positive, latent, sampling, extent, misc, models)
+
+
+def _h3_sample_batch(
+    w: ComfyWorkflow,
+    model: Output,
+    vae: Output,
+    positive: Output,
+    latent: Output,
+    sampling: SamplingInput,
+    extent: Extent,
+    misc: MiscParams,
+    models: ModelDict,
+):
+    guider = w.basic_guider(model, positive)
+    sampler = w.sampler_select(sampling.sampler)
+    steps = sampling.actual_steps
+    sigmas = w.scheduler_sigmas(model, sampling.scheduler, steps, models.arch, extent)
     results: list[Output] = []
-    if references:
-        model_file = models.all.checkpoints[checkpoint.checkpoint].filename
-        custom_vae = checkpoint.vae and checkpoint.vae != StyleSettings.vae.default
-        vae = checkpoint.vae if custom_vae else models.vae
-        te = custom_text_encoder(checkpoint) or models.text_encoder["qwen_3vl_32b_h3"]
-        h3 = w.h3_studio_models(model_file, te, vae)
-        for lora in checkpoint.loras:
-            h3 = w.h3_studio_lora(h3, lora.name, lora.strength)
-        job = w.h3_studio_edit(h3, image, instruction, extent, references[:8])
-        for i in range(misc.batch_count):
-            out = w.h3_studio_render(job, steps, seed + i, sampling.sampler, sampling.scheduler)
-            results.append(out)
-    else:
-        model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
-        positive, latent, fitted = w.h3_image_to_image_prepare(
-            clip.model, vae, image, instruction, extent
-        )
-        model, sampler, sigmas = w.h3_sampling_settings(
-            model, sampling.sampler, sampling.scheduler, steps
-        )
-        guider = w.basic_guider(model, positive)
-        for i in range(misc.batch_count):
-            out_latent = w.h3_sample(guider, sampler, sigmas, latent, seed + i)
-            results.append(w.h3_decode_still(out_latent, vae, fitted))
+    for i in range(misc.batch_count):
+        out_latent = w.h3_sample(guider, sampler, sigmas, latent, sampling.seed + i)
+        results.append(w.vae_decode(vae, out_latent))
     w.sample_count += steps * misc.batch_count
 
     out_image = results[0]
     for result in results[1:]:
         out_image = w.batch_image(out_image, result)
-    return w.scale_image(out_image, extent)  # the nodes may round the size
+    return w.scale_image(out_image, extent)  # the nodes round the size to a multiple of 32
 
 
 def ph3_sample(
@@ -1327,8 +1326,8 @@ def ph3_sample(
     reference images after it. The model is distilled to a fixed 8-step grid without CFG, so it
     always samples from pure noise: denoise strength does not apply, edits keep the image instead."""
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
-    if models.all.checkpoints[checkpoint.checkpoint].arch is not Arch.ph3:
-        # A MiniMax-H3 (FL2VA) model with the style set to P-H3-Image runs it as a LoRA
+    if resources.is_minimax_h3_video(checkpoint.checkpoint):
+        # A MiniMax-H3 video model (FL2VA) runs P-H3-Image as a LoRA
         lora = models.lora.find("p_h3_image")
         if lora is None:
             msg = _("P-H3-Image on a MiniMax-H3 model needs the LoRA {file} in models/loras")
@@ -1343,20 +1342,7 @@ def ph3_sample(
     if checkpoint.prompt_upsampler and upsampler and prompt:
         prompt = ph3_upsample_prompt(w, upsampler, prompt, images, extent)
     positive, latent = w.ph3_image_conditioning(clip.model, vae, prompt, extent, images)
-    guider = w.basic_guider(model, positive)
-    sampler = w.sampler_select(sampling.sampler)
-    steps = sampling.actual_steps
-    sigmas = w.scheduler_sigmas(model, sampling.scheduler, steps, models.arch, extent)
-    results: list[Output] = []
-    for i in range(misc.batch_count):
-        out_latent = w.h3_sample(guider, sampler, sigmas, latent, sampling.seed + i)
-        results.append(w.vae_decode(vae, out_latent))
-    w.sample_count += steps * misc.batch_count
-
-    out_image = results[0]
-    for result in results[1:]:
-        out_image = w.batch_image(out_image, result)
-    return w.scale_image(out_image, extent)  # the node rounds the size to a multiple of 32
+    return _h3_sample_batch(w, model, vae, positive, latent, sampling, extent, misc, models)
 
 
 _ph3_aspect_ratios = {"1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4, "3:2": 3 / 2, "2:3": 2 / 3}
@@ -1394,7 +1380,7 @@ def ph3_upsample_prompt(
     return w.text_generate(clip, request, 3072, thinking=False, image=batch)
 
 
-def ph3_generate(
+def h3_generate(
     w: ComfyWorkflow,
     checkpoint: CheckpointInput,
     extent: ScaledExtent,
@@ -1403,7 +1389,8 @@ def ph3_generate(
     misc: MiscParams,
     models: ModelDict,
 ):
-    out_image = ph3_sample(w, checkpoint, cond, sampling, None, extent.initial, misc, models)
+    sample = ph3_sample if models.arch is Arch.ph3 else h3_image_sample
+    out_image = sample(w, checkpoint, cond, sampling, None, extent.initial, misc, models)
     out_image = w.nsfw_filter(out_image, sensitivity=misc.nsfw_filter)
     out_image = scale_to_target(extent, w, out_image, models)
     w.send_image(out_image)
@@ -1420,7 +1407,7 @@ def h3_refine(
     misc: MiscParams,
     models: ModelDict,
 ):
-    edit = ph3_sample if models.arch is Arch.ph3 else h3_edit
+    edit = ph3_sample if models.arch is Arch.ph3 else h3_image_sample
     in_image = w.load_image(image)
     in_image = scale_to_initial(extent, w, in_image, models)
     out_image = edit(w, checkpoint, cond, sampling, in_image, extent.initial, misc, models)
@@ -1447,7 +1434,7 @@ def h3_refine_region(
     in_mask = apply_grow_feather(w, in_mask, inpaint)
     initial_mask = scale_to_initial(extent, w, in_mask, models, is_mask=True)
 
-    edit = ph3_sample if models.arch is Arch.ph3 else h3_edit
+    edit = ph3_sample if models.arch is Arch.ph3 else h3_image_sample
     out_image = edit(w, checkpoint, cond, sampling, in_image, extent.initial, misc, models)
     out_image = w.color_match(out_image, in_image, initial_mask, misc.color_match)
     out_image = w.nsfw_filter(out_image, sensitivity=misc.nsfw_filter)
@@ -1471,7 +1458,7 @@ def refine(
     misc: MiscParams,
     models: ModelDict,
 ):
-    if models.arch in (Arch.h3_e, Arch.ph3):
+    if models.arch in (Arch.h3, Arch.ph3):
         return h3_refine(w, image, extent, checkpoint, cond, sampling, misc, models)
 
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
@@ -1505,7 +1492,7 @@ def refine_region(
     misc: MiscParams,
     models: ModelDict,
 ):
-    if models.arch in (Arch.h3_e, Arch.ph3):
+    if models.arch in (Arch.h3, Arch.ph3):
         args = (w, images, checkpoint, cond, sampling, inpaint, misc, models)
         return h3_refine_region(*args)
 
@@ -1837,7 +1824,7 @@ _layer_replace = {
     Arch.qwen2: "<image{}>",
     Arch.fibo2: "<image_{}>",
     Arch.fibo2_e: "<image_{}>",
-    Arch.h3_e: "<Picture {}>",
+    Arch.h3: "<Picture {}>",
     Arch.ph3: "<Picture {}>",
 }
 _control_instructions = {
@@ -2105,10 +2092,6 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
     This should be a pure function, the workflow is entirely defined by the input.
     """
     workflow = ComfyWorkflow(models.node_inputs, comfy_mode)
-    if i.models and i.models.version is Arch.h3_e and i.kind not in _h3_workflow_kinds:
-        raise ValueError(
-            _("H3 Edit only edits images, it can't be used for {kind}", kind=i.kind.name)
-        )
     layer_count = i.images.layer_count if i.images else 1
     misc = MiscParams(i.batch_count, layer_count, i.color_match, i.nsfw_filter)
 
@@ -2191,15 +2174,6 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
         )
     else:
         raise ValueError(f"Unsupported workflow kind: {i.kind}")
-
-
-_h3_workflow_kinds = (
-    WorkflowKind.refine,
-    WorkflowKind.refine_region,
-    WorkflowKind.upscale_simple,
-    WorkflowKind.control_image,
-    WorkflowKind.custom,
-)
 
 
 def _get_sampling_lora(style: Style, is_live: bool, model_set: ModelDict, models: ClientModels):

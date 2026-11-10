@@ -32,17 +32,21 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 * Both use the Flux 2 VAE and are detected by filename. They only show up if the connected ComfyUI
   supports them; otherwise you get an "update ComfyUI" hint.
 
-### H3 Edit (experimental)
-* Edits images with **MiniMax H3**, the same way [H3 Image Studio](https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio)
-  does. Without reference images it uses **Keep source**: the canvas is anchored as the first frame of a
-  short clip, which keeps faces, pose and background. With reference images it switches to **Creative**,
-  which redraws the scene using all of them (`<Picture 1>` is the canvas, references are `<Picture 2>` and up).
-* Needs ComfyUI master with H3 support and the H3 Image Studio custom nodes. `H3StillSliceDecode` (included
-  in the Runpod image) removes the 16 px banding of the stock decode; without it the stock decode is used.
-* The default style uses the **H3 - Turbo** sampler: Larry's v4 EMA turbo LoRA at 0.38, 20 steps, er_sde.
-  **H3 - ER-SDE** runs 50 steps without the LoRA. Large canvases are edited at about 2 MP and then upscaled.
-* The models are big: about 40 GB (FL2VA pruned int8, Qwen3-VL 32B text encoder in nvfp4, video VAE). On
-  Runpod, pick a GPU with 48 GB or more.
+### MiniMax-H3-Image
+* **MiniMax-H3-Image** is MiniMax's native image model from the H3 family: text-to-image and edits in one
+  checkpoint. Generate is text-to-image. Refine, inpaint and fill edit the canvas, which is `<Picture 1>` in the
+  prompt; reference images are `<Picture 2>` and up (16 images at most). The model always starts from noise,
+  so the strength slider has no effect on edits.
+* It is distilled to **6 steps without CFG** (preset **MiniMax-H3 - 6 steps**, euler / simple). Canvases above
+  about 6 MP are generated at that size and scaled up afterwards; smaller canvases keep their size.
+* The model wants a long, detailed description of the whole image. **Improve Prompt** uses MiniMax's own
+  caption expander (from the official ComfyUI workflow) for text-to-image.
+* Needs **ComfyUI 0.45** or newer (`MiniMaxH3ImageConditioning`). Files from
+  [Comfy-Org/MiniMax-H3-Image](https://huggingface.co/Comfy-Org/MiniMax-H3-Image): the DiT (pruned int8,
+  21 GB), the image VAE (1.2 GB) and the Qwen3-VL 32B text encoder of MiniMax-H3 (nvfp4 15.7 GB or int8
+  27 GB). On Runpod, pick a GPU with 48 GB or more.
+* MiniMax-H3 video checkpoints (FL2VA, Ref2VA) are not a base model of their own any more. They only run
+  P-H3-Image through its LoRA (style **P-H3-Image (MiniMax-H3 + LoRA)**).
 
 ## <a name="installation"></a> Installation
 
@@ -86,9 +90,9 @@ Runpod account; you pay Runpod directly, per second while the pod runs.
    The settings page shows an estimate for both, based on the selected GPU and models.
 
    Workloads: Stable Diffusion 1.5, SDXL, Illustrious, Flux, Flux 2, Z-Image, Qwen Image (with Qwen Image
-   Edit 2511), Qwen Image 2.1, Krea 2, MOSS-Image, Fibo 2 (with Fibo 2 Edit) and H3 Edit (experimental,
-   about 40 GB). The larger models are downloaded in fp8/int8 versions; Qwen Image needs a GPU with at least
-   24 GB, 48 GB is more comfortable. H3 Edit needs 48 GB or more.
+   Edit 2511), Qwen Image 2.1, Krea 2, MOSS-Image, Fibo 2 (with Fibo 2 Edit) and MiniMax-H3-Image
+   (about 38 GB). The larger models are downloaded in fp8/int8 versions; Qwen Image needs a GPU with at least
+   24 GB, 48 GB is more comfortable. MiniMax-H3-Image needs 48 GB or more.
 4. Click **Start pod**. The plugin creates the pod, shows the download progress and connects.
 
 **Stopping.** The pod is terminated when you click **Stop pod**, when Krita closes, and after the idle time
@@ -159,7 +163,7 @@ The style list shows each style's base model as an icon, and any LoRA you add mu
 | Flux, Flux Kontext, Flux 2 (Klein 4B / 9B) | Flux 2 also edits images |
 | Z-Image, Qwen Image (incl. Edit), Chroma, Anima | |
 | MOSS-Image, Fibo 2, Fibo 2 Edit | See [MOSS-Image and Fibo 2](#moss-image-and-fibo-2) |
-| H3 Edit (experimental) | See [H3 Edit](#h3-edit-experimental) |
+| MiniMax-H3-Image, P-H3-Image | See [MiniMax-H3-Image](#minimax-h3-image) |
 
 When you install the managed server you choose "workloads": the minimal set of models a base model needs.
 
@@ -171,7 +175,7 @@ Restart Krita for changes to take effect.
 **Improve Prompt** is the wand button in the top right corner of the prompt box. It rewrites the prompt
 with a language model, the way the style's model wants it:
 * **Official prompt enhancers**, copied unchanged from the model makers: Qwen-Image and Qwen-Image-Edit
-  (QwenLM), Qwen-Image 2.1, Krea 2, MOSS-Image, ERNIE-Image and Z-Image (see
+  (QwenLM), Qwen-Image 2.1, Krea 2, MOSS-Image, ERNIE-Image, Z-Image and MiniMax-H3-Image (see
   [ai_diffusion/prompt_templates](ai_diffusion/prompt_templates/SOURCES.md)). Their settings come along too,
   e.g. thinking for Krea 2 and Qwen 2, the JSON answer of Qwen-Image-Edit, and the canvas size for ERNIE.
 * **P-H3-Image** uses PrunaAI's own prompt upsampler when it is on the ComfyUI server, with the request

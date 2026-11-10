@@ -14,6 +14,7 @@ written for this plugin from the makers' prompting guides (also in that file).
 | `krea2.txt` | Krea 2 | "Prompt Enhancer system instruction from the Krea team", ComfyUI template `image_krea2_turbo_t2i` | MIT |
 | `moss.txt` | MOSS-Image | ComfyUI template `image_moss_image_t2i` | MIT |
 | `ernie.txt` | ERNIE-Image | `pe/chat_template.jinja` of [baidu/ERNIE-Image](https://huggingface.co/baidu/ERNIE-Image), as used in ComfyUI template `image_ernie_image` | Apache-2.0 / MIT |
+| `h3.txt` | MiniMax-H3-Image | `task_prompt` of ComfyUI template `image_minimax_h3_image_t2i` (system prompt in `prompt_templates.py`) | MIT |
 | `zimage.txt` | Z-Image | `pe.py` of the [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo) Space | Apache-2.0 |
 
 P-H3-Image has no text template: Improve Prompt runs PrunaAI's own prompt upsampler with the

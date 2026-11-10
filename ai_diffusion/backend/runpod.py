@@ -48,7 +48,7 @@ workload_names = {
     "krea2": "Krea 2",
     "moss": "MOSS-Image",
     "fibo2": "Fibo 2",
-    "h3": "H3 Edit (experimental)",
+    "h3": "MiniMax-H3-Image",
 }
 
 

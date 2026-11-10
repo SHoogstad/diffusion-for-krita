@@ -267,8 +267,8 @@ class DocumentModel(QObject, ObservableProperties):
         seed = self.seed if self.fixed_seed else workflow.generate_seed()
         ref_layers: dict[str, int] | None = None
         if not dryrun:
-            # P-H3-Image always edits the canvas as <Picture 1> when it gets one
-            canvas_input = arch is Arch.ph3 and (
+            # The H3 image models always edit the canvas as <Picture 1> when they get one
+            canvas_input = arch in (Arch.h3, Arch.ph3) and (
                 mask is not None or workflow_kind is WorkflowKind.refine
             )
             conditioning, ref_layers = self._add_reference_layers(conditioning, canvas_input)

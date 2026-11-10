@@ -29,8 +29,10 @@ def test_arch_from_string():
     assert Arch.from_string("unknown", filename=checkpoint) is Arch.ph3
     assert Arch.from_string("unknown", filename="p-h3-image_w4a8.safetensors") is Arch.ph3
     assert Arch.from_string("minimax-h3", filename="P-H3-Image_bf16.safetensors") is Arch.ph3
-    unknown = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
-    assert Arch.from_string("unknown", filename=unknown) is Arch.h3_e
+    # MiniMax-H3 video models only run P-H3-Image as a LoRA
+    assert Arch.from_string("unknown", filename=h3_checkpoint) is Arch.ph3
+    assert Arch.from_string("minimax-h3", filename="MiniMax_H3_Ref2VA.safetensors") is Arch.ph3
+    assert Arch.from_string("unknown", filename="DasiwaMinimaxH3_turbo.safetensors") is Arch.ph3
     assert Arch.ph3.supports_edit and not Arch.ph3.is_edit
     assert Arch.ph3.clip_loader_type == "minimax"
 
@@ -41,12 +43,16 @@ def node_info(nodes: list[str]):
     return ComfyObjectInfo(info)
 
 
-def client_models(nodes: list[str] = ph3_nodes, with_upsampler=False, with_lora=False):
+def client_models(
+    nodes: list[str] = ph3_nodes, with_upsampler=False, with_lora=False, with_ph3=True
+):
     models = ClientModels()
     models.checkpoints = {
         checkpoint: CheckpointInfo(checkpoint, Arch.ph3, workflow.FileFormat.diffusion),
-        h3_checkpoint: CheckpointInfo(h3_checkpoint, Arch.h3_e, workflow.FileFormat.diffusion),
+        h3_checkpoint: CheckpointInfo(h3_checkpoint, Arch.ph3, workflow.FileFormat.diffusion),
     }
+    if not with_ph3:
+        del models.checkpoints[checkpoint]
     if with_upsampler:
         models.resources[resource_id(ResourceKind.text_encoder, Arch.all, "p_h3_upsampler")] = (
             upsampler
@@ -72,6 +78,17 @@ def test_workload_requires_ph3_nodes():
     assert missing_for_arch(client_models()) == []
     missing = missing_for_arch(client_models(nodes=["MiniMaxH3SigmaShift"]))
     assert {m.identifier for m in missing} == {"PH3ImageConditioning"}
+
+
+def test_workload_video_checkpoint_needs_lora():
+    def missing_checkpoint(models: ClientModels):
+        client = SimpleNamespace(models=models)
+        missing = ComfyClient._check_workload(client, Arch.ph3)  # type: ignore
+        return any(m.kind is ResourceKind.checkpoint for m in missing)
+
+    assert missing_checkpoint(client_models(with_ph3=False))
+    assert not missing_checkpoint(client_models(with_ph3=False, with_lora=True))
+    assert not missing_checkpoint(client_models())
 
 
 def create(
@@ -287,15 +304,13 @@ def test_h3_checkpoint_without_lora():
         create(*args, style_checkpoint=h3_checkpoint)
 
 
-def test_arch_override_h3_to_ph3():
+def test_video_checkpoint_resolves_to_ph3():
     from ai_diffusion.backend.client import resolve_arch
 
     style = Style(Path("default.json"))
     style.checkpoints = [h3_checkpoint]
-    assert resolve_arch(style, client_models()) is Arch.h3_e
-    style.architecture = Arch.ph3
     assert resolve_arch(style, client_models()) is Arch.ph3
-    assert Arch.is_compatible(Arch.h3_e, Arch.ph3)
+    assert not Arch.is_compatible(Arch.h3, Arch.ph3)
     assert not Arch.is_compatible(Arch.ph3, Arch.qwen2)
 
 

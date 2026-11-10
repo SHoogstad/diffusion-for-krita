@@ -136,7 +136,7 @@ class ScaledExtent(NamedTuple):
 # Image resolution for diffusion should be divisible by this factor, either because it is the
 # required latent compression factor, or to avoid border artifacts with UNET models.
 def diffusion_multiple(arch: Arch):
-    return 32 if arch in (Arch.qwen2, Arch.h3_e, Arch.ph3) else 16
+    return 32 if arch in (Arch.qwen2, Arch.h3, Arch.ph3) else 16
 
 
 class CheckpointResolution(NamedTuple):
@@ -158,7 +158,12 @@ class CheckpointResolution(NamedTuple):
                 Arch.moss: (512, 2048, 1024**2, 1448**2),  # 1-2 MP
                 Arch.fibo2: (512, 1536, 832**2, 1088**2),  # trained at ~1 MP
                 Arch.fibo2_e: (512, 1536, 832**2, 1088**2),
-                Arch.h3_e: (512, 1792, 1024**2, 1448**2),  # 1-2 MP, larger is slow
+                Arch.h3: (
+                    256,
+                    2560,
+                    512**2,
+                    2448**2,
+                ),  # at most ~6 MP, larger canvases are upscaled
                 Arch.ph3: (768, 2048, 1448**2, 2048**2),  # 2-4 MP, best at 4-8 MP
             }
             default = (256, 2048, 512**2, 2048**2)
@@ -199,8 +204,8 @@ def prepare_diffusion_input(
     mult = diffusion_multiple(arch)
 
     # The checkpoint may require a different resolution than what is requested.
-    if arch.is_edit or arch is Arch.ph3:
-        downscale = False  # Never use 2-pass generation for edit models (P-H3 can't refine)
+    if arch.is_edit or arch in (Arch.h3, Arch.ph3):
+        downscale = False  # Never use 2-pass generation for edit models (H3 models can't refine)
 
     min_size, max_size, min_scale, max_scale = CheckpointResolution.compute(
         desired, arch, style, inpaint
@@ -216,13 +221,13 @@ def prepare_diffusion_input(
         image = Image.scale(image, initial) if image else None
 
     elif (
-        (arch.is_fibo2 or arch in (Arch.h3_e, Arch.ph3))
+        (arch.is_fibo2 or arch in (Arch.h3, Arch.ph3))
         and max_scale < 0.9
         and any(x > max_size for x in desired)
     ):
         # Fibo 2 falls apart well above its training resolution (duplicated limbs etc.), and edits
         # don't use 2 passes. Generate at checkpoint resolution and scale up the result.
-        # H3 Edit works at large sizes, but gets very slow.
+        # The H3 image models work at large sizes, but get very slow.
         input = extent  # scaled down to the generation resolution below
         initial = desired = (desired * max_scale).multiple_of(mult)
 

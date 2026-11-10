@@ -50,6 +50,7 @@ class Options(NamedTuple):
     sampling: bool = True
     json_key: str | None = None  # the answer is a JSON object, the prompt is in this key
     suffix: str = ""  # appended to the answer
+    system: str = ""  # system prompt for templates that are the user message
     user_format: str = "{prompt}"  # placeholders: {prompt} {prompt_json} {width} {height} ...
     enhancer: Enhancer | None = None
 
@@ -168,6 +169,20 @@ _ph3_edit = (
     "with what the user said and never invent details like clothing, colors or names."
 )
 
+# MiniMax's edit enhancer (ComfyUI template image_minimax_h3_image_edit) needs to see the images,
+# which Improve Prompt can't send. Written from its output format: subjects are defined against
+# <Picture N>, preserved parts are named, then the target image is described.
+_h3_edit = (
+    "You improve edit requests for MiniMax-H3-Image, which works best with a full description of "
+    "the finished image. The image to edit is <Picture 1>; reference images are <Picture 2>, "
+    "<Picture 3> and so on, keep those names exactly. Rewrite the request as one paragraph: "
+    "first say what in <Picture 1> stays exactly the same, then describe the finished result of "
+    "the change: what is added, removed or different, where it is, and how it fits the "
+    "lighting and perspective of the scene. Say which element comes from which reference image. "
+    "Put any new text in double quotes. You cannot see the images: refer to things only with "
+    "what the user said and never invent details like clothing, colors or names."
+)
+
 _builtin: dict[str, str] = {
     "sd15": (
         "You improve text prompts for Stable Diffusion 1.5, which reads short, comma-separated "
@@ -253,7 +268,7 @@ _builtin: dict[str, str] = {
         "felt hat to the subject.' or 'Remove the book from the subject's hands.'. "
         + _references("<image_{}>"),
     ),
-    "h3_e-edit": _ph3_edit,
+    "h3-edit": _h3_edit,
     "ph3": _ph3,
     "ph3-edit": _ph3_edit,
 }
@@ -277,6 +292,7 @@ _official: dict[str, str] = {
     "moss": "moss.txt",
     "ernie": "ernie.txt",
     "zimage": "zimage.txt",
+    "h3": "h3.txt",
 }
 
 _options: dict[str, Options] = {
@@ -296,6 +312,20 @@ _options: dict[str, Options] = {
             "ernie-image-prompt-enhancer",
             "flux2",
             raw_template="<s>[SYSTEM_PROMPT]{system}[/SYSTEM_PROMPT][INST]{user}[/INST]",
+        ),
+    ),
+    # ComfyUI template image_minimax_h3_image_t2i: TextGenerateV2 with thinking, temperature 1,
+    # top-k 20, 8192 tokens, then the "expanded_caption" of the JSON answer
+    "h3": Options(
+        thinking=True,
+        max_tokens=8192,
+        temperature=1.0,
+        json_key="expanded_caption",
+        system=(
+            "Reason in the thinking section first. The visible final content must be exactly one "
+            "JSON object with exactly two keys: expanded_caption and aspect_ratio. Every ASCII "
+            "double quotation mark used as caption content inside expanded_caption must be "
+            'serialized as the JSON escape sequence \\". Do not output text outside that object.'
         ),
     ),
     "ph3": Options(
@@ -397,7 +427,7 @@ def build(
     user = fill(opts.user_format, prompt, extent)
     if _prompt in text:  # the template is the user message, with the prompt inside
         user = text.replace(_prompt, user)
-        system = ""
+        system = opts.system if source == "official" else ""
     else:
         system = text if source == "official" else f"{text}\n{rules}"
     if extra:

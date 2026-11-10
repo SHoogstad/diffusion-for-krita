@@ -36,7 +36,7 @@ _checkpoint_archs = {
     "krea2": [Arch.krea2],
     "moss": [Arch.moss],
     "fibo2": [Arch.fibo2, Arch.fibo2_e],
-    "h3": [Arch.h3_e],
+    "h3": [Arch.h3],
 }
 
 Progress = Callable[[str, int, int], None]  # message, bytes done, bytes total
