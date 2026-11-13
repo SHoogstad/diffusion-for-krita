@@ -21,6 +21,8 @@ from .properties import ObservableProperties, Property
 if TYPE_CHECKING:
     from .model import DocumentModel
 
+h3_reference_pixels = 2048 * 2048
+
 
 class ControlLayer(QObject, ObservableProperties):
     max_preset_value = 4
@@ -135,7 +137,13 @@ class ControlLayer(QObject, ObservableProperties):
             image.make_opaque(background=Qt.GlobalColor.white)
 
         if self.mode.is_ip_adapter:
-            if self._model.arch.supports_edit:
+            if self._model.arch is Arch.h3:
+                # Like MiniMax's workflows: references at 4 MP. The node encodes them with a short
+                # edge between 1024 and 2048, more detail than the canvas height would allow.
+                target = image.extent.scale_to_pixel_count(h3_reference_pixels)
+                if abs(target.width - image.extent.width) > 8:
+                    image = Image.scale(image, target)
+            elif self._model.arch.supports_edit:
                 if image.extent.height > extent.height:
                     w = (image.extent.width * extent.height) // image.extent.height
                     image = Image.scale(image, Extent(w, extent.height))

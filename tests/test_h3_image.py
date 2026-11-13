@@ -19,6 +19,7 @@ from ai_diffusion.backend.resources import (
 from ai_diffusion.files import FileCollection, FileLibrary
 from ai_diffusion.image import Bounds, Extent, Image, Mask
 from ai_diffusion.model import prompt_templates
+from ai_diffusion.model.control import ControlLayer
 from ai_diffusion.settings import PerformanceSettings
 from ai_diffusion.style import Arch, SamplerPresets, Style
 
@@ -161,6 +162,39 @@ def test_edit_with_reference():
     assert inputs["width"] % 32 == 0 and inputs["height"] % 32 == 0
     assert inputs["prompt"] == "put the hat from <Picture 2> on the person in <Picture 1>"
     assert len(find(nodes, "VAEEncode")) == 0  # the node encodes the pictures itself
+
+
+def reference_extent(arch: Arch, reference: Extent):
+    layer = SimpleNamespace(
+        name="reference",
+        bounds=Bounds(0, 0, *reference),
+        get_pixels=lambda bounds, time: Image.create(reference),
+    )
+    control = SimpleNamespace(
+        layer=layer,
+        is_supported=True,
+        mode=ControlMode.reference,
+        strength=100,
+        strength_multiplier=100,
+        start=0.0,
+        end=1.0,
+        clip_vision_extent=Extent(224, 224),
+        _model=SimpleNamespace(arch=arch, document=SimpleNamespace(extent=Extent(2000, 1088))),
+    )
+    return ControlLayer.to_api(control).image.extent  # type: ignore
+
+
+@pytest.mark.parametrize("size", [(1707, 1280), (3840, 2160), (1080, 1080), (4096, 4096)])
+def test_reference_images_at_4mp(size: tuple[int, int]):
+    reference = Extent(*size)
+    extent = reference_extent(Arch.h3, reference)
+    assert abs(extent.pixel_count - 2048 * 2048) < 3 * 4096
+    assert extent.width / extent.height == pytest.approx(reference.width / reference.height, 0.01)
+
+
+def test_reference_images_other_edit_models():
+    # Not MiniMax-H3: references are no taller than the canvas
+    assert reference_extent(Arch.qwen2, Extent(1707, 1280)) == Extent(1450, 1088)
 
 
 def test_refine_without_edit_mode_still_edits():
