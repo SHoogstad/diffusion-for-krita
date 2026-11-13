@@ -1,0 +1,17 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share what you made with Diffusion for Krita. Keep images safe for work, or put them behind a link with a clear warning.
+  - type: textarea
+    id: showcase
+    attributes:
+      label: What you made
+      description: Images, a short video or a description. Drag files in here.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How you made it
+      description: Model, style, LoRAs, control layers, regions, steps that helped. Optional, but others learn a lot from it.

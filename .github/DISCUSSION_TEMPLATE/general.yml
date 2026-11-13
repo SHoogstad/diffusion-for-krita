@@ -1,0 +1,8 @@
+body:
+  - type: textarea
+    id: topic
+    attributes:
+      label: Topic
+      description: Anything about Diffusion for Krita that isn't a question, idea or showcase. Bugs go in [Issues](https://github.com/SHoogstad/diffusion-for-krita/issues).
+    validations:
+      required: true

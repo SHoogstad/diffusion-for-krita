@@ -4,6 +4,8 @@ Patches and contributions are very welcome!
 
 ## Reporting issues
 
+Questions, help with setup, ideas and results go in [Discussions](https://github.com/SHoogstad/diffusion-for-krita/discussions). Issues are for bugs.
+
 If you are facing an issue or want to report a bug, please check [existing issues](https://github.com/SHoogstad/diffusion-for-krita/issues).
 
 Having a look at the log files can provide additional information for troubleshooting. You can find them in the `.logs` subfolder of the plugin installation folder (`ai_diffusion`). There is also a link in the plugin's connection settings.
@@ -45,7 +47,7 @@ simply search for entries which are `null`. These are valid, but not translated 
 
 ## Contributing code
 
-For bigger changes, it makes sense to create an issue first to discuss a proposal before time is committed.
+For bigger changes, it makes sense to start an [idea discussion](https://github.com/SHoogstad/diffusion-for-krita/discussions/categories/ideas) or an issue first to discuss a proposal before time is committed.
 
 You can submit your changes by opening a [pull request](https://github.com/SHoogstad/diffusion-for-krita/pulls).
 

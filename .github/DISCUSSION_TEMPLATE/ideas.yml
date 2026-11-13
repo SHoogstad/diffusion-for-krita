@@ -1,0 +1,41 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are discussed here first. Ones that get picked up become issues. Upvote ideas you want with 👍.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The task or workflow, and what makes it hard today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How it could work in the plugin. Mockups and examples welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and workarounds
+      description: What you use now, or other ways to solve it.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Generation / refine / inpaint
+        - Live painting
+        - Regions
+        - Control layers / poses
+        - Upscaling
+        - Styles and models
+        - Improve Prompt
+        - Server / ComfyUI setup
+        - Runpod
+        - User interface
+        - Other
