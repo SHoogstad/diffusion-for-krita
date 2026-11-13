@@ -122,11 +122,12 @@ class SettingWidget(SettingWidgetBase):
 
         self._key_label = QLabel(f"<b>{setting.name}</b><br>{setting.desc}")
         self._key_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._key_label.setWordWrap(True)  # long descriptions must not push the widget away
 
         self._layout = QHBoxLayout()
         self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.addWidget(self._key_label)
-        self._layout.addStretch(1)
+        self._layout.addWidget(self._key_label, 1)  # wraps only when space runs out
+        self._layout.addStretch(0)  # keeps the widget on the right when the label is hidden
         self.setLayout(self._layout)
         self._set_margins()
 
@@ -449,7 +450,7 @@ class SettingsTab(QWidget):
         scroll.setWidget(inner)
         scroll.setWidgetResizable(True)
         scroll.setFrameStyle(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         frame_layout.addWidget(scroll)
 
     def add(self, name: str, widget):

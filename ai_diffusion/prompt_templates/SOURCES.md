@@ -14,8 +14,27 @@ written for this plugin from the makers' prompting guides (also in that file).
 | `krea2.txt` | Krea 2 | "Prompt Enhancer system instruction from the Krea team", ComfyUI template `image_krea2_turbo_t2i` | MIT |
 | `moss.txt` | MOSS-Image | ComfyUI template `image_moss_image_t2i` | MIT |
 | `ernie.txt` | ERNIE-Image | `pe/chat_template.jinja` of [baidu/ERNIE-Image](https://huggingface.co/baidu/ERNIE-Image), as used in ComfyUI template `image_ernie_image` | Apache-2.0 / MIT |
-| `h3.txt` | MiniMax-H3-Image | `task_prompt` of ComfyUI template `image_minimax_h3_image_t2i` (system prompt in `prompt_templates.py`) | MIT |
+| `h3.txt`, `h3-edit.txt` | MiniMax-H3-Image (optional, see below) | `task_prompt` of ComfyUI templates `image_minimax_h3_image_t2i` / `image_minimax_h3_image_edit` (system prompt in `prompt_templates.py`) | MIT |
 | `zimage.txt` | Z-Image | `pe.py` of the [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo) Space | Apache-2.0 |
 
 P-H3-Image has no text template: Improve Prompt runs PrunaAI's own prompt upsampler with the
 request format of the official ComfyUI template (`Aspect ratio: <ratio>` / `Request: <prompt>`).
+
+MiniMax-H3-Image does not use `h3.txt` by default any more: MiniMax's enhancer thinks for up to
+8192 tokens, which takes minutes on the 32B text encoder. The plugin's own templates are condensed
+from the instructions of MiniMax's enhancers (ComfyUI templates `image_minimax_h3_image_t2i` and
+`image_minimax_h3_image_edit`) for a small model which writes without thinking, by default
+Qwen3.5-9B (`qwen3.5_9b_w4a8_gptq`, like ComfyUI's templates):
+
+| File | Used for |
+| --- | --- |
+| `h3-expert.txt` | text to image: one detailed caption |
+| `h3-expert-edit.txt` | canvas edits and reference pictures, when the language model sees the pictures: `<Subject N>` definitions against `<Picture N>`, one relationship per subject, then only the changes |
+| `h3-expert-edit-blind.txt` | the same when the language model can't see the pictures |
+
+MiniMax's own enhancers stay available with "Model maker's own instructions" in the Improve Prompt
+menu (setting `prompt_enhancer_official`): `h3.txt` and `h3-edit.txt`, the `task_prompt` of the ComfyUI
+templates `image_minimax_h3_image_t2i` / `image_minimax_h3_image_edit` (MIT), with their settings
+(thinking, temperature 1, top-k 20, 8192 tokens, JSON answer). As those instructions expect, each
+picture is labeled `Reference Media: <Picture N>, aspect_ratio W:H` and the request ends with
+`User Aspect Ratio Selection: W:H` (the edited area or the canvas).

@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Generic, NamedTuple, TypeVar
 
 from ..files import FileFormat, FileLibrary
-from ..image import ImageCollection, Point
+from ..image import Image, ImageCollection, Point
 from ..localization import translate as _
 from ..model.properties import ObservableProperties, Property
 from ..qt.QtCore import QObject, pyqtSignal
@@ -437,8 +437,14 @@ class Client(ABC):
         temperature: float = 0.7,
         sampling: bool = True,
         use_default_template: bool = True,
+        top_k: int = 64,
+        repetition_penalty: float = 1.05,
+        images: list[Image] | None = None,
+        unload: bool = False,
     ) -> str:
-        """Run a language model (text encoder) on the server and return the generated text."""
+        """Run a language model (text encoder) on the server and return the generated text.
+        `images` are shown to the model in this order (vision language models only).
+        `unload` frees the GPU memory afterwards."""
         raise RuntimeError(_("This server cannot generate text"))
 
     async def disconnect(self):

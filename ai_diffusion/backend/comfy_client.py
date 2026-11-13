@@ -4,6 +4,7 @@ import asyncio
 import json
 import struct
 import uuid
+import zlib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -596,37 +597,54 @@ class ComfyClient(Client):
         temperature: float = 0.7,
         sampling: bool = True,
         use_default_template: bool = True,
+        top_k: int = 64,
+        repetition_penalty: float = 1.05,
+        images: list[Image] | None = None,
+        unload: bool = False,
     ):
-        if "TextGenerate" not in self.models.node_inputs:
-            raise RuntimeError(_("ComfyUI is too old: the TextGenerate node is missing"))
+        node = text_generate_node(self.models.node_inputs, with_images=bool(images))
+        if node != "TextGenerateV2":
+            images = None
         loader = "CLIPLoaderGGUF" if text_encoder.endswith(".gguf") else "CLIPLoader"
         sampling_args: dict[str, Any] = {"sampling_mode": "off"}
         if sampling:
             sampling_args = {
                 "sampling_mode": "on",
                 "sampling_mode.temperature": temperature,
-                "sampling_mode.top_k": 64,
+                "sampling_mode.top_k": top_k,
                 "sampling_mode.top_p": 0.95,
                 "sampling_mode.min_p": 0.05,
-                "sampling_mode.repetition_penalty": 1.05,
+                "sampling_mode.repetition_penalty": repetition_penalty,
+                "sampling_mode.presence_penalty": 0.0,
                 "sampling_mode.seed": seed,
             }
-        workflow = {
+        image_args: dict[str, Any] = {}
+        workflow: dict[str, dict] = {
             "1": {"class_type": loader, "inputs": {"clip_name": text_encoder, "type": clip_type}},
-            "2": {
-                "class_type": "TextGenerate",
-                "inputs": {
-                    "clip": ["1", 0],
-                    "prompt": prompt,
-                    "max_length": max_length,
-                    "thinking": thinking,
-                    "use_default_template": use_default_template,
-                    "system_prompt": system_prompt,
-                    **sampling_args,
-                },
-            },
-            "3": {"class_type": "PreviewAny", "inputs": {"source": ["2", 0]}},
         }
+        if images:
+            image_data: dict[str, bytes] = {}
+            for i, image in enumerate(images):
+                data = image.to_bytes().data()
+                id = f"{zlib.crc32(data):08x}"
+                image_data[id] = data
+                workflow[str(10 + i)] = {"class_type": "ETN_LoadImageCache", "inputs": {"id": id}}
+                image_args[f"images.image{i + 1}"] = [str(10 + i), 0]
+            await self.upload_images(image_data)
+        workflow["2"] = {
+            "class_type": node,
+            "inputs": {
+                "clip": ["1", 0],
+                "prompt": prompt,
+                "max_length": max_length,
+                "thinking": thinking,
+                "use_default_template": use_default_template,
+                "system_prompt": system_prompt,
+                **sampling_args,
+                **image_args,
+            },
+        }
+        workflow["3"] = {"class_type": "PreviewAny", "inputs": {"source": ["2", 0]}}
         prompt_id = str(uuid.uuid4())
         self._side_prompts.add(prompt_id)
         try:
@@ -652,6 +670,11 @@ class ComfyClient(Client):
             raise RuntimeError(_("Text generation timed out"))
         finally:
             self._side_prompts.discard(prompt_id)
+            if unload:  # an LLM left in VRAM slows down the next generation a lot
+                try:
+                    await self._post("free", {"unload_models": True})
+                except Exception as e:
+                    log.warning(f"Could not unload the language model: {e!s}")
 
     async def _subscribe_workflows(self):
         try:
@@ -848,6 +871,20 @@ def _find_text_encoder_models(model_list: Sequence[str]):
     return {
         resource_id(kind, Arch.all, te): _find_model(model_list, kind, Arch.all, te) for te in tes
     }
+
+
+def text_generate_node(nodes: ComfyObjectInfo, with_images=False):
+    """TextGenerateV2 (ComfyUI 0.43+) takes several pictures of different sizes. Older servers
+    fall back to TextGenerate, without the pictures."""
+    if "TextGenerateV2" in nodes:
+        return "TextGenerateV2"
+    if "TextGenerate" not in nodes:
+        raise RuntimeError(_("ComfyUI is too old: the TextGenerate node is missing"))
+    if with_images:
+        log.warning(
+            "TextGenerateV2 is missing (ComfyUI older than 0.43), generating without pictures"
+        )
+    return "TextGenerate"
 
 
 def _find_control_models(model_list: Sequence[str]):

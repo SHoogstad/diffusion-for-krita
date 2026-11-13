@@ -1,15 +1,20 @@
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from ai_diffusion.backend import workflow
 from ai_diffusion.backend.api import CheckpointInput
-from ai_diffusion.backend.client import CheckpointInfo, ClientModels
-from ai_diffusion.backend.comfy_workflow import ComfyWorkflow
+from ai_diffusion.backend.client import CheckpointInfo, Client, ClientModels
+from ai_diffusion.backend.comfy_client import text_generate_node
+from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo, ComfyWorkflow
 from ai_diffusion.backend.resources import ResourceKind, resource_id
 from ai_diffusion.files import FileFormat
-from ai_diffusion.image import Extent
+from ai_diffusion.image import Extent, Image
 from ai_diffusion.model import prompt_enhance, prompt_templates
+from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.settings import settings
-from ai_diffusion.style import Arch, StyleSettings
+from ai_diffusion.style import Arch, Style, StyleSettings
 from ai_diffusion.util import ensure
 
 single_encoder_archs = [
@@ -176,3 +181,135 @@ def test_template_user_file(tmp_path):
     assert prompt_templates.user_file(Arch.qwen_e, False, tmp_path).name == "qwen_e-edit.txt"
     req = prompt_templates.build(Arch.illu, False, "x", folder=tmp_path)
     assert req.system == f"my booru template\n{prompt_templates.rules}"
+
+
+def test_parse_json_without_key():
+    opts = prompt_templates.options(Arch.sdxl, False)
+    assert prompt_templates.parse('{"expanded_caption": "a red fox"}', opts) == "a red fox"
+    assert prompt_templates.parse("{not json", opts) == "{not json"
+
+
+def test_ratio():
+    assert prompt_templates.ratio(Extent(1707, 1280)) == "4:3"  # scaled, a pixel off
+    assert prompt_templates.ratio(Extent(1920, 1080)) == "16:9"
+    assert prompt_templates.ratio(Extent(1024, 1024)) == "1:1"
+
+
+def picture_context(has_canvas=True, selection=""):
+    pictures = [
+        prompt_enhance.Picture("the canvas being edited"),
+        prompt_enhance.Picture("a pose to match"),
+        prompt_enhance.Picture("a reference picture", layer="knight"),
+    ]
+    return prompt_enhance.PromptContext(pictures, has_canvas, selection)
+
+
+def test_picture_text():
+    context = picture_context(selection="the left side of <Picture 1>, about 30% of it")
+    text, layers = prompt_enhance._picture_text("put <layer:knight> here", context)
+    assert layers == {3: "knight"}
+    assert text.splitlines() == [
+        (
+            "<Picture 1> is the canvas being edited; the change happens in the selected area, "
+            "the left side of <Picture 1>, about 30% of it."
+        ),
+        "<Picture 2> is a pose to match.",
+        "<Picture 3> is a reference picture.",
+        "Request: put <Picture 3> here",
+    ]
+    text, __ = prompt_enhance._picture_text("<layer:knight>", context, describe=False)
+    assert text == "<Picture 3>"
+
+    no_canvas = prompt_enhance.PromptContext(context.pictures[2:], has_canvas=False)
+    text, layers = prompt_enhance._picture_text("<layer:knight> <layer:other>", no_canvas)
+    assert text.startswith("There is no canvas")
+    assert text.endswith("Request: <Picture 1> <layer:other>")
+    assert layers == {1: "knight"}
+
+
+def test_restore_layers():
+    fixed = prompt_enhance._fix_tokens("<Picture 3> runs in Picture 1. Subject 2> waves")
+    assert fixed == "<Picture 3> runs in <Picture 1>. <Subject 2> waves"
+    restored = prompt_enhance._restore_layers(fixed, {3: "knight"})
+    assert restored == "<layer:knight> runs in <Picture 1>. <Subject 2> waves"
+
+
+def test_prepare_image():
+    prepared = prompt_enhance._prepare_image(Image.create(Extent(4000, 2000)))
+    assert prepared.extent == Extent(2000, 1000)  # 1024 short edge would exceed 2 MP
+    prepared = prompt_enhance._prepare_image(Image.create(Extent(2048, 1536)))
+    assert prepared.extent == Extent(1365, 1024)
+
+    image = Image.create(Extent(512, 384), Qt.GlobalColor.transparent)
+    prepared = prompt_enhance._prepare_image(image)
+    assert prepared.extent == Extent(512, 384)
+    assert prepared.pixel(0, 0) == (255, 255, 255, 255)  # opaque on white
+    assert image.pixel(0, 0) == (0, 0, 0, 0)  # the original is unchanged
+
+
+def test_picture_labels():
+    pictures = [
+        prompt_enhance.Picture("the canvas", Image.create(Extent(1707, 1280))),
+        prompt_enhance.Picture("a reference", Image.create(Extent(512, 512))),
+    ]
+    labels = prompt_enhance._picture_labels(pictures, official=False)
+    assert labels == ["<Picture 1>:", "<Picture 2>:"]
+    assert prompt_enhance._picture_labels(pictures, official=True) == [
+        "Reference Media: <Picture 1>, aspect_ratio 4:3",
+        "Reference Media: <Picture 2>, aspect_ratio 1:1",
+    ]
+
+
+h3_text_encoder = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+fast_llm = "qwen3.5_9b_w4a8_gptq.safetensors"
+
+
+def llm_client(*files: str) -> Client:
+    models = ClientModels()
+    models.text_encoders = list(files)
+    loader = {"input": {"required": {"type": [["stable_diffusion", "qwen_image", "minimax"]]}}}
+    models.node_inputs = ComfyObjectInfo({"CLIPLoader": loader})
+    te_id = resource_id(ResourceKind.text_encoder, Arch.all, Arch.h3.main_text_encoder)
+    models.resources[te_id] = h3_text_encoder
+    return SimpleNamespace(models=models)  # type: ignore
+
+
+def test_llm_choices():
+    client = llm_client(h3_text_encoder, fast_llm, "gemma-4-e4b-Q4.gguf", "t5xxl_fp16.safetensors")
+    assert prompt_enhance.llm_choices(client) == [h3_text_encoder, fast_llm]
+    assert prompt_enhance.llm_choices(None) == []
+    assert prompt_enhance.llm_name("LLM/qwen3.5_9b_w4a8_gptq.safetensors") == "qwen3.5_9b_w4a8_gptq"
+
+
+def test_select_llm():
+    style = Style(Path("default.json"))
+    opts = prompt_templates.options(Arch.h3, False)
+
+    def select(client: Client, chosen=""):
+        return prompt_enhance.select_llm(Arch.h3, style, client, opts, "expert", chosen)
+
+    client = llm_client(h3_text_encoder, "qwen3.5_4b_prompt_upsampler.safetensors", fast_llm)
+    assert select(client) == prompt_enhance.LanguageModel(fast_llm, "minimax")  # fast first
+    assert select(client, chosen=h3_text_encoder) == (h3_text_encoder, "minimax", None)
+    assert select(client, chosen="missing.safetensors").file == fast_llm
+    assert select(llm_client(h3_text_encoder)).file == h3_text_encoder  # style's own
+
+
+def test_text_generate_node():
+    nodes = ComfyObjectInfo({"TextGenerate": {}, "TextGenerateV2": {}})
+    assert text_generate_node(nodes, with_images=True) == "TextGenerateV2"
+    old = ComfyObjectInfo({"TextGenerate": {}})
+    assert text_generate_node(old, with_images=True) == "TextGenerate"  # without the pictures
+    with pytest.raises(RuntimeError):
+        text_generate_node(ComfyObjectInfo({}))
+
+
+def test_can_see():
+    client = llm_client(fast_llm)
+    llm = prompt_enhance.LanguageModel(fast_llm, "minimax")
+    assert not prompt_enhance._can_see(llm, client)  # ComfyUI without TextGenerateV2
+    client.models.node_inputs.nodes["TextGenerateV2"] = {}
+    assert prompt_enhance._can_see(llm, client)
+    enhancer = ensure(prompt_templates.options(Arch.ph3, False).enhancer)
+    assert not prompt_enhance._can_see(llm._replace(enhancer=enhancer), client)
+    assert prompt_enhance._can_see(None, None)  # OpenAI-compatible server

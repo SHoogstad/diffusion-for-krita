@@ -11,6 +11,7 @@ from ..backend.resources import Arch, ResourceId
 from ..backend.server import Server, ServerState
 from ..localization import Localization
 from ..localization import translate as _
+from ..model import prompt_enhance
 from ..model.connection import ConnectionState, apply_performance_preset
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
@@ -919,19 +920,6 @@ class InterfaceSettings(SettingsTab):
         S = Settings
         self.add("language", ComboBoxSetting(S._language, parent=self))
         self.add("prompt_translation", ComboBoxSetting(S._prompt_translation, parent=self))
-        self.add("prompt_enhancer", ComboBoxSetting(S._prompt_enhancer, parent=self))
-        self.add("prompt_enhancer_url", TextSetting(S._prompt_enhancer_url, parent=self))
-        self.add("prompt_enhancer_model", TextSetting(S._prompt_enhancer_model, parent=self))
-        self.add("prompt_enhancer_api_key", TextSetting(S._prompt_enhancer_api_key, parent=self))
-        self.add(
-            "prompt_enhancer_instructions",
-            TextSetting(S._prompt_enhancer_instructions, parent=self),
-        )
-        api_key = cast(TextSetting, self._widgets["prompt_enhancer_api_key"])
-        api_key.set_password_mode()
-        for w in ["prompt_enhancer_url", "prompt_enhancer_model", "prompt_enhancer_api_key"]:
-            self._widgets[w].indent = 1
-        self._widgets["prompt_enhancer"].value_changed.connect(self._update_prompt_enhancer)
         self.add(
             "prompt_line_count",
             SpinBoxSetting(S._prompt_line_count, self, 1, prompt_max_line_count),
@@ -987,12 +975,6 @@ class InterfaceSettings(SettingsTab):
     def read(self):
         super().read()
         self._update_image_format_widgets()
-        self._update_prompt_enhancer()
-
-    def _update_prompt_enhancer(self):
-        is_openai = self._widgets["prompt_enhancer"].value is PromptEnhancer.openai
-        for w in ["prompt_enhancer_url", "prompt_enhancer_model", "prompt_enhancer_api_key"]:
-            self._widgets[w].setVisible(is_openai)
 
     def _tag_files(self) -> list[str]:
         plugin_tags_path = util.plugin_dir / "tags"
@@ -1024,6 +1006,57 @@ class InterfaceSettings(SettingsTab):
     def _update_image_format_widgets(self):
         fmt: ImageFileFormat = self._widgets["save_image_format"].value
         self._widgets["save_image_metadata"].enabled = fmt.extension == "png"
+
+
+class LanguageModelSettings(SettingsTab):
+    _openai_settings = ("prompt_enhancer_url", "prompt_enhancer_model", "prompt_enhancer_api_key")
+
+    def __init__(self):
+        super().__init__(_("LLM Settings"))
+
+        S = Settings
+        self.add("prompt_enhancer", ComboBoxSetting(S._prompt_enhancer, parent=self))
+        self.add("prompt_enhancer_llm", ComboBoxSetting(S._prompt_enhancer_llm, parent=self))
+        self.add("prompt_enhancer_url", TextSetting(S._prompt_enhancer_url, parent=self))
+        self.add("prompt_enhancer_model", TextSetting(S._prompt_enhancer_model, parent=self))
+        self.add("prompt_enhancer_api_key", TextSetting(S._prompt_enhancer_api_key, parent=self))
+        self.add(
+            "prompt_enhancer_instructions",
+            TextSetting(S._prompt_enhancer_instructions, parent=self),
+        )
+        self.add("prompt_enhancer_vision", SwitchSetting(S._prompt_enhancer_vision, parent=self))
+        self.add(
+            "prompt_enhancer_thinking", SwitchSetting(S._prompt_enhancer_thinking, parent=self)
+        )
+        self.add("prompt_enhancer_unload", SwitchSetting(S._prompt_enhancer_unload, parent=self))
+        self.add(
+            "prompt_enhancer_official", SwitchSetting(S._prompt_enhancer_official, parent=self)
+        )
+        cast(TextSetting, self._widgets["prompt_enhancer_api_key"]).set_password_mode()
+        for w in ["prompt_enhancer_llm", *self._openai_settings]:
+            self._widgets[w].indent = 1
+        self._widgets["prompt_enhancer"].value_changed.connect(self._update_prompt_enhancer)
+        self.update_models(root.connection.client_if_connected)
+
+        self._layout.addStretch()
+
+    def read(self):
+        super().read()
+        self._update_prompt_enhancer()
+
+    def update_models(self, client: Client | None):
+        llms = prompt_enhance.llm_choices(client)
+        if settings.prompt_enhancer_llm and settings.prompt_enhancer_llm not in llms:
+            llms.append(settings.prompt_enhancer_llm)
+        items = [(_("Automatic"), "")] + [(prompt_enhance.llm_name(f), f) for f in llms]
+        self._widgets["prompt_enhancer_llm"].set_items(items)
+        self.read()
+
+    def _update_prompt_enhancer(self):
+        is_openai = self._widgets["prompt_enhancer"].value is PromptEnhancer.openai
+        self._widgets["prompt_enhancer_llm"].setVisible(not is_openai)
+        for w in self._openai_settings:
+            self._widgets[w].setVisible(is_openai)
 
 
 class HistorySizeWidget(QWidget):
@@ -1389,11 +1422,13 @@ class SettingsDialog(QDialog):
         type(self)._instance = self
 
         self.setWindowTitle(_("Configure Diffusion for Krita"))
-        self.setMinimumSize(QSize(960, 480))
+        min_size = QSize(960, 480)
         if screen := QGuiApplication.screenAt(QCursor.pos()):
             size = screen.availableSize()
+            min_size = min_size.boundedTo(size)  # small screens and high display scaling
             min_w = min(size.width(), QFontMetrics(self.font()).horizontalAdvance("M") * 100)
             self.resize(QSize(min_w, int(size.height() * 0.8)))
+        self.setMinimumSize(min_size)
 
         layout = QHBoxLayout()
         self.setLayout(layout)
@@ -1402,24 +1437,29 @@ class SettingsDialog(QDialog):
         self.styles = StylePresets(server)
         self.diffusion = DiffusionSettings()
         self.interface = InterfaceSettings()
+        self.llm = LanguageModelSettings()
         self.performance = PerformanceSettings()
         self.about = AboutSettings()
 
         self._stack = QStackedWidget(self)
         self._list = QListWidget(self)
-        self._list.setFixedWidth(120)
-
-        def create_list_item(text: str, widget: QWidget):
+        pages = [
+            (_("Connection"), self.connection),
+            (_("Styles"), self.styles),
+            (_("Diffusion"), self.diffusion),
+            (_("Interface"), self.interface),
+            (_("LLM"), self.llm),
+            (_("Performance"), self.performance),
+            (_("Plugin"), self.about),
+        ]
+        # Sized for the font and the translated names, which can be larger than the default
+        metrics = self._list.fontMetrics()
+        text_width = max(metrics.horizontalAdvance(text) for text, __ in pages)
+        for text, widget in pages:
             item = QListWidgetItem(text, self._list)
-            item.setSizeHint(QSize(112, 24))
+            item.setSizeHint(QSize(text_width + 16, max(24, metrics.height() + 8)))
             self._stack.addWidget(widget)
-
-        create_list_item(_("Connection"), self.connection)
-        create_list_item(_("Styles"), self.styles)
-        create_list_item(_("Diffusion"), self.diffusion)
-        create_list_item(_("Interface"), self.interface)
-        create_list_item(_("Performance"), self.performance)
-        create_list_item(_("Plugin"), self.about)
+        self._list.setFixedWidth(max(120, text_width + 32))
 
         self._list.setCurrentRow(0)
         self._list.currentRowChanged.connect(self._change_page)
@@ -1456,12 +1496,14 @@ class SettingsDialog(QDialog):
 
         root.connection.state_changed.connect(self._update_connection)
         root.connection.models_changed.connect(self.styles.update_model_lists)
+        root.connection.models_changed.connect(self._update_llms)
 
     def read(self):
         self.connection.read()
         self.styles.read()
         self.diffusion.read()
         self.interface.read()
+        self.llm.read()
         self.performance.read()
         self.about.read()
 
@@ -1488,6 +1530,9 @@ class SettingsDialog(QDialog):
         if root.connection.state is ConnectionState.connected:
             self.interface.update_translation(root.connection.client)
             self.performance.update_client_info()
+
+    def _update_llms(self):
+        self.llm.update_models(root.connection.client_if_connected)
 
     def _open_settings_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(util.user_data_dir)))

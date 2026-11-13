@@ -237,15 +237,40 @@ def test_download_workload():
 
 
 def test_improve_prompt_templates():
-    text, source = prompt_templates.builtin(Arch.h3, False)
-    assert source == "official" and "{prompt}" in text and "{input text}" not in text
+    # Default: the plugin's expert templates, written without thinking by a fast language model
     request = prompt_templates.build(Arch.h3, False, "a fox in the snow")
-    assert "input_text: a fox in the snow" in request.user
+    assert request.source == "expert" and request.user == "a fox in the snow"
+    assert prompt_templates.rules not in request.system
+    assert not request.options.thinking and "qwen3.5_9b_w4a8" in request.options.llms
+
+    assert prompt_templates.key(Arch.h3, True) == "h3-edit"
+    edit, source = prompt_templates.builtin(Arch.h3, True, vision=True)
+    assert source == "expert" and "<Subject 1>" in edit
+    blind, source = prompt_templates.builtin(Arch.h3, True)  # vision is opt-in
+    assert source == "expert" and blind != edit
+    assert prompt_templates.options(Arch.h3, True).vision
+
+
+def test_improve_prompt_official_templates():
+    # MiniMax's own enhancers, with the settings of ComfyUI's templates
+    assert prompt_templates.has_official(Arch.h3, False)
+    assert prompt_templates.has_official(Arch.h3, True)
+    assert not prompt_templates.has_official(Arch.ph3, False)
+
+    text, source = prompt_templates.builtin(Arch.h3, False, official=True)
+    assert source == "official" and "{prompt}" in text and "{input text}" not in text
+    extent = Extent(1024, 768)
+    request = prompt_templates.build(Arch.h3, False, "a fox in the snow", extent, official=True)
+    assert "input_text: a fox in the snow\nFinal canvas: 1024x768 pixels." in request.user
     assert "expanded_caption" in request.system
     answer = '{"expanded_caption": "A red fox \\"Vulpes\\" in deep snow.", "aspect_ratio": "4:3"}'
     assert prompt_templates.parse(answer, request.options) == 'A red fox "Vulpes" in deep snow.'
     assert request.options.thinking and request.options.max_tokens == 8192
 
-    text, source = prompt_templates.builtin(Arch.h3, True)
-    assert source == "builtin" and "<Picture 1>" in text
-    assert prompt_templates.key(Arch.h3, True) == "h3-edit"
+    request = prompt_templates.build(
+        Arch.h3, True, 'a "red" hat', Extent(1707, 1280), official=True
+    )
+    assert request.source == "official" and request.options.vision
+    assert 'User Editing Instruction: "a \\"red\\" hat"\nUser Aspect Ratio Selection: 4:3' in (
+        request.user
+    )

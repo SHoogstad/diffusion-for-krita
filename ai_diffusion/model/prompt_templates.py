@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from fractions import Fraction
 from pathlib import Path
 from typing import NamedTuple
 
@@ -48,11 +49,15 @@ class Options(NamedTuple):
     max_tokens: int = 1024
     temperature: float = 0.7
     sampling: bool = True
+    top_k: int = 64
+    repetition_penalty: float = 1.05  # 1.0 for templates which repeat tokens like <Subject 1>
     json_key: str | None = None  # the answer is a JSON object, the prompt is in this key
     suffix: str = ""  # appended to the answer
     system: str = ""  # system prompt for templates that are the user message
     user_format: str = "{prompt}"  # placeholders: {prompt} {prompt_json} {width} {height} ...
     enhancer: Enhancer | None = None
+    vision: bool = False  # the language model gets the pictures the prompt refers to
+    llms: tuple[str, ...] = ()  # preferred language models (parts of file names), fastest first
 
 
 class Request(NamedTuple):
@@ -169,20 +174,6 @@ _ph3_edit = (
     "with what the user said and never invent details like clothing, colors or names."
 )
 
-# MiniMax's edit enhancer (ComfyUI template image_minimax_h3_image_edit) needs to see the images,
-# which Improve Prompt can't send. Written from its output format: subjects are defined against
-# <Picture N>, preserved parts are named, then the target image is described.
-_h3_edit = (
-    "You improve edit requests for MiniMax-H3-Image, which works best with a full description of "
-    "the finished image. The image to edit is <Picture 1>; reference images are <Picture 2>, "
-    "<Picture 3> and so on, keep those names exactly. Rewrite the request as one paragraph: "
-    "first say what in <Picture 1> stays exactly the same, then describe the finished result of "
-    "the change: what is added, removed or different, where it is, and how it fits the "
-    "lighting and perspective of the scene. Say which element comes from which reference image. "
-    "Put any new text in double quotes. You cannot see the images: refer to things only with "
-    "what the user said and never invent details like clothing, colors or names."
-)
-
 _builtin: dict[str, str] = {
     "sd15": (
         "You improve text prompts for Stable Diffusion 1.5, which reads short, comma-separated "
@@ -268,7 +259,6 @@ _builtin: dict[str, str] = {
         "felt hat to the subject.' or 'Remove the book from the subject's hands.'. "
         + _references("<image_{}>"),
     ),
-    "h3-edit": _h3_edit,
     "ph3": _ph3,
     "ph3-edit": _ph3_edit,
 }
@@ -292,7 +282,31 @@ _official: dict[str, str] = {
     "moss": "moss.txt",
     "ernie": "ernie.txt",
     "zimage": "zimage.txt",
+}
+
+# Templates written for the plugin which are too long for this file (ai_diffusion/prompt_templates).
+# MiniMax-H3-Image: condensed from the instructions of MiniMax's own prompt enhancers (ComfyUI
+# templates image_minimax_h3_image_t2i / _edit) for a small model without thinking. Edits use the
+# caption format H3 was trained on: <Subject N> definitions against <Picture N>, one relationship
+# per subject (fully/partially preserved, transfer, weak reference), then only the changes.
+# "-edit" is used when the language model sees the pictures, the blind variant when it can't.
+_expert: dict[str, str] = {
+    "h3": "h3-expert.txt",
+    "h3-edit": "h3-expert-edit.txt",
+}
+_expert_blind: dict[str, str] = {
+    "h3-edit": "h3-expert-edit-blind.txt",
+}
+
+# Fast language models for architectures whose own text encoder is too big to write prompts
+_fast_llms = ("qwen3.5_9b_w4a8", "qwen3.5_9b_int8", "qwen3.5_9b", "qwen3.5_27b", "qwen3vl_8b")
+
+# The model makers' own enhancers where the plugin uses its own templates by default (setting
+# prompt_enhancer_official). MiniMax-H3-Image: ComfyUI templates image_minimax_h3_image_t2i and
+# image_minimax_h3_image_edit (Qwen3.5-9B, thinking, JSON answer). They think for 1-3 minutes.
+_official_alt: dict[str, str] = {
     "h3": "h3.txt",
+    "h3-edit": "h3-edit.txt",
 }
 
 _options: dict[str, Options] = {
@@ -314,19 +328,19 @@ _options: dict[str, Options] = {
             raw_template="<s>[SYSTEM_PROMPT]{system}[/SYSTEM_PROMPT][INST]{user}[/INST]",
         ),
     ),
-    # ComfyUI template image_minimax_h3_image_t2i: TextGenerateV2 with thinking, temperature 1,
-    # top-k 20, 8192 tokens, then the "expanded_caption" of the JSON answer
+    # MiniMax's own enhancer (h3.txt, ComfyUI template image_minimax_h3_image_t2i) thinks for up
+    # to 8192 tokens: minutes on the 32B text encoder. The expert templates write directly, with
+    # Qwen3.5-9B like ComfyUI's templates. A low temperature keeps the edit format consistent.
     "h3": Options(
-        thinking=True,
-        max_tokens=8192,
-        temperature=1.0,
-        json_key="expanded_caption",
-        system=(
-            "Reason in the thinking section first. The visible final content must be exactly one "
-            "JSON object with exactly two keys: expanded_caption and aspect_ratio. Every ASCII "
-            "double quotation mark used as caption content inside expanded_caption must be "
-            'serialized as the JSON escape sequence \\". Do not output text outside that object.'
-        ),
+        max_tokens=1536, temperature=0.6, top_k=20, repetition_penalty=1.0, llms=_fast_llms
+    ),
+    "h3-edit": Options(
+        max_tokens=1536,
+        temperature=0.3,
+        top_k=20,
+        repetition_penalty=1.0,
+        vision=True,
+        llms=_fast_llms,
     ),
     "ph3": Options(
         max_tokens=1536,
@@ -338,6 +352,41 @@ _options: dict[str, Options] = {
             thinking=True,
             sampling=False,
         ),
+    ),
+}
+
+_h3_official_system = (
+    "Reason in the thinking section first. The visible final content must be exactly one JSON "
+    "object with exactly two keys: expanded_caption and aspect_ratio. Every ASCII double quotation "
+    "mark used as caption content inside expanded_caption must be serialized as the JSON escape "
+    'sequence \\". Do not output text outside that object.'
+)
+# Settings of the ComfyUI templates (TextGenerateV2: thinking, temperature 1, top-k 20, 8192
+# tokens). The edit enhancer expects the instruction as a JSON string and the target aspect ratio
+# in its last text part, and each picture labeled with its <Picture N> and aspect ratio.
+_options_official: dict[str, Options] = {
+    "h3": Options(
+        thinking=True,
+        max_tokens=8192,
+        temperature=1.0,
+        top_k=20,
+        repetition_penalty=1.0,
+        json_key="expanded_caption",
+        system=_h3_official_system,
+        user_format="{prompt}\nFinal canvas: {width}x{height} pixels.",
+        llms=_fast_llms,
+    ),
+    "h3-edit": Options(
+        thinking=True,
+        max_tokens=8192,
+        temperature=1.0,
+        top_k=20,
+        repetition_penalty=1.0,
+        json_key="expanded_caption",
+        system=_h3_official_system,
+        user_format="User Editing Instruction: {prompt_json}\nUser Aspect Ratio Selection: {ratio}",
+        vision=True,
+        llms=_fast_llms,
     ),
 }
 
@@ -369,17 +418,28 @@ _fallback = _natural("an AI image generation model", "one detailed, vivid paragr
 _fallback_edit = _edit("an AI image editing model")
 
 
-def builtin(arch: Arch, editing: bool):
-    """The template shipped with the plugin and where it comes from ("official"/"builtin")."""
+def has_official(arch: Arch, editing: bool):
+    """Whether the model maker's enhancer is an alternative to the plugin's own template."""
+    return key(arch, editing) in _official_alt
+
+
+def builtin(arch: Arch, editing: bool, vision=False, official=False):
+    """The template shipped with the plugin and where it comes from ("official", "expert" or
+    "builtin"). `vision`: whether the language model sees the pictures. `official`: the model
+    maker's enhancer instead of the plugin's own template, where there is one."""
     k = key(arch, editing)
+    if official and (file := _official_alt.get(k)):
+        return (official_dir / file).read_text(encoding="utf-8").strip(), "official"
     if file := _official.get(k):
         return (official_dir / file).read_text(encoding="utf-8").strip(), "official"
+    if file := (_expert if vision else {**_expert, **_expert_blind}).get(k):
+        return (official_dir / file).read_text(encoding="utf-8").strip(), "expert"
     if text := _builtin.get(k):
         return text, "builtin"
     return (_fallback_edit if is_edit(arch, editing) else _fallback), "builtin"
 
 
-def get(arch: Arch, editing: bool, folder: Path | None = None):
+def get(arch: Arch, editing: bool, folder: Path | None = None, vision=False, official=False):
     """The template for `arch` and its source, from a user file if there is one."""
     if folder is not None:
         file = user_file(arch, editing, folder)
@@ -388,11 +448,20 @@ def get(arch: Arch, editing: bool, folder: Path | None = None):
                 return text, "custom"
         except OSError:
             pass
-    return builtin(arch, editing)
+    return builtin(arch, editing, vision, official)
 
 
-def options(arch: Arch, editing: bool):
-    return _options.get(key(arch, editing), Options())
+def options(arch: Arch, editing: bool, official=False):
+    k = key(arch, editing)
+    if official and k in _options_official:
+        return _options_official[k]
+    return _options.get(k, Options())
+
+
+def ratio(extent: Extent):
+    """The aspect ratio as small integers, eg. "16:9" (scaled pictures are a few pixels off)."""
+    value = Fraction(extent.width, max(extent.height, 1)).limit_denominator(64)
+    return f"{value.numerator}:{value.denominator}"
 
 
 def fill(template: str, prompt: str, extent: Extent | None):
@@ -403,6 +472,7 @@ def fill(template: str, prompt: str, extent: Extent | None):
         "width": str(extent.width),
         "height": str(extent.height),
         "aspect_ratio": aspect_ratio(extent),
+        "ratio": ratio(extent),
     }
 
     def replace(m: re.Match[str]):
@@ -420,16 +490,18 @@ def build(
     extent: Extent | None = None,
     extra: str = "",
     folder: Path | None = None,
+    vision=False,
+    official=False,
 ):
     """The messages for the language model. `extra` is added to the system prompt."""
-    text, source = get(arch, editing, folder)
-    opts = options(arch, editing)
+    text, source = get(arch, editing, folder, vision, official)
+    opts = options(arch, editing, official and source == "official")
     user = fill(opts.user_format, prompt, extent)
     if _prompt in text:  # the template is the user message, with the prompt inside
         user = text.replace(_prompt, user)
         system = opts.system if source == "official" else ""
     else:
-        system = text if source == "official" else f"{text}\n{rules}"
+        system = text if source in ("official", "expert") else f"{text}\n{rules}"
     if extra:
         system = f"{system}\n{extra}" if system else extra
     return Request(system, user, opts, source)
@@ -437,13 +509,15 @@ def build(
 
 def parse(text: str, opts: Options):
     """The prompt from a model's answer, for templates that ask for JSON or add a suffix."""
-    if opts.json_key:
+    # Without a key, JSON answers of MiniMax-style templates (eg. h3.txt as a user template)
+    json_key = opts.json_key or ("expanded_caption" if text.lstrip().startswith("{") else None)
+    if json_key:
         start, end = text.find("{"), text.rfind("}")
         if start != -1 and end > start:
             try:
                 data = json.loads(text[start : end + 1])
-                if isinstance(data, dict) and isinstance(data.get(opts.json_key), str):
-                    text = data[opts.json_key]
+                if isinstance(data, dict) and isinstance(data.get(json_key), str):
+                    text = data[json_key]
             except json.JSONDecodeError:
                 pass
     text = " ".join(text.split()) if opts.suffix else text

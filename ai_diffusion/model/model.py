@@ -5,6 +5,7 @@ import time
 import uuid
 import weakref
 from collections import deque
+from collections.abc import Callable
 from copy import copy
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -57,7 +58,7 @@ from ..settings import (
     settings,
 )
 from ..style import Arch, Style, Styles
-from ..text import create_img_metadata, extract_layers
+from ..text import create_img_metadata, extract_layers, pattern_layer
 from ..util import PluginError, clamp, ensure, is_one, trim_text, unique
 from ..util import client_logger as log
 from .connection import Connection, ConnectionState
@@ -69,6 +70,7 @@ from .custom_workflow import (
     get_inpaint_context,
 )
 from .jobs import Job, JobKind, JobParams, JobQueue, JobRegion, JobState
+from .prompt_enhance import Picture, PromptContext
 from .properties import ObservableProperties, Property
 from .region import Region, RegionLink, RootRegion, get_region_inpaint_mask, process_regions
 
@@ -121,6 +123,23 @@ class Error(NamedTuple):
 
 
 no_error = Error(ErrorKind.none, "")
+
+
+class JobArea(NamedTuple):
+    """The part of the canvas the next generation job works on."""
+
+    strength: float
+    kind: WorkflowKind
+    mask: Mask | None
+    bounds: Bounds
+    selection_bounds: Bounds | None
+    selection_modifiers: SelectionModifiers
+    region_layer: Layer | None
+    inpaint_mode: InpaintMode | None
+
+    @property
+    def has_canvas_input(self):
+        return self.mask is not None or self.kind is WorkflowKind.refine
 
 
 class DocumentModel(QObject, ObservableProperties):
@@ -228,7 +247,8 @@ class DocumentModel(QObject, ObservableProperties):
         )
         eventloop.run(_report_errors(self, jobs))
 
-    def _prepare_workflow(self, dryrun=False):
+    def _job_area(self):
+        """The selection or region the next job works on, and the canvas bounds it gets."""
         arch = self.arch
         workflow_kind = WorkflowKind.generate
         strength = self.strength
@@ -236,19 +256,17 @@ class DocumentModel(QObject, ObservableProperties):
             strength = 1.0
         if strength < 1.0 or self.is_editing:
             workflow_kind = WorkflowKind.refine
-        client = self._connection.client
-        image = None
         inpaint_mode: InpaintMode | None = None
-        inpaint = None
         extent = self._doc.extent
-        regions = self.active_regions
         region_layer = None
 
         smod = get_selection_modifiers(arch, self.inpaint.mode, strength)
         mask, selection_bounds = self._doc.create_mask_from_selection(smod)
         bounds = Bounds(0, 0, *extent)
         if mask is None:  # Check for region inpaint
-            region_layer = regions.get_active_region_layer(use_parent=not self.region_only)
+            region_layer = self.active_regions.get_active_region_layer(
+                use_parent=not self.region_only
+            )
             if not region_layer.is_root:
                 mask = get_region_inpaint_mask(region_layer, extent)
                 bounds = mask.bounds
@@ -257,6 +275,28 @@ class DocumentModel(QObject, ObservableProperties):
             bounds = compute_bounds(extent, mask.bounds if mask else None, workflow_kind)
             bounds = self.inpaint.get_context(self, mask) or bounds
             inpaint_mode = self.resolve_inpaint_mode()
+
+        return JobArea(
+            strength,
+            workflow_kind,
+            mask,
+            bounds,
+            selection_bounds,
+            smod,
+            region_layer,
+            inpaint_mode,
+        )
+
+    def _prepare_workflow(self, dryrun=False):
+        arch = self.arch
+        area = self._job_area()
+        strength, workflow_kind, mask, bounds = area.strength, area.kind, area.mask, area.bounds
+        inpaint_mode, region_layer = area.inpaint_mode, area.region_layer
+        client = self._connection.client
+        image = None
+        inpaint = None
+        extent = self._doc.extent
+        regions = self.active_regions
 
         if not dryrun:
             conditioning, job_regions = process_regions(regions, bounds, region_layer)
@@ -268,9 +308,7 @@ class DocumentModel(QObject, ObservableProperties):
         ref_layers: dict[str, int] | None = None
         if not dryrun:
             # The H3 image models always edit the canvas as <Picture 1> when they get one
-            canvas_input = arch in (Arch.h3, Arch.ph3) and (
-                mask is not None or workflow_kind is WorkflowKind.refine
-            )
+            canvas_input = arch in (Arch.h3, Arch.ph3) and area.has_canvas_input
             conditioning, ref_layers = self._add_reference_layers(conditioning, canvas_input)
 
         original_conditioning = conditioning
@@ -279,7 +317,7 @@ class DocumentModel(QObject, ObservableProperties):
             conditioning, self.style, seed, arch, inpaint_instruction, ref_layers
         )
 
-        if mask is not None or workflow_kind is WorkflowKind.refine:
+        if area.has_canvas_input:
             image = self._get_current_image(bounds) if not dryrun else DummyImage(bounds.extent)
 
         if mask is not None:
@@ -297,7 +335,9 @@ class DocumentModel(QObject, ObservableProperties):
                 inpaint = workflow.detect_inpaint(
                     inpaint_mode, mask.bounds, arch, conditioning, strength
                 )
-            inpaint = calc_selection_pre_process(inpaint, selection_bounds, smod)
+            inpaint = calc_selection_pre_process(
+                inpaint, area.selection_bounds, area.selection_modifiers
+            )
 
         input = workflow.prepare(
             workflow_kind,
@@ -972,6 +1012,57 @@ class DocumentModel(QObject, ObservableProperties):
         cond.edit_reference = self.is_editing
         return cond, layers
 
+    def prompt_enhance_context(self, prompt: str, images=True):
+        """The pictures which the next job gets along with `prompt`, numbered like the model sees
+        them: the canvas if it is edited, then control layers and <layer:name> references.
+        Used by Improve Prompt; `images` also gets their pixels."""
+        arch = self.arch
+        area = self._job_area()
+        mask, bounds = area.mask, area.bounds
+        if arch in (Arch.h3, Arch.ph3):  # same as _prepare_workflow
+            has_canvas = area.has_canvas_input
+        else:
+            has_canvas = self.is_editing
+
+        def pixels(get_image: Callable[[], Image | None]):
+            try:
+                return get_image() if images else None
+            except Exception as e:
+                log.warning(f"Improve Prompt: could not get a picture: {e!s}")
+                return None
+
+        def layer_pixels(layer: ControlLayer):
+            return pixels(lambda: layer.to_api(bounds).image)
+
+        pictures: list[Picture] = []
+        selection = ""
+        if has_canvas:
+            image = pixels(lambda: self._get_current_image(bounds))
+            pictures.append(Picture("the canvas being edited", image))
+            if mask is not None:
+                selection = _selection_position(mask.bounds, bounds)
+
+        for control in self.active_regions.control:
+            mode = control.mode
+            if not control.is_supported:
+                continue
+            if not (mode.is_ip_adapter or mode.can_substitute_instruction(arch)):
+                continue
+            role = _picture_roles.get(mode, "a reference picture")
+            name = control.layer.name
+            pictures.append(Picture(_with_layer_name(role, name), layer_pixels(control)))
+
+        names = list(dict.fromkeys(m[1] for m in pattern_layer.finditer(prompt)))
+        for name in names:
+            uid = next((l.id for l in self._doc.layers.images if l.name == name), None)
+            if uid is None:
+                continue
+            ref = ControlLayer(self, ControlMode.reference, uid, 0)
+            role = _with_layer_name(_picture_roles[ControlMode.reference], name)
+            pictures.append(Picture(role, layer_pixels(ref), layer=name))
+
+        return PromptContext(pictures, has_canvas, selection)
+
     def _performance_settings(self, client: Client):
         result = client.performance_settings
         if not is_one(self.resolution_multiplier):
@@ -1626,6 +1717,37 @@ class AnimationWorkspace(QObject, ObservableProperties):
             bounds = Bounds(0, 0, *self._model.document.extent)
             image = layer.get_pixels(bounds)
             self.target_image_changed.emit(image)
+
+
+_picture_roles = {
+    ControlMode.reference: "a reference picture",
+    ControlMode.style: "a style reference: only its art style is used, never its content",
+    ControlMode.composition: "a composition reference: only its layout is used",
+    ControlMode.face: "a face reference: only the face is used",
+    ControlMode.scribble: "a sketch to follow",
+    ControlMode.line_art: "line art to fill in with colors",
+    ControlMode.canny_edge: "an edge map to match",
+    ControlMode.depth: "a depth map to match",
+    ControlMode.pose: "a pose to match",
+}
+
+
+def _with_layer_name(role: str, name: str):
+    kind, sep, note = role.partition(":")
+    return f'{kind} (layer "{name}"){sep}{note}'
+
+
+def _selection_position(area: Bounds, canvas: Bounds):
+    """Where the selected area is in the canvas picture, in words for a language model."""
+    share = (area.width * area.height) / max(canvas.width * canvas.height, 1)
+    if share > 0.75:
+        return ""
+    x = (area.x - canvas.x + area.width / 2) / max(canvas.width, 1)
+    y = (area.y - canvas.y + area.height / 2) / max(canvas.height, 1)
+    h = "left" if x < 0.38 else "right" if x > 0.62 else ""
+    v = "top" if y < 0.38 else "bottom" if y > 0.62 else ""
+    where = f"{v} {h}" if v and h else f"{v} part" if v else f"{h} side" if h else "center"
+    return f"the {where} of <Picture 1>, about {max(1, round(share * 100))}% of it"
 
 
 def get_selection_modifiers(

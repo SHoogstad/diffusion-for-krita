@@ -146,7 +146,13 @@ class ServerlessComfyClient(ComfyClient):
         pass  # messages arrive with each workflow job
 
     async def generate_text(
-        self, text_encoder: str, clip_type: str, prompt: str, system_prompt: str, seed: int = 0
+        self,
+        text_encoder: str,
+        clip_type: str,
+        prompt: str,
+        system_prompt: str,
+        seed: int = 0,
+        **kwargs,
     ):
         raise RuntimeError(
             _("Runpod serverless can't generate text. Use an OpenAI-compatible server instead.")

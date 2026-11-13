@@ -8,13 +8,15 @@ from ..backend.client import Client
 from ..document import LayerType
 from ..image import Bounds
 from ..localization import translate as _
+from ..model import prompt_enhance, prompt_templates
 from ..model.model import Error
 from ..model.prompt_enhance import improve_prompt
 from ..model.properties import Binding, bind
 from ..model.region import Region, RegionLink, RootRegion, translate_prompt
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, QUrl, pyqtSignal
 from ..qt.QtGui import (
+    QDesktopServices,
     QFontMetrics,
     QGuiApplication,
     QIcon,
@@ -25,7 +27,19 @@ from ..qt.QtGui import (
     QResizeEvent,
     QTextCursor,
 )
-from ..qt.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget
+from ..qt.QtWidgets import (
+    QActionGroup,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QStyle,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+from ..settings import PromptEnhancer, Settings
+from ..style import Arch
 from ..util import ensure
 from . import theme
 from .control import ControlListWidget
@@ -194,8 +208,13 @@ class ActiveRegionWidget(QFrame):
         self._improve_button = QToolButton(self)
         self._improve_button.setIcon(theme.icon("improve-prompt"))
         self._improve_button.setAutoRaise(True)
-        self._improve_button.setToolTip(self._improve_help)
         self._improve_button.clicked.connect(self._improve_prompt)
+        self._improve_menu = QMenu(self._improve_button)
+        self._improve_menu.setToolTipsVisible(True)
+        self._improve_menu.aboutToShow.connect(self._fill_improve_menu)
+        self._improve_button.setMenu(self._improve_menu)
+        self._improve_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self._update_improve_tooltip()
         self._is_improving = False
 
         font_height = QFontMetrics(self.font()).height()
@@ -375,6 +394,8 @@ class ActiveRegionWidget(QFrame):
             self._update_prompt_widgets()
         elif key == "prompt_translation":
             self._update_language()
+        elif key in {"prompt_enhancer", "prompt_enhancer_llm"}:
+            self._update_improve_tooltip()
 
     async def _replace_with_translation(self, client: Client):
         region = self.region
@@ -423,6 +444,113 @@ class ActiveRegionWidget(QFrame):
         "Improve Prompt: rewrite the prompt in more detail with a language model (Ctrl+Z to undo)."
     )
 
+    def _update_improve_tooltip(self):
+        if settings.prompt_enhancer is PromptEnhancer.openai:
+            name = _("OpenAI-compatible server")
+        else:
+            name = prompt_enhance.llm_name(settings.prompt_enhancer_llm) or _("Automatic")
+        text = f"{self._improve_help}\n" + _("Language model") + f": {name}\n"
+        text += _("Click the arrow to choose the language model.")
+        self._improve_button.setToolTip(text)
+
+    def _fill_improve_menu(self):
+        menu = self._improve_menu
+        menu.clear()
+        model = self._root._model
+        client = root.connection.client_if_connected
+        is_openai = settings.prompt_enhancer is PromptEnhancer.openai
+        chosen = "" if is_openai else settings.prompt_enhancer_llm
+
+        menu.addSection(_("Language model"))
+        group = QActionGroup(menu)
+        auto = prompt_enhance.automatic_llm(model.active_style, client)
+        text = _("Automatic") + (f" ({auto})" if auto else "")
+        tip = _("The fastest suitable model for the style on the server")
+        self._add_llm_action(group, text, tip, "", not is_openai and not chosen)
+        choices = prompt_enhance.llm_choices(client)
+        if chosen and chosen not in choices:
+            choices.append(chosen)
+        for file in choices:
+            name = prompt_enhance.llm_name(file)
+            self._add_llm_action(group, name, file, file, file == chosen)
+        server = settings.prompt_enhancer_model.strip() or settings.prompt_enhancer_url.strip()
+        text = _("OpenAI-compatible server") + (f" ({server})" if server else "")
+        tip = _("LM Studio, Ollama, llama.cpp... set it up in Settings > Interface")
+        self._add_llm_action(group, text, tip, "", is_openai, openai=True)
+        if client is None and not is_openai:
+            note = ensure(menu.addAction(_("Connect to a server to list its language models")))
+            note.setEnabled(False)
+
+        menu.addSeparator()
+        self._add_setting_action(_("Show canvas and reference pictures"), "prompt_enhancer_vision")
+        self._add_setting_action(_("Think before writing (slower)"), "prompt_enhancer_thinking")
+        self._add_setting_action(
+            _("Unload the language model afterwards"), "prompt_enhancer_unload"
+        )
+        arch = model.arch
+        if any(prompt_templates.has_official(arch, editing) for editing in (False, True)):
+            text = _("Model maker's own instructions (thinks, ~2 min)")
+            self._add_setting_action(text, "prompt_enhancer_official")
+
+        if arch is not Arch.auto:
+            templates = ensure(menu.addMenu(_("Edit instructions")))
+            templates.setToolTipsVisible(True)
+            modes = [False, True] if arch.supports_edit else [arch.is_edit]
+            keys = dict.fromkeys(prompt_templates.key(arch, editing) for editing in modes)
+            for key in keys:
+                is_edit = key.endswith("-edit")
+                label = _("Edits and pictures") if is_edit else _("Text to image")
+                action = ensure(templates.addAction(f"{label} ({key}.txt)"))
+                action.setToolTip(
+                    _("Opens your copy of the instructions. Delete it to use the built-in ones.")
+                )
+                action.triggered.connect(partial(self._open_improve_template, arch, is_edit))
+            folder = ensure(templates.addAction(_("Open folder")))
+            folder.triggered.connect(self._open_improve_templates_folder)
+
+    def _add_setting_action(self, text: str, name: str):
+        action = ensure(self._improve_menu.addAction(text))
+        action.setCheckable(True)
+        action.setChecked(getattr(settings, name))
+        action.setToolTip(getattr(Settings, f"_{name}").desc)
+        action.toggled.connect(partial(self._set_improve_setting, name))
+
+    def _add_llm_action(
+        self, group: QActionGroup, text: str, tip: str, file: str, checked: bool, openai=False
+    ):
+        action = ensure(self._improve_menu.addAction(text))
+        action.setCheckable(True)
+        action.setChecked(checked)
+        action.setToolTip(tip)
+        group.addAction(action)
+        action.triggered.connect(partial(self._set_improve_llm, file, openai))
+
+    def _set_improve_llm(self, file: str, openai: bool, *args):
+        settings.prompt_enhancer = PromptEnhancer.openai if openai else PromptEnhancer.comfy
+        if not openai:
+            settings.prompt_enhancer_llm = file
+        settings.save()
+        self._update_improve_tooltip()
+
+    def _set_improve_setting(self, name: str, value: bool):
+        setattr(settings, name, value)
+        settings.save()
+
+    def _open_improve_template(self, arch: Arch, editing: bool, *args):
+        folder = prompt_enhance.templates_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        file = prompt_templates.user_file(arch, editing, folder)
+        if not file.exists():
+            vision = settings.prompt_enhancer_vision
+            text, __ = prompt_templates.builtin(arch, editing, vision)
+            file.write_text(text + "\n", encoding="utf-8")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(file)))
+
+    def _open_improve_templates_folder(self, *args):
+        folder = prompt_enhance.templates_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
     def _improve_prompt(self):
         if self._is_improving or self.region is None:
             return
@@ -436,8 +564,13 @@ class ActiveRegionWidget(QFrame):
         self._improve_button.setToolTip(_("Improving prompt..."))
         try:
             client = root.connection.client_if_connected
+            context = None
+            if prompt_enhance.uses_pictures(model.arch):
+                vision = settings.prompt_enhancer_vision
+                context = model.prompt_enhance_context(original, images=vision)
+            extent = model.document.extent
             result = await improve_prompt(
-                original, model.style, client, model.is_editing, model.document.extent
+                original, model.active_style, client, model.is_editing, extent, context
             )
             if self.region is region and region.positive == original:
                 self._replace_positive(result)
@@ -448,7 +581,7 @@ class ActiveRegionWidget(QFrame):
         finally:
             self._is_improving = False
             self._improve_button.setEnabled(True)
-            self._improve_button.setToolTip(self._improve_help)
+            self._update_improve_tooltip()
 
     def _replace_positive(self, text: str):
         """Replace the text as one edit, so that Ctrl+Z restores the original prompt."""
@@ -477,8 +610,11 @@ class ActiveRegionWidget(QFrame):
     def _layout_language_button(self):
         s = self.fontMetrics().height() + 4
         pos = self.positive.geometry().topRight()
-        self._improve_button.resize(QSize(s, s))
-        self._improve_button.move(pos.x() - s - 2, pos.y() + 2)
+        style = self._improve_button.style()
+        arrow = style.pixelMetric(QStyle.PixelMetric.PM_MenuButtonIndicator) if style else 12
+        width = s + arrow + 2
+        self._improve_button.resize(QSize(width, s))
+        self._improve_button.move(pos.x() - width - 2, pos.y() + 2)
         self._improve_button.raise_()
 
         if settings.prompt_translation:
