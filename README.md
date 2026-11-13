@@ -3,7 +3,7 @@
 Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
 regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the backend.
 
-⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | 🦴 [Poses](#poses) | ❓ [Common issues](#common-issues)
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | 🦴 [Poses](#poses) | ❓ [Common issues](#common-issues) | 💬 [Discussions](https://github.com/SHoogstad/diffusion-for-krita/discussions)
 
 ## <a name="features"></a> Features
 
@@ -363,7 +363,8 @@ or another program. Close that process, or log off / reboot. To use another port
 **Log files.** *Configure ▸ Connection ▸ View log files* opens the log folder. With *Configure ▸ Interface ▸
 Dump Workflow* on, the last generated ComfyUI workflow is saved there as `workflow.json`.
 
-Report problems [here](https://github.com/SHoogstad/diffusion-for-krita/issues). Official Krita channels are
+Report bugs [here](https://github.com/SHoogstad/diffusion-for-krita/issues). Questions, ideas and results go in
+[Discussions](https://github.com/SHoogstad/diffusion-for-krita/discussions). Official Krita channels are
 **not** the right place for questions about this plugin.
 
 ### Object selection tools
