@@ -1,0 +1,59 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [Common issues](https://github.com/SHoogstad/diffusion-for-krita#common-issues) first. If something is clearly broken, open an [issue](https://github.com/SHoogstad/diffusion-for-krita/issues) instead.
+        When an answer solves your question, mark it as the answer.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do, and what happens instead?
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Shown at the bottom of the plugin settings.
+      placeholder: "1.63.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: krita-version
+    attributes:
+      label: Krita version
+      options:
+        - Krita 5.x
+        - Krita 6.x
+        - Other / not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: server
+    attributes:
+      label: Server
+      options:
+        - Local managed server (installed by the plugin)
+        - Custom ComfyUI (my own install)
+        - Runpod (pod)
+        - Runpod (serverless)
+        - Not connected yet
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: OS and GPU
+      placeholder: "Windows 11, RTX 4070 12 GB"
+  - type: input
+    id: model
+    attributes:
+      label: Model / style
+      description: Base model or checkpoint involved, if any.
+      placeholder: "SDXL, Flux 2, MiniMax-H3-Image, ..."
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: "Configure ▸ Connection ▸ View log files. Drag the files or screenshots in here."
