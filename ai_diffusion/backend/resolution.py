@@ -201,13 +201,22 @@ def prepare_diffusion_input(
     if arch.is_edit or arch in (Arch.h3, Arch.ph3):
         downscale = False  # Never use 2-pass generation for edit models (H3 models can't refine)
 
-    if arch is Arch.h3 and style.preferred_resolution == 0:
+    if arch is Arch.h3:
         # MiniMax-H3-Image works natively at any size (1, 2, 4, 16 MP...): generate at the
         # requested resolution, never scale down and back up in the background.
         # (Not rounded here: the node rounds to its multiple itself, h3_image_sample restores it.)
         input = initial = desired
         if extent.pixel_count > desired.pixel_count:  # resolution_multiplier / max_pixel_count
             image = Image.scale(image, desired) if image else None
+        if style.preferred_resolution > 0:
+            # Opt-in minimum: H3 is tuned for 2048x2048 of area and "doesn't work well in low
+            # resolution" (MiniMax). Smaller requests are generated at the style's preferred
+            # resolution and scaled down to the canvas afterwards.
+            min_pixels = style.preferred_resolution**2
+            if perf.max_pixel_count > 0:
+                min_pixels = min(min_pixels, int(perf.max_pixel_count * 10**6))
+            if desired.pixel_count < 0.95 * min_pixels:
+                initial = desired = desired.scale_to_pixel_count(min_pixels)
         batch = compute_batch_size(desired, 512, perf.batch_size)
         return ScaledExtent(input, initial, desired, extent), image, batch
 

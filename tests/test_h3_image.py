@@ -203,6 +203,35 @@ def test_native_resolution_respects_max_pixel_count():
     assert scaled.target == extent
 
 
+@pytest.mark.parametrize("size", [(1024, 768), (1920, 1080), (1448, 1448)])
+def test_preferred_resolution_is_a_minimum(size):
+    style = Style(Path("default.json"))
+    style.preferred_resolution = 2048
+    perf = PerformanceSettings(max_pixel_count=0)
+    extent = Extent(*size)
+    image = Image.create(extent)
+    scaled, out, _ = prepare_diffusion_input(extent, image, Arch.h3, style, perf)
+    # generated at 4 MP, then scaled down to the canvas
+    assert scaled.input == scaled.target == extent and out is image
+    assert scaled.initial == scaled.desired
+    assert abs(scaled.desired.pixel_count - 2048 * 2048) < 3 * 2048
+    assert scaled.desired.width / scaled.desired.height == pytest.approx(size[0] / size[1], 0.01)
+
+
+def test_preferred_resolution_keeps_larger_sizes():
+    style = Style(Path("default.json"))
+    style.preferred_resolution = 2048
+    perf = PerformanceSettings(max_pixel_count=0)
+    for extent in (Extent(2048, 2048), Extent(6144, 4096)):
+        scaled, _, _ = prepare_diffusion_input(extent, Image.create(extent), Arch.h3, style, perf)
+        assert scaled.input == scaled.initial == scaled.desired == scaled.target == extent
+
+    perf = PerformanceSettings(max_pixel_count=2)  # the user's limit wins
+    extent = Extent(1024, 768)
+    scaled, _, _ = prepare_diffusion_input(extent, Image.create(extent), Arch.h3, style, perf)
+    assert abs(scaled.desired.pixel_count - 2 * 10**6) < 3 * 2048
+
+
 def test_sampler_preset():
     preset = SamplerPresets.instance()["MiniMax-H3 - 6 steps"]
     assert preset.sampler == "euler" and preset.scheduler == "simple"
