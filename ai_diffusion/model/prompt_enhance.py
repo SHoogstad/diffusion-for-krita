@@ -456,9 +456,9 @@ async def _openai_chat(request: prompt_templates.Request, images: list[Image], l
     if images:
         content = []
         for label, image in zip(labels, images):
-            url = f"data:image/jpeg;base64,{image.to_base64(ImageFileFormat.jpeg)}"
+            data_url = f"data:image/jpeg;base64,{image.to_base64(ImageFileFormat.jpeg)}"
             content.append({"type": "text", "text": label})
-            content.append({"type": "image_url", "image_url": {"url": url}})
+            content.append({"type": "image_url", "image_url": {"url": data_url}})
         content.append({"type": "text", "text": request.user})
     messages: list[dict] = [{"role": "user", "content": content}]
     if request.system:
