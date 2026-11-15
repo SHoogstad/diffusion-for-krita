@@ -32,6 +32,12 @@ Qwen3.5-9B (`qwen3.5_9b_w4a8_gptq`, like ComfyUI's templates):
 | `h3-expert-edit.txt` | canvas edits and reference pictures, when the language model sees the pictures: `<Subject N>` definitions against `<Picture N>`, one relationship per subject, then only the changes |
 | `h3-expert-edit-blind.txt` | the same when the language model can't see the pictures |
 
+The edit templates also follow MiniMax's edit prompt guide (`skills/h3-image-prompt-writing/references/edit-en.txt`
+in [MiniMax-AI/MiniMax-H3-Image](https://github.com/MiniMax-AI/MiniMax-H3-Image)): a donor which only gives a property
+(a pose, an outfit, a style) is defined as that property, a fully preserved subject can't contain a part that changes,
+and replaced content gets no subject. That is what makes a pose transfer work: the figure which shows the pose is
+defined only by its pose, so H3 doesn't keep it next to the new character.
+
 MiniMax's own enhancers stay available with "Model maker's own instructions" in the Improve Prompt
 menu (setting `prompt_enhancer_official`): `h3.txt` and `h3-edit.txt`, the `task_prompt` of the ComfyUI
 templates `image_minimax_h3_image_t2i` / `image_minimax_h3_image_edit` (MIT), with their settings
