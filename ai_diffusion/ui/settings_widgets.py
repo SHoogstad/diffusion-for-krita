@@ -9,6 +9,7 @@ from ..qt.QtGui import QIcon
 from ..qt.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -227,6 +228,42 @@ class SpinBoxSetting(SettingWidget):
 
         self._spinbox = QSpinBox(self)
         self._spinbox.setMinimumWidth(100)
+        self._spinbox.setMinimum(minimum)
+        self._spinbox.setMaximum(maximum)
+        self._spinbox.setSingleStep(step)
+        self._spinbox.setSuffix(suffix)
+        self._spinbox.valueChanged.connect(self._notify_value_changed)
+        self.set_widget(self._spinbox)
+
+    @property
+    def value(self):
+        return self._spinbox.value()
+
+    @value.setter
+    def value(self, v):
+        self._spinbox.setValue(v)
+
+    def add_checkbox(self, text: str):
+        self._spinbox.setSpecialValueText("Default")
+        return super().add_checkbox(text)
+
+
+class DoubleSpinBoxSetting(SettingWidget):
+    def __init__(
+        self,
+        setting: Setting,
+        parent=None,
+        minimum: float = 0,
+        maximum: float = 100,
+        step: float = 1,
+        decimals: int = 1,
+        suffix="",
+    ):
+        super().__init__(setting, parent)
+
+        self._spinbox = QDoubleSpinBox(self)
+        self._spinbox.setMinimumWidth(100)
+        self._spinbox.setDecimals(decimals)
         self._spinbox.setMinimum(minimum)
         self._spinbox.setMaximum(maximum)
         self._spinbox.setSingleStep(step)

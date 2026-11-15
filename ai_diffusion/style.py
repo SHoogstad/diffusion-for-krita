@@ -106,6 +106,14 @@ class StyleSettings:
         _("Preferred Resolution"), 0, _("Image resolution the checkpoint was trained on")
     )
 
+    preferred_megapixels = Setting(
+        _("Preferred Resolution"),
+        0.0,
+        _(
+            "Smallest size to generate at, in megapixels. Smaller images are generated at this size and scaled down to the canvas"
+        ),
+    )
+
     linked_edit_style = Setting(
         _("Linked Edit Style"),
         "",
@@ -126,9 +134,31 @@ class StyleSettings:
         _("Value which indicates how closely image generation follows the text prompt"),
     )
 
+    # Sampler, scheduler and guider can be chosen directly. Empty = take it from the preset.
+    sampler_method = Setting(
+        _("Sampler"), "", _("Algorithm that removes the noise step by step (from the preset)")
+    )
+    sampler_scheduler = Setting(
+        _("Scheduler"), "", _("How the noise levels are spread over the steps (from the preset)")
+    )
+    sampler_guider = Setting(
+        _("Guider"),
+        "auto",
+        _(
+            "Automatic uses CFG when the guidance strength is above 1. Basic never uses CFG "
+            "(distilled models). CFG always uses the negative prompt"
+        ),
+        items=["auto", "basic", "cfg"],
+    )
+
     live_sampler = Setting(_("Sampler"), "Realtime - Hyper", sampler.desc)
     live_sampler_steps = Setting(_("Sampler Steps"), 6, sampler_steps.desc)
     live_cfg_scale = Setting(_("Guidance Strength (CFG Scale)"), 1.8, cfg_scale.desc)
+    live_sampler_method = Setting(_("Sampler"), "", sampler_method.desc)
+    live_sampler_scheduler = Setting(_("Scheduler"), "", sampler_scheduler.desc)
+    live_sampler_guider = Setting(
+        _("Guider"), "auto", sampler_guider.desc, items=["auto", "basic", "cfg"]
+    )
 
 
 class Style(QObject):
@@ -148,13 +178,20 @@ class Style(QObject):
     rescale_cfg: float = StyleSettings.rescale_cfg.default
     self_attention_guidance: bool = StyleSettings.self_attention_guidance.default
     preferred_resolution: int = StyleSettings.preferred_resolution.default
+    preferred_megapixels: float = StyleSettings.preferred_megapixels.default
     linked_edit_style: str = StyleSettings.linked_edit_style.default
     sampler: str = StyleSettings.sampler.default
     sampler_steps: int = StyleSettings.sampler_steps.default
     cfg_scale: float = StyleSettings.cfg_scale.default
+    sampler_method: str = StyleSettings.sampler_method.default
+    sampler_scheduler: str = StyleSettings.sampler_scheduler.default
+    sampler_guider: str = StyleSettings.sampler_guider.default
     live_sampler: str = StyleSettings.live_sampler.default
     live_sampler_steps: int = StyleSettings.live_sampler_steps.default
     live_cfg_scale: float = StyleSettings.live_cfg_scale.default
+    live_sampler_method: str = StyleSettings.live_sampler_method.default
+    live_sampler_scheduler: str = StyleSettings.live_sampler_scheduler.default
+    live_sampler_guider: str = StyleSettings.live_sampler_guider.default
 
     changed = pyqtSignal(str, object)
 
@@ -246,6 +283,22 @@ class Style(QObject):
             self_attention_guidance=self.self_attention_guidance,
             prompt_upsampler=self.prompt_upsampler,
         )
+
+    def get_sampler(self, is_live: bool) -> tuple[str, str, str]:
+        """Sampler, scheduler and guider: the style's own choice, otherwise the preset's."""
+        prefix = "live_" if is_live else ""
+        preset = SamplerPresets.instance()[self.live_sampler if is_live else self.sampler]
+        sampler = getattr(self, f"{prefix}sampler_method") or preset.sampler
+        scheduler = getattr(self, f"{prefix}sampler_scheduler") or preset.scheduler
+        return sampler, scheduler, getattr(self, f"{prefix}sampler_guider")
+
+    @property
+    def preferred_pixel_count(self) -> int:
+        """Preferred resolution as a pixel count (MiniMax-H3-Image), 0 if not set. Styles
+        saved before the megapixel setting existed hold it as the side of a square."""
+        if self.preferred_megapixels > 0:
+            return round(self.preferred_megapixels * 10**6)
+        return self.preferred_resolution**2
 
     def get_steps(self, is_live: bool) -> tuple[int, int]:
         sampler_name = self.live_sampler if is_live else self.sampler

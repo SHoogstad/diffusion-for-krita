@@ -78,6 +78,7 @@ class SamplingInput:
     total_steps: int
     start_step: int = 0
     seed: int = 0
+    guider: str = "auto"  # auto (CFG if cfg_scale > 1), basic (never CFG), cfg (always)
 
     @property
     def actual_steps(self):

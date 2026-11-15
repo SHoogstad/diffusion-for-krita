@@ -208,11 +208,11 @@ def prepare_diffusion_input(
         input = initial = desired
         if extent.pixel_count > desired.pixel_count:  # resolution_multiplier / max_pixel_count
             image = Image.scale(image, desired) if image else None
-        if style.preferred_resolution > 0:
+        if style.preferred_pixel_count > 0:
             # Opt-in minimum: H3 is tuned for 2048x2048 of area and "doesn't work well in low
             # resolution" (MiniMax). Smaller requests are generated at the style's preferred
-            # resolution and scaled down to the canvas afterwards.
-            min_pixels = style.preferred_resolution**2
+            # resolution (in megapixels) and scaled down to the canvas afterwards.
+            min_pixels = style.preferred_pixel_count
             if perf.max_pixel_count > 0:
                 min_pixels = min(min_pixels, int(perf.max_pixel_count * 10**6))
             if desired.pixel_count < 0.95 * min_pixels:

@@ -354,16 +354,23 @@ class ComfyWorkflow:
         cfg=7.0,
         seed=-1,
         extent: Extent | None = None,
+        guider="auto",
     ):
         self.sample_count += steps - start_at_step
 
+        # guider: "auto" picks by model and CFG scale, "basic" never uses CFG, "cfg" always does
+        positive = cond.positive
+        use_cfg = guider == "cfg"
         if arch.is_flux_like:
-            positive = self.flux_guidance(cond.positive, cfg if cfg > 1 else 3.5)
-            guider = self.basic_guider(model, positive)
-        elif is_one(cfg):
-            guider = self.basic_guider(model, cond.positive)
+            # Flux takes its guidance as conditioning. With a real CFG guider the scale is CFG.
+            positive = self.flux_guidance(positive, cfg if cfg > 1 and not use_cfg else 3.5)
+        elif guider == "auto":
+            use_cfg = not is_one(cfg)
+
+        if use_cfg:
+            guider = self.cfg_guider(model, ConditioningOutput(positive, cond.negative), cfg)
         else:
-            guider = self.cfg_guider(model, cond, cfg)
+            guider = self.basic_guider(model, positive)
 
         sigmas = self.scheduler_sigmas(model, scheduler, steps, arch, extent)
         if start_at_step > 0:

@@ -70,11 +70,13 @@ def sampling_from_style(style: Style, strength: float, is_live: bool):
     cfg = style.live_cfg_scale if is_live else style.cfg_scale
     min_steps, max_steps = style.get_steps(is_live=is_live)
     preset = SamplerPresets.instance()[sampler_name]
+    sampler, scheduler, guider = style.get_sampler(is_live)
     result = SamplingInput(
-        sampler=preset.sampler,
-        scheduler=preset.scheduler,
+        sampler=sampler,
+        scheduler=scheduler,
         cfg_scale=cfg or preset.cfg,
         total_steps=max_steps,
+        guider=guider,
     )
     if strength < 1.0:
         result.total_steps, result.start_step = apply_strength(strength, max_steps, min_steps)
@@ -112,6 +114,7 @@ def _sampler_params(sampling: SamplingInput, extent: Extent, strength: float | N
         "cfg": sampling.cfg_scale,
         "seed": sampling.seed,
         "extent": extent,
+        "guider": sampling.guider,
     }
     if strength is not None:
         params["steps"], params["start_at_step"] = apply_strength(strength, sampling.total_steps)
@@ -434,7 +437,7 @@ class Conditioning:
 
     @staticmethod
     def from_input(i: ConditioningInput, sampling: SamplingInput | None):
-        has_negative = sampling and sampling.cfg_scale > 1
+        has_negative = sampling and sampling.cfg_scale > 1 and sampling.guider != "basic"
         return Conditioning(
             TextPrompt(i.positive, i.language),
             TextPrompt(i.negative, i.language) if has_negative else None,
@@ -1281,8 +1284,20 @@ def h3_image_sample(
     images = [image] if image is not None else []
     images += [c.image.load(w) for c in cond.all_control if c.mode.is_ip_adapter]
     prompt = cond.positive.prepare(w, cond.style_prompt)
-    positive, latent = w.minimax_h3_image_conditioning(clip.model, vae, prompt, extent, images[:16])
-    return _h3_sample_batch(w, model, vae, positive, latent, sampling, extent, misc, models)
+    images = images[:16]
+    positive, latent = w.minimax_h3_image_conditioning(clip.model, vae, prompt, extent, images)
+    negative = None
+    if _h3_uses_cfg(sampling):
+        text = cond.negative.prepare(w) if cond.negative else ""
+        negative = w.minimax_h3_image_conditioning(clip.model, vae, text, extent, images)[0]
+    return _h3_sample_batch(
+        w, model, vae, positive, negative, latent, sampling, extent, misc, models
+    )
+
+
+def _h3_uses_cfg(sampling: SamplingInput):
+    # The H3 image models are distilled without CFG: only use it when the style asks for it.
+    return sampling.guider == "cfg"
 
 
 def _h3_sample_batch(
@@ -1290,13 +1305,17 @@ def _h3_sample_batch(
     model: Output,
     vae: Output,
     positive: Output,
+    negative: Output | None,
     latent: Output,
     sampling: SamplingInput,
     extent: Extent,
     misc: MiscParams,
     models: ModelDict,
 ):
-    guider = w.basic_guider(model, positive)
+    if negative is not None:
+        guider = w.cfg_guider(model, ConditioningOutput(positive, negative), sampling.cfg_scale)
+    else:
+        guider = w.basic_guider(model, positive)
     sampler = w.sampler_select(sampling.sampler)
     steps = sampling.actual_steps
     sigmas = w.scheduler_sigmas(model, sampling.scheduler, steps, models.arch, extent)
@@ -1342,7 +1361,13 @@ def ph3_sample(
     if checkpoint.prompt_upsampler and upsampler and prompt:
         prompt = ph3_upsample_prompt(w, upsampler, prompt, images, extent)
     positive, latent = w.ph3_image_conditioning(clip.model, vae, prompt, extent, images)
-    return _h3_sample_batch(w, model, vae, positive, latent, sampling, extent, misc, models)
+    negative = None
+    if _h3_uses_cfg(sampling):
+        text = cond.negative.prepare(w) if cond.negative else ""
+        negative = w.ph3_image_conditioning(clip.model, vae, text, extent, images)[0]
+    return _h3_sample_batch(
+        w, model, vae, positive, negative, latent, sampling, extent, misc, models
+    )
 
 
 _ph3_aspect_ratios = {"1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4, "3:2": 3 / 2, "2:3": 2 / 3}
