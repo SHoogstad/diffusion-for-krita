@@ -39,6 +39,9 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
   so the strength slider has no effect on edits.
 * It is distilled to **6 steps without CFG** (preset **MiniMax-H3 - 6 steps**, euler / simple). Canvases above
   about 6 MP are generated at that size and scaled up afterwards; smaller canvases keep their size.
+* **Preferred Resolution** in the style (checkpoint configuration) is in **megapixels** for this model, up to
+  60 MP: smaller images are generated at that size and scaled down to the canvas. The *Maximum Pixel Count*
+  in the performance settings still limits it, so raise that too for more than 6 MP.
 * The model wants a long, detailed description of the whole image. **Improve Prompt** uses MiniMax's own
   caption expander (from the official ComfyUI workflow) for text-to-image.
 * Needs **ComfyUI 0.45** or newer (`MiniMaxH3ImageConditioning`). Files from
@@ -167,9 +170,18 @@ The style list shows each style's base model as an icon, and any LoRA you add mu
 
 When you install the managed server you choose "workloads": the minimal set of models a base model needs.
 
+### <a name="sampler-settings"></a> Sampler, scheduler and guider
+Each style has a sampler preset. Open the preset (the arrow next to its name) to choose the **Sampler**,
+**Scheduler** and **Guider** yourself from lists, next to steps and guidance strength. The lists come from
+your ComfyUI server. Choosing another preset resets them to that preset.
+* **Guider: Automatic** uses CFG when the guidance strength is above 1.
+* **Basic (no CFG)** never uses CFG and ignores the negative prompt. Good for distilled models.
+* **CFG** always uses CFG with the negative prompt. Use it to try CFG on models that run without it by
+  default, like MiniMax-H3-Image or Flux (with Flux the strength then is the CFG scale).
+
 ### <a name="custom-sampler-presets"></a> Custom sampler presets
-Add your own sampler presets in `presets/samplers.json` in the plugin's settings folder (the file has examples).
-Restart Krita for changes to take effect.
+To keep a combination as a named preset, add it to `presets/samplers.json` in the plugin's settings folder
+(the file has examples). Restart Krita for changes to take effect.
 
 ## <a name="improve-prompt"></a> Improve Prompt and text encoders
 **Improve Prompt** is the wand button in the top right corner of the prompt box. It rewrites the prompt

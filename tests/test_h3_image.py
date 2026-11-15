@@ -85,6 +85,7 @@ def create(
     batch=1,
     mask: Mask | None = None,
     edit=True,
+    **style_settings,
 ):
     models = client_models()
     style = Style(Path("default.json"))
@@ -92,6 +93,8 @@ def create(
     style.sampler = "MiniMax-H3 - 6 steps"
     style.sampler_steps = 6
     style.cfg_scale = 1.0
+    for name, value in style_settings.items():
+        setattr(style, name, value)
     files = FileLibrary(FileCollection(), FileCollection())
     perf = PerformanceSettings()
     cond.edit_reference = edit
@@ -264,6 +267,69 @@ def test_preferred_resolution_keeps_larger_sizes():
     extent = Extent(1024, 768)
     scaled, _, _ = prepare_diffusion_input(extent, Image.create(extent), Arch.h3, style, perf)
     assert abs(scaled.desired.pixel_count - 2 * 10**6) < 3 * 2048
+
+
+@pytest.mark.parametrize("megapixels", [4.0, 16.0, 60.0])
+def test_preferred_megapixels_is_a_minimum(megapixels):
+    style = Style(Path("default.json"))
+    style.preferred_megapixels = megapixels
+    perf = PerformanceSettings(max_pixel_count=0)
+    extent = Extent(1920, 1080)
+    image = Image.create(extent)
+    scaled, out, _ = prepare_diffusion_input(extent, image, Arch.h3, style, perf)
+    assert scaled.input == scaled.target == extent and out is image
+    assert scaled.initial == scaled.desired
+    assert scaled.desired.pixel_count == pytest.approx(megapixels * 10**6, rel=0.01)
+    assert scaled.desired.width / scaled.desired.height == pytest.approx(16 / 9, 0.01)
+
+
+def test_preferred_megapixels_replaces_resolution():
+    style = Style(Path("default.json"))
+    assert style.preferred_pixel_count == 0
+    style.preferred_resolution = 2048  # style saved by 1.64.0
+    assert style.preferred_pixel_count == 2048 * 2048
+    style.preferred_megapixels = 2.0
+    assert style.preferred_pixel_count == 2 * 10**6
+
+    perf = PerformanceSettings(max_pixel_count=0)
+    extent = Extent(4096, 4096)  # larger than preferred: kept
+    scaled, _, _ = prepare_diffusion_input(extent, Image.create(extent), Arch.h3, style, perf)
+    assert scaled.initial == scaled.desired == extent
+
+    perf = PerformanceSettings(max_pixel_count=6)  # the user's limit wins
+    style.preferred_megapixels = 60.0
+    extent = Extent(1024, 1024)
+    scaled, _, _ = prepare_diffusion_input(extent, Image.create(extent), Arch.h3, style, perf)
+    assert scaled.desired.pixel_count == pytest.approx(6 * 10**6, rel=0.01)
+
+
+def test_sampler_and_scheduler_from_style():
+    nodes = create(
+        WorkflowKind.generate,
+        Extent(1024, 1024),
+        ConditioningInput("a fox"),
+        sampler_method="res_multistep",
+        sampler_scheduler="beta",
+    )
+    assert find(nodes, "KSamplerSelect")[0]["inputs"]["sampler_name"] == "res_multistep"
+    assert find(nodes, "BasicScheduler")[0]["inputs"]["scheduler"] == "beta"
+    assert len(find(nodes, "CFGGuider")) == 0 and len(find(nodes, "BasicGuider")) == 1
+
+
+def test_cfg_guider():
+    cond = ConditioningInput("a fox", negative="blurry")
+    args = (WorkflowKind.generate, Extent(1024, 1024), cond)
+    # distilled model: a CFG scale above 1 alone does not turn CFG on
+    nodes = create(*args, cfg_scale=3.0)
+    assert len(find(nodes, "CFGGuider")) == 0 and len(find(nodes, "BasicGuider")) == 1
+
+    nodes = create(*args, cfg_scale=3.0, sampler_guider="cfg")
+    assert len(find(nodes, "BasicGuider")) == 0
+    guider = find(nodes, "CFGGuider")[0]["inputs"]
+    assert guider["cfg"] == pytest.approx(3.0)
+    prompts = {n["inputs"]["prompt"] for n in find(nodes, "MiniMaxH3ImageConditioning")}
+    assert prompts == {"a fox", "blurry"}
+    assert guider["positive"] != guider["negative"]
 
 
 def test_sampler_preset():

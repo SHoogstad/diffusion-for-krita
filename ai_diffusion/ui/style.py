@@ -34,6 +34,7 @@ from ..style import SamplerPresets, Style, Styles, StyleSettings
 from . import theme
 from .settings_widgets import (
     ComboBoxSetting,
+    DoubleSpinBoxSetting,
     ExpanderButton,
     LineEditSetting,
     SettingsTab,
@@ -514,6 +515,20 @@ class SamplerWidget(QWidget):
         info_layout.addStretch()
         info_layout.addWidget(self._user_presets_link)
 
+        # Sampler, scheduler and guider can be picked right here. A preset fills them in.
+        self._method = ComboBoxSetting(StyleSettings.sampler_method, parent=self)
+        self._method.value_changed.connect(self._change_sampler)
+        self._scheduler = ComboBoxSetting(StyleSettings.sampler_scheduler, parent=self)
+        self._scheduler.value_changed.connect(self._change_sampler)
+        self._guider = ComboBoxSetting(StyleSettings.sampler_guider, parent=self)
+        self._guider.set_items([
+            (_("Automatic"), "auto"),
+            (_("Basic (no CFG)"), "basic"),
+            (_("CFG (uses negative prompt)"), "cfg"),
+        ])
+        self._guider.value_changed.connect(self.notify_changed)
+        self.update_items(None)
+
         self._steps = SliderSetting(StyleSettings.sampler_steps, self, 1, 100, suffix=" steps")
         self._steps.slider.setSoftMaximum(50)
         self._steps.value_changed.connect(self.notify_changed)
@@ -525,6 +540,9 @@ class SamplerWidget(QWidget):
         extended_layout = QVBoxLayout()
         extended_layout.setContentsMargins(16, 2, 0, 2)
         extended_layout.addLayout(info_layout)
+        extended_layout.addWidget(self._method)
+        extended_layout.addWidget(self._scheduler)
+        extended_layout.addWidget(self._guider)
         extended_layout.addWidget(self._steps)
         extended_layout.addWidget(self._cfg)
 
@@ -544,18 +562,49 @@ class SamplerWidget(QWidget):
         name = self._preset.currentText()
         return SamplerPresets.instance()[name]
 
+    def update_items(self, client):
+        """Fill the sampler and scheduler lists with what the server offers. The presets'
+        own entries are always there: some schedulers only exist in the plugin."""
+        samplers, schedulers = list(_default_samplers), list(_default_schedulers)
+        if client is not None and client.models.node_inputs:
+            samplers += client.models.node_inputs.options("KSampler", "sampler_name")
+            schedulers += client.models.node_inputs.options("KSampler", "scheduler")
+        presets = dict(SamplerPresets.instance().items()).values()
+        samplers += [p.sampler for p in presets]
+        schedulers += [p.scheduler for p in presets]
+        for widget, items in ((self._method, samplers), (self._scheduler, schedulers)):
+            current = widget.value
+            widget.set_items(list(dict.fromkeys(items)))
+            if current:
+                self._set_combo(widget, current)
+
+    @staticmethod
+    def _set_combo(widget: ComboBoxSetting, value: str):
+        if widget._combo.findData(value) < 0:  # e.g. a sampler from a custom node
+            widget._combo.addItem(value, value)
+        widget.value = value
+
     def _select_preset(self, index: int):
         preset = self.preset
+        self._set_combo(self._method, preset.sampler)
+        self._set_combo(self._scheduler, preset.scheduler)
+        self._guider.value = StyleSettings.sampler_guider.default
         self._steps.value = preset.steps
         self._cfg.value = preset.cfg
         self._update_info()
         self.notify_changed()
 
+    def _change_sampler(self):
+        self._update_info()
+        self.notify_changed()
+
     def _update_info(self):
         preset = self.preset
-        text = "<b>" + _("Sampler") + f":</b> {preset.sampler} / {preset.scheduler}"
+        text = "<b>" + _("Preset") + f":</b> {preset.sampler} / {preset.scheduler}"
         if preset.lora:
             text += f" +LoRA '{preset.lora}'"
+        if (self._method.value, self._scheduler.value) != (preset.sampler, preset.scheduler):
+            text += " <i>(" + _("changed below") + ")</i>"
         self._sampler_info.setText(text)
 
     def _open_user_presets(self):
@@ -569,14 +618,40 @@ class SamplerWidget(QWidget):
 
     def read(self, style: Style):
         self._preset.setCurrentText(getattr(style, f"{self.prefix}sampler"))
+        preset = self.preset
+        method = getattr(style, f"{self.prefix}sampler_method")
+        scheduler = getattr(style, f"{self.prefix}sampler_scheduler")
+        self._set_combo(self._method, method or preset.sampler)
+        self._set_combo(self._scheduler, scheduler or preset.scheduler)
+        self._guider.value = getattr(style, f"{self.prefix}sampler_guider")
         self._steps.value = getattr(style, f"{self.prefix}sampler_steps")
         self._cfg.value = getattr(style, f"{self.prefix}cfg_scale")
         self._update_info()
 
     def write(self, style: Style):
+        # Sampler and scheduler are only stored when they differ from the preset
+        preset = self.preset
+        method, scheduler = self._method.value, self._scheduler.value
         setattr(style, f"{self.prefix}sampler", self._preset.currentText())
+        setattr(style, f"{self.prefix}sampler_method", method if method != preset.sampler else "")
+        setattr(
+            style,
+            f"{self.prefix}sampler_scheduler",
+            scheduler if scheduler != preset.scheduler else "",
+        )
+        setattr(style, f"{self.prefix}sampler_guider", self._guider.value)
         setattr(style, f"{self.prefix}sampler_steps", self._steps.value)
         setattr(style, f"{self.prefix}cfg_scale", self._cfg.value)
+
+
+# Used when the server's lists are not known (not connected)
+_default_samplers = ["euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral", "lms"]
+_default_samplers += ["dpmpp_2s_ancestral", "dpmpp_sde", "dpmpp_sde_gpu", "dpmpp_2m"]
+_default_samplers += ["dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_3m_sde", "dpmpp_3m_sde_gpu"]
+_default_samplers += ["ddpm", "lcm", "ipndm", "deis", "res_multistep", "er_sde", "ddim"]
+_default_samplers += ["uni_pc", "uni_pc_bh2"]
+_default_schedulers = ["simple", "sgm_uniform", "karras", "exponential", "ddim_uniform", "beta"]
+_default_schedulers += ["normal", "linear_quadratic", "kl_optimal"]
 
 
 class StylePresets(SettingsTab):
@@ -707,6 +782,15 @@ class StylePresets(SettingsTab):
         resolution_check = self._resolution_spin.add_checkbox(_("Override"))
         resolution_check.toggled.connect(self._toggle_preferred_resolution)
 
+        # MiniMax-H3-Image works at any size: its preferred resolution is an area in megapixels
+        self._megapixel_spin = self._style_widgets["preferred_megapixels"] = DoubleSpinBoxSetting(
+            StyleSettings.preferred_megapixels, self, 0, 60, step=0.5, suffix=" MP"
+        )
+        self._megapixel_spin.value_changed.connect(self.write)
+        self._layout.addWidget(self._megapixel_spin)
+        megapixel_check = self._megapixel_spin.add_checkbox(_("Override"))
+        megapixel_check.toggled.connect(self._toggle_preferred_megapixels)
+
         self._zsnr = add(
             "v_prediction_zsnr", SwitchSetting(StyleSettings.v_prediction_zsnr, parent=self)
         )
@@ -723,6 +807,7 @@ class StylePresets(SettingsTab):
             self._upsampler,
             self._clip_skip,
             self._resolution_spin,
+            self._megapixel_spin,
             self._zsnr,
             self._sag,
         ]
@@ -912,6 +997,12 @@ class StylePresets(SettingsTab):
         elif not checked and self._resolution_spin.value > 0:
             self._resolution_spin.value = 0
 
+    def _toggle_preferred_megapixels(self, checked: bool):
+        if checked and self._megapixel_spin.value == 0:
+            self._megapixel_spin.value = 4.0  # the model is tuned for 2048x2048 of area
+        elif not checked and self._megapixel_spin.value > 0:
+            self._megapixel_spin.value = 0
+
     def _toggle_clip_skip(self, checked: bool):
         if checked and self._clip_skip.value == 0:
             arch = resolve_arch(self.current_style, root.connection.client_if_connected)
@@ -920,8 +1011,17 @@ class StylePresets(SettingsTab):
             self._clip_skip.value = 0
 
     def _toggle_checkpoint_advanced(self, checked: bool):
+        self._checkpoint_advanced_open = checked
         for widget in self._checkpoint_advanced_widgets:
             widget.visible = checked
+        self._show_resolution_widget()
+
+    def _show_resolution_widget(self):
+        # Megapixels for MiniMax-H3-Image, the side of a square in pixels for everything else
+        arch = resolve_arch(self.current_style, root.connection.client_if_connected)
+        is_open = getattr(self, "_checkpoint_advanced_open", False)
+        self._megapixel_spin.visible = is_open and arch is Arch.h3
+        self._resolution_spin.visible = is_open and arch is not Arch.h3
 
     def _show_builtin_info(self, style: Style):
         is_builtin = Styles.list().is_builtin(style)
@@ -959,21 +1059,30 @@ class StylePresets(SettingsTab):
         self._upsampler.enabled = arch is Arch.ph3
         self._zsnr.enabled = arch.supports_attention_guidance
         self._sag.enabled = arch.supports_attention_guidance
+        self._show_resolution_widget()
 
     def _read_style(self, style: Style):
         with self._write_guard:
             for name, widget in self._style_widgets.items():
                 widget.value = getattr(style, name)
+            arch = resolve_arch(style, root.connection.client_if_connected)
+            if arch is Arch.h3 and style.preferred_megapixels == 0 and style.preferred_resolution:
+                # Style from before megapixels: show (and from now on save) it as megapixels
+                self._megapixel_spin.value = round(style.preferred_pixel_count / 10**6, 1)
+                self._resolution_spin.value = 0
             self._loras.value = style.loras  # type: ignore
             self._default_sampler.read(style)
             self._live_sampler.read(style)
         self._show_builtin_info(style)
         self._read_checkpoint(style)
         self._enable_checkpoint_advanced()
-        self._resolution_spin.enabled = style.preferred_resolution > 0
+        self._resolution_spin.enabled = self._resolution_spin.value > 0
+        self._megapixel_spin.enabled = self._megapixel_spin.value > 0
 
     def _read(self):
         self._show_builtin_checkbox.setChecked(settings.show_builtin_styles)
+        self._default_sampler.update_items(root.connection.client_if_connected)
+        self._live_sampler.update_items(root.connection.client_if_connected)
         if client := root.connection.client_if_connected:
             default_vae = cast(str, StyleSettings.vae.default)
             self._style_widgets["vae"].set_items([default_vae] + client.models.vae)
