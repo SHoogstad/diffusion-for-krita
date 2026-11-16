@@ -17,7 +17,6 @@ from ..qt.QtCore import Qt, pyqtSignal
 from ..qt.QtGui import QIcon
 from ..qt.QtWidgets import (
     QCheckBox,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QStackedWidget,
@@ -242,25 +241,7 @@ class WelcomeWidget(QWidget):
 
         layout.setContentsMargins(14, 14, 14, 10)
 
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(12)
-        header_logo = QLabel(self)
-        header_logo.setPixmap(
-            theme.logo().scaled(
-                56,
-                56,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-        header_logo.setFixedSize(56, 56)
-        header_text = QLabel(
-            "<span style='font-size: 15pt; font-weight: 600;'>Diffusion</span><br>"
-            f"<span style='color: {theme.grey};'>for Krita &nbsp;\u00b7&nbsp; {__release__}</span>",
-            self,
-        )
-        header_layout.addWidget(header_logo)
-        header_layout.addWidget(header_text, 1)
+        banner = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
 
         self._update_widget = AutoUpdateWidget(self)
         self._news_widget = NewsWidget(self)
@@ -281,10 +262,8 @@ class WelcomeWidget(QWidget):
         )
         info.setOpenExternalLinks(True)
 
-        layout.addLayout(header_layout)
+        layout.addWidget(banner)
         layout.addSpacing(10)
-        layout.addWidget(theme.AccentLine(self))
-        layout.addSpacing(8)
         layout.addWidget(self._update_widget)
         layout.addWidget(self._news_widget)
         layout.addWidget(self._connection_widget)

@@ -19,6 +19,7 @@ from ..qt.QtCore import (
     QItemSelectionModel,
     QMetaObject,
     QPoint,
+    QRectF,
     QSize,
     Qt,
     QTimer,
@@ -26,15 +27,16 @@ from ..qt.QtCore import (
     pyqtSignal,
 )
 from ..qt.QtGui import (
+    QColor,
     QGuiApplication,
     QIcon,
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
+    QPainter,
 )
 from ..qt.QtWidgets import (
     QAction,
-    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -56,6 +58,7 @@ from . import theme
 from .region import RegionPromptWidget
 from .widget import (
     AccentProgressBar,
+    ChipToggle,
     ErrorBox,
     GenerateButton,
     LayerCountWidget,
@@ -303,6 +306,22 @@ class HistoryWidget(QListWidget):
                         cast(AnimatedListItem, item).start_animation()
 
         self.update_apply_button()
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.count() > 0:
+            return
+        # empty state: the dissolving stroke and a hint
+        viewport = ensure(self.viewport())
+        painter = QPainter(viewport)
+        width, height = viewport.width(), viewport.height()
+        if height < 70 or width < 120:
+            return
+        band = QRectF(width * 0.18, min(height * 0.3, 90) - 22, width * 0.64, 44)
+        theme.paint_dissolve(painter, band, step=8, seed=9, opacity=0.55)
+        painter.setPen(QColor(theme.grey))
+        text = QRectF(0, band.bottom() + 6, width, 24)
+        painter.drawText(text, Qt.AlignmentFlag.AlignCenter, _("Results appear here"))
 
     def update_apply_button(self):
         selected = self.selectedItems()
@@ -575,11 +594,11 @@ class CustomInpaintWidget(QWidget):
         self._model = root.active_model
         self._model_bindings = []
 
-        self.use_inpaint_button = QCheckBox(self)
+        self.use_inpaint_button = ChipToggle(self)
         self.use_inpaint_button.setText(_("Seamless"))
         self.use_inpaint_button.setToolTip(_("Generate content which blends into the surroundings"))
 
-        self.use_prompt_focus_button = QCheckBox(self)
+        self.use_prompt_focus_button = ChipToggle(self)
         self.use_prompt_focus_button.setText(_("Focus"))
         self.use_prompt_focus_button.setToolTip(
             _(
@@ -587,7 +606,7 @@ class CustomInpaintWidget(QWidget):
             )
         )
 
-        self.edit_mode_switch = QCheckBox(self)
+        self.edit_mode_switch = ChipToggle(self)
         self.edit_mode_switch.setText(_("Edit"))
         self.edit_mode_switch.setToolTip(_("Edit canvas with text instructions"))
 

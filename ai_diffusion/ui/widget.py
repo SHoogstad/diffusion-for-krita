@@ -23,7 +23,7 @@ from ..model.model import (
 )
 from ..model.properties import Bind, Binding, bind, bind_combo
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QRectF, QSize, Qt, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QPointF, QRectF, QSize, Qt, pyqtSignal
 from ..qt.QtGui import (
     QCloseEvent,
     QColor,
@@ -35,8 +35,10 @@ from ..qt.QtGui import (
     QMouseEvent,
     QPaintDevice,
     QPainter,
+    QPainterPath,
     QPaintEvent,
     QPalette,
+    QPen,
     QSyntaxHighlighter,
     QTextCharFormat,
     QTextCursor,
@@ -317,11 +319,50 @@ class QueueButton(QToolButton):
 
     def sizeHint(self) -> QSize:
         original = super().sizeHint()
-        width = original.height() * 0.75 + self.fontMetrics().horizontalAdvance(" 99 ") + 20
+        width = original.height() * 0.75 + self.fontMetrics().horizontalAdvance(" 99 ") + 30
         return QSize(int(width), original.height())
 
     def paintEvent(self, a0):
-        _paint_tool_drop_down(self, self.text())
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        fm = self.fontMetrics()
+        rect = QRectF(self.rect()).adjusted(0.5, 1.5, -0.5, -1.5)
+        radius = rect.height() / 2
+        is_busy = self.text().strip() not in ("", "0")
+        border = QColor(theme.grey)
+        border.setAlpha(110)
+        if self.underMouse() and self.isEnabled():
+            border = QColor(theme.accent_cool)
+        elif is_busy:
+            border = QColor(theme.accent)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(QColor(theme.base) if is_busy else Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, radius, radius)
+
+        size = float(fm.height())
+        ratio = self.devicePixelRatioF() or 1.0
+        pixmap = self.icon().pixmap(int(size * ratio))
+        x = rect.left() + radius * 0.7
+        painter.drawPixmap(
+            QRectF(x, (self.height() - size) / 2, size, size), pixmap, QRectF(pixmap.rect())
+        )
+        x += size + 4
+        font = self.font()
+        font.setBold(is_busy)
+        painter.setFont(font)
+        text_color = self.palette().color(QPalette.ColorRole.WindowText)
+        painter.setPen(QColor(theme.accent) if is_busy else text_color)
+        align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        painter.drawText(QRectF(x, 0, self.width() - x, self.height()), align, self.text().strip())
+        # chevron: the pill opens the queue menu
+        cx, cy = rect.right() - radius * 0.7 - 3, self.height() / 2
+        chevron = QPen(text_color, 1.4)
+        chevron.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(chevron)
+        painter.setOpacity(0.7)
+        painter.drawLine(QPointF(cx - 3, cy - 1.5), QPointF(cx, cy + 1.5))
+        painter.drawLine(QPointF(cx, cy + 1.5), QPointF(cx + 3, cy - 1.5))
 
 
 class StyleSelectWidget(QWidget):
@@ -875,10 +916,9 @@ class LayerCountWidget(QWidget):
 class WorkspaceTab(QToolButton):
     """One workspace in the tab strip. The active tab shows its name, the others only an icon."""
 
-    def __init__(self, workspace: Workspace, icon: QIcon, text: str, parent: QWidget):
+    def __init__(self, workspace: Workspace, text: str, parent: QWidget):
         super().__init__(parent)
         self.workspace = workspace
-        self._icon = icon
         self._text = text
         font = self.font()
         font.setBold(True)
@@ -921,11 +961,11 @@ class WorkspaceTab(QToolButton):
             painter.drawRoundedRect(rect, theme.radius, theme.radius)
 
         size = self._icon_size()
-        ratio = self.devicePixelRatioF() or 1.0
-        pixmap = self._icon.pixmap(int(size * ratio))
         icon_rect = QRectF(7, (self.height() - size) / 2 - 1, size, size)
+        text_color = self.palette().color(QPalette.ColorRole.WindowText)
         painter.setOpacity(1.0 if self.isChecked() else (0.9 if is_hover else 0.55))
-        painter.drawPixmap(icon_rect, pixmap, QRectF(pixmap.rect()))
+        glyph_color = None if self.isChecked() else text_color  # active = brand gradient
+        theme.paint_workspace_glyph(painter, icon_rect, self.workspace.name, glyph_color)
         if self.isChecked():
             painter.setOpacity(1.0)
             painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
@@ -961,7 +1001,7 @@ class WorkspaceSelectWidget(QWidget):
         layout.setSpacing(2)
         self._tabs: list[WorkspaceTab] = []
         for workspace, name in names.items():
-            tab = WorkspaceTab(workspace, self._icons[workspace], name, self)
+            tab = WorkspaceTab(workspace, name, self)
             tab.clicked.connect(self._activate(workspace))
             layout.addWidget(tab)
             self._tabs.append(tab)
@@ -978,6 +1018,13 @@ class WorkspaceSelectWidget(QWidget):
         for tab in self._tabs:
             tab.setChecked(tab.workspace is workspace)
             tab.updateGeometry()
+
+    def paintEvent(self, a0):
+        # the brand stroke dissolves into the empty space right of the tabs
+        left = self._tabs[-1].geometry().right() + 14
+        if self.width() - left > 50:
+            rect = QRectF(left, 3, self.width() - left - 4, self.height() - 6)
+            theme.paint_dissolve(QPainter(self), rect, step=5, seed=3, opacity=0.7)
 
     def _activate(self, workspace: Workspace):
         switch = actions.set_workspace(workspace)
@@ -1053,6 +1100,24 @@ class GenerateButton(QPushButton):
         else:
             painter.setBrush(QColor(theme.line))
         painter.drawRoundedRect(rect, theme.radius, theme.radius)
+        if is_enabled and rect.width() > 120:
+            # the stroke of the logo: solid at the start, dissolving into mint at the end
+            clip = QPainterPath()
+            clip.addRoundedRect(rect, theme.radius, theme.radius)
+            painter.save()
+            painter.setClipPath(clip)
+            tail = QRectF(rect.right() - rect.width() * 0.2, 0, rect.width() * 0.22, rect.height())
+            theme.paint_dissolve(
+                painter,
+                tail,
+                step=5,
+                seed=5,
+                opacity=0.95,
+                color=QColor(theme.accent_cool),
+                reverse=True,
+            )
+            painter.restore()
+            painter.setPen(Qt.PenStyle.NoPen)
         if self.isDown():
             painter.setBrush(QColor(0, 0, 0, 40))
             painter.drawRoundedRect(rect, theme.radius, theme.radius)
@@ -1087,6 +1152,50 @@ class GenerateButton(QPushButton):
             hint_x -= hint_size + 4
         if is_hover and self.model.resolution_multiplier != 1:
             draw_icon(self._resolution_icon, hint_size, hint_x)
+
+
+class ChipToggle(QCheckBox):
+    """A checkbox drawn as a pill: outlined when off, filled with the accent when on."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+    def sizeHint(self) -> QSize:
+        fm = self.fontMetrics()
+        return QSize(fm.horizontalAdvance(self.text()) + 20, fm.height() + 8)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
+
+    def paintEvent(self, a0):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2
+        text_color = self.palette().color(QPalette.ColorRole.WindowText)
+        painter.setOpacity(1.0 if self.isEnabled() else 0.45)
+        if self.isChecked():
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.accent_gradient(rect))
+            painter.drawRoundedRect(rect, radius, radius)
+            text_color = QColor(theme.accent_text)
+        else:
+            border = QColor(theme.accent_cool if self.underMouse() else theme.grey)
+            border.setAlpha(255 if self.underMouse() else 120)
+            painter.setPen(QPen(border, 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect, radius, radius)
+        painter.setPen(text_color)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.text())
+        if self.hasFocus() and not self.isChecked():
+            painter.setPen(QPen(QColor(theme.accent), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect, radius, radius)
 
 
 class AccentProgressBar(QProgressBar):
