@@ -3,6 +3,9 @@
 One drawing per icon on a 24 unit grid: round 2 unit lines in the theme's text color, with
 details in red or blue (the brand colors). Each icon is written twice, for dark and for light
 Krita themes. Run: python scripts/make_icons.py
+
+Icons contain no text, so the plugin shows a single font: the one Krita uses. The lettered
+model badges are painted at runtime in that font (theme.model_badge).
 """
 
 from pathlib import Path
@@ -92,6 +95,17 @@ icons: dict[str, str] = {
     "apply": p("M4.5 12.5l5 5L20 6.5", "b", 2.4),
     "apply-layer": p("M12 9l9 4.5-9 4.5-9-4.5z") + p("M8 5.5l3 3 5.5-6", "b", 2.2),
     "cancel": p("M6 6l12 12M18 6L6 18", "r", 2.4),
+    "add": p("M12 5v14M5 12h14", "b", 2.4),
+    "copy": box(8, 8, 13, 13) + p("M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"),
+    "duplicate": box(8, 8, 13, 13)
+    + p("M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1")
+    + p("M14.5 11.5v6M11.5 14.5h6", "b"),
+    "folder": p("M3 7a2 2 0 0 1 2-2h4l2.5 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z")
+    + p("M3 11h18", "b"),
+    "refresh": p("M19.5 12a7.5 7.5 0 1 1-2.3-5.4") + p("M20 4v4.5h-4.5", "b"),
+    "chevron": p("M6 9.5l6 6 6-6", width=2.4),
+    "chevron-up": p("M6 14.5l6-6 6 6", width=2.4),
+    "check": '<path d="M5 12.5l4.5 4.5L19 7" stroke="#ffffff" stroke-width="3.4"/>',
     "comfyui": box(3, 4, 8, 6, 1.5) + box(13, 14, 8, 6, 1.5) + p("M11 7h3a3 3 0 0 1 3 3v4", "b"),
     "context": corners + dot(12, 12, 2),
     "context-automatic": corners + star(12, 12, 5, "r"),
@@ -217,25 +231,6 @@ icons: dict[str, str] = {
     + p("M12 3c3.5 3 3.5 15 0 18M12 3c-3.5 3-3.5 15 0 18"),
 }
 icons.update({f"workspace-{name}": body for name, body in workspace.items()})
-
-# Model families: a badge in red or blue with white letters
-badges = {
-    "15": ("1.5", "b"), "xl": ("XL", "b"), "3": ("SD3", "b"), "illu": ("IL", "b"),
-    "illu-v": ("IV", "b"), "anima": ("AN", "b"), "flux": ("FX", "r"), "flux-k": ("FK", "r"),
-    "flux-2": ("F2", "r"), "chroma": ("CH", "r"), "krea2": ("K2", "r"), "qwen": ("QW", "b"),
-    "z-image": ("ZI", "r"), "ernie": ("ER", "b"), "moss": ("MS", "r"), "fibo2": ("FB", "b"),
-    "h3": ("H3", "r"),
-}  # fmt: skip
-badge_fill = {"r": "#c8242f", "b": "#2f5fc4"}
-for name, (text, color) in badges.items():
-    size = 8.5 if len(text) > 2 else 10.5
-    icons[f"sd-version-{name}"] = (
-        f'<rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="{badge_fill[color]}"'
-        ' stroke="none"/>'
-        f'<text x="12" y="{12 + size * 0.36:.1f}" font-family="Arial, Helvetica, sans-serif"'
-        f' font-size="{size}" font-weight="bold" text-anchor="middle" fill="#ffffff"'
-        f' stroke="none">{text}</text>'
-    )
 
 
 def write_icons():

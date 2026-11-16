@@ -125,6 +125,7 @@ class UpscaleWidget(QWidget):
 
         self.workspace_select = WorkspaceSelectWidget(self)
         self.model_select = QComboBox(self)
+        theme.style_select(self.model_select)
         layout.addWidget(self.workspace_select)
         layout.addWidget(self.model_select)
 

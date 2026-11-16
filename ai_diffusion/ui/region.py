@@ -14,8 +14,9 @@ from ..model.prompt_enhance import improve_prompt
 from ..model.properties import Binding, bind
 from ..model.region import Region, RegionLink, RootRegion, translate_prompt
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QRectF, QSize, Qt, QUrl, pyqtSignal
 from ..qt.QtGui import (
+    QColor,
     QDesktopServices,
     QFontMetrics,
     QGuiApplication,
@@ -23,6 +24,8 @@ from ..qt.QtGui import (
     QImage,
     QMouseEvent,
     QPainter,
+    QPainterPath,
+    QPen,
     QPixmap,
     QResizeEvent,
     QTextCursor,
@@ -64,15 +67,18 @@ class InactiveRegionWidget(QFrame):
         self.setStyleSheet(
             f"QFrame#InactiveRegionWidget {{ background-color: {theme.base};"
             f" border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
+            f"QFrame#InactiveRegionWidget:hover {{ border-color: {theme.accent_cool}; }}"
         )
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
         thumbnail = RegionThumbnailWidget(region, self)
 
         self._prompt = QLabel(self)
-        self._prompt.setCursor(Qt.CursorShape.IBeamCursor)
 
         layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 5, 0)
+        layout.setContentsMargins(4, 3, 6, 3)
+        layout.setSpacing(8)
         layout.addWidget(thumbnail, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._prompt, 1)
         self.setLayout(layout)
@@ -808,4 +814,25 @@ class RegionThumbnailWidget(QLabel):
             painter.drawPixmap(offset, offset, icon_image.pixmap(size, size))
             painter.end()
             icon_image = QPixmap.fromImage(image)
+        else:
+            icon_image = self._rounded(icon_image)
         self.setPixmap(icon_image)
+
+    @staticmethod
+    def _rounded(pixmap: QPixmap):
+        result = QPixmap(pixmap.size())
+        result.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(result.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        clip = QPainterPath()
+        clip.addRoundedRect(rect, 4, 4)
+        painter.setClipPath(clip)
+        painter.fillRect(result.rect(), QColor(theme.line))
+        painter.drawPixmap(0, 0, pixmap)
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(theme.grey), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, 4, 4)
+        painter.end()
+        return result

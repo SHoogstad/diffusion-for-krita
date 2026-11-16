@@ -36,8 +36,16 @@ class ControlWidget(QWidget):
         self._control = control
         self._connections: list[QMetaObject.Connection | Binding] = []
 
+        # each control layer is a card
+        self.setObjectName("ControlRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(
+            f"QWidget#ControlRow {{ background: {theme.base}; border: 1px solid {theme.line_base};"
+            f" border-radius: {theme.radius}px; }}"
+        )
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(4, 2, 4, 2)
         self.setLayout(layout)
 
         self.mode_select = QComboBox(self)
@@ -47,6 +55,7 @@ class ControlWidget(QWidget):
             self.mode_select.addItem(icon, mode.text, mode)
 
         self.layer_select = QComboBox(self)
+        self.layer_select.setStyleSheet(theme.flat_combo_stylesheet)
         self.layer_select.setMinimumContentsLength(20)
         self.layer_select.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon

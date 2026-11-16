@@ -4,8 +4,6 @@ from collections.abc import Callable
 from itertools import chain
 from typing import Any, ClassVar, cast
 
-from krita import Krita
-
 from ..backend.client import filter_supported_styles, resolve_arch
 from ..backend.workflow import apply_strength, snap_to_percent
 from ..localization import translate as _
@@ -94,10 +92,11 @@ class QueuePopup(QMenu):
         palette = self.palette()
         self.setObjectName("QueuePopup")
         self.setStyleSheet(
-            f"""
+            theme.docker_stylesheet
+            + f"""
             QWidget#QueuePopup {{
-                background-color: {palette.window().color().name()}; 
-                border: 1px solid {palette.dark().color().name()};
+                background-color: {palette.window().color().name()};
+                border: 1px solid {theme.accent_cool}; padding: 6px;
             }}"""
         )
 
@@ -337,7 +336,8 @@ class QueueButton(QToolButton):
         elif is_busy:
             border = QColor(theme.accent)
         painter.setPen(QPen(border, 1))
-        painter.setBrush(QColor(theme.base) if is_busy else Qt.BrushStyle.NoBrush)
+        filled = is_busy or not theme.is_dark
+        painter.setBrush(QColor(theme.base) if filled else Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(rect, radius, radius)
 
         size = float(fm.height())
@@ -379,12 +379,16 @@ class StyleSelectWidget(QWidget):
         self.setLayout(layout)
 
         self._combo = QComboBox(self)
+        theme.style_select(self._combo)
+        self._combo.setIconSize(QSize(22, 22))
+        self._combo.setToolTip(_("Style: the model and its settings used to generate"))
         self.update_styles()
         self._combo.currentIndexChanged.connect(self.change_style)
         layout.addWidget(self._combo, 3)
 
         if show_quality:
             self._quality_combo = QComboBox(self)
+            theme.style_select(self._quality_combo)
             self._quality_combo.addItem(_("Fast"), SamplingQuality.fast.value)
             self._quality_combo.addItem(_("Quality"), SamplingQuality.quality.value)
             self._quality_combo.currentIndexChanged.connect(self.change_quality)
@@ -392,7 +396,9 @@ class StyleSelectWidget(QWidget):
 
         settings_btn = QToolButton(self)
         settings_btn.setIcon(theme.icon("settings"))
-        settings_btn.setAutoRaise(True)
+        settings_btn.setStyleSheet(theme.ghost_button_stylesheet)
+        settings_btn.setToolTip(_("Edit this style"))
+        settings_btn.setFixedSize(self._combo.sizeHint().height(), self._combo.sizeHint().height())
         settings_btn.clicked.connect(self.show_settings)
         layout.addWidget(settings_btn)
 
@@ -934,7 +940,7 @@ class WorkspaceTab(QToolButton):
 
     def sizeHint(self) -> QSize:
         fm = self.fontMetrics()
-        height = fm.height() + 12
+        height = fm.height() + 14
         width = self._icon_size() + 14
         if self.isChecked():
             width += fm.horizontalAdvance(self._text) + 6
@@ -952,8 +958,11 @@ class WorkspaceTab(QToolButton):
         painter.setPen(Qt.PenStyle.NoPen)
         if self.isChecked():
             painter.setBrush(QColor(theme.base))
+            if not theme.is_dark:  # a white tab on a light window needs an edge
+                painter.setPen(QPen(QColor(theme.line_base), 1))
             painter.drawRoundedRect(rect, theme.radius, theme.radius)
-            bar = QRectF(rect.left() + 7, rect.bottom() - 2.5, rect.width() - 14, 2)
+            painter.setPen(Qt.PenStyle.NoPen)
+            bar = QRectF(rect.left() + 7, rect.bottom() - 5, rect.width() - 14, 4.5)
             theme.paint_flag_bar(painter, bar)
             painter.setPen(Qt.PenStyle.NoPen)
         elif is_hover:
@@ -963,7 +972,8 @@ class WorkspaceTab(QToolButton):
         size = self._icon_size()
         icon_rect = QRectF(7, (self.height() - size) / 2 - 1, size, size)
         text_color = self.palette().color(QPalette.ColorRole.WindowText)
-        painter.setOpacity(1.0 if self.isChecked() else (0.9 if is_hover else 0.55))
+        rest = 0.55 if theme.is_dark else 0.72  # thin lines need more weight on light
+        painter.setOpacity(1.0 if self.isChecked() else (0.95 if is_hover else rest))
         glyph_color = None if self.isChecked() else text_color  # active = brand gradient
         theme.paint_workspace_glyph(painter, icon_rect, self.workspace.name, glyph_color)
         if self.isChecked():
@@ -1023,8 +1033,8 @@ class WorkspaceSelectWidget(QWidget):
         # the brand stroke dissolves into the empty space right of the tabs
         left = self._tabs[-1].geometry().right() + 14
         if self.width() - left > 50:
-            rect = QRectF(left, 3, self.width() - left - 4, self.height() - 6)
-            theme.paint_dissolve(QPainter(self), rect, step=5, seed=3, opacity=0.7)
+            rect = QRectF(left, 4, self.width() - left - 4, self.height() - 8)
+            theme.paint_dissolve(QPainter(self), rect, step=6, seed=3, opacity=0.85)
 
     def _activate(self, workspace: Workspace):
         switch = actions.set_workspace(workspace)
@@ -1113,7 +1123,7 @@ class GenerateButton(QPushButton):
                 step=5,
                 seed=5,
                 opacity=0.95,
-                color=QColor(theme.accent_white),
+                color=QColor(theme.accent_text),
                 reverse=True,
             )
             painter.restore()
@@ -1183,12 +1193,12 @@ class ChipToggle(QCheckBox):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(theme.blue_fill))
             painter.drawRoundedRect(rect, radius, radius)
-            text_color = QColor(theme.accent_text)
+            text_color = QColor(theme.fill_text)
         else:
             border = QColor(theme.accent_cool if self.underMouse() else theme.grey)
-            border.setAlpha(255 if self.underMouse() else 120)
+            border.setAlpha(255 if self.underMouse() else (120 if theme.is_dark else 170))
             painter.setPen(QPen(border, 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush if theme.is_dark else QColor(theme.base))
             painter.drawRoundedRect(rect, radius, radius)
         painter.setPen(text_color)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.text())
@@ -1225,7 +1235,7 @@ class AccentProgressBar(QProgressBar):
         if self.alt_color:
             painter.setBrush(QColor(self.alt_color))
         else:
-            painter.setBrush(theme.accent_gradient(rect, cool_end=True))
+            painter.setBrush(theme.accent_gradient(rect))
         painter.drawRoundedRect(fill, radius, radius)
 
 
@@ -1245,27 +1255,35 @@ class ErrorBox(QFrame):
 
         self._copy_button = QToolButton(self)
         self._copy_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        self._copy_button.setIcon(Krita.instance().icon("edit-copy"))
+        self._copy_button.setIcon(theme.icon("copy"))
         self._copy_button.setToolTip(_("Copy error message to clipboard"))
         self._copy_button.setAutoRaise(True)
         self._copy_button.clicked.connect(self._copy_error)
 
+        self._icon = QLabel(self)
+        self._icon.setFixedSize(18, 18)
+        self._icon.setScaledContents(True)
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.addWidget(self._label)
-        layout.addWidget(self._copy_button)
+        layout.setContentsMargins(8, 6, 4, 6)
+        layout.setSpacing(8)
+        layout.addWidget(self._icon, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._label, 1)
+        layout.addWidget(self._copy_button, 0, Qt.AlignmentFlag.AlignTop)
 
         self.reset()
 
     def reset(self, color: str = theme.red):
         self._copy_button.setVisible(False)
         self._label.setStyleSheet(f"color: {color};")
-        if color == theme.red:
-            self.setStyleSheet(
-                f"QFrame#errorBox {{ border: 1px solid #a01020; border-radius: {theme.radius}px; }}"
-            )
-        else:
-            self.setStyleSheet(None)
+        is_error = color == theme.red
+        tint = QColor(theme.accent if is_error else color)
+        ground = f"rgba({tint.red()}, {tint.green()}, {tint.blue()}, {34 if is_error else 22})"
+        self._icon.setPixmap(theme.icon("alert" if is_error else "warning").pixmap(36, 36))
+        self.setStyleSheet(
+            f"QFrame#errorBox {{ background: {ground}; border: 1px solid {tint.name()};"
+            f" border-radius: {theme.radius}px; }}"
+        )
         self.setVisible(False)
 
     @property

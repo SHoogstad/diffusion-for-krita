@@ -17,7 +17,6 @@ from ..util import client_logger as log
 from ..util import ensure
 
 _bar_color_end = QColor("#ffffff")
-_bar_color = "#4f7fd9"  # brand blue (theme.accent_cool), not imported: theme needs a QApplication
 
 
 def spin_box(widget: QWidget | None) -> QDoubleSpinBox | None:
@@ -117,7 +116,9 @@ class _SliderSpinBox(QDoubleSpinBox):
         rect = QRectF(self._line_edit().geometry()).adjusted(-1, -1, 1, 1)
         rect.setWidth(rect.width() * ratio)
         alpha = 130 if self.isEnabled() else 45
-        start, end = QColor(_bar_color), QColor(_bar_color)
+        from . import theme  # imported late: the theme needs a QApplication
+
+        start, end = QColor(theme.accent_cool), QColor(theme.accent_cool)
         start.setAlpha(alpha)
         end.setAlpha(alpha)
         gradient = QLinearGradient(rect.topLeft(), rect.topRight())

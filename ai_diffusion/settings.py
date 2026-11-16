@@ -56,6 +56,11 @@ class PromptEnhancer(Enum):
     openai = _("OpenAI-compatible server")
 
 
+class InterfaceLook(Enum):
+    country = _("Country: colors and flag of your country")
+    plain = _("Plain: one color of your choice")
+
+
 class GenerationFinishedAction(Enum):
     none = _("Do Nothing")
     preview = _("Preview")
@@ -183,6 +188,23 @@ class Settings(QObject):
         "en",
         _("Interface language used by the plugin - requires restart!"),
     )
+
+    interface_look: InterfaceLook
+    _interface_look = Setting(
+        _("Look"),
+        InterfaceLook.country,
+        _("Colors of the plugin - requires restart!"),
+    )
+
+    interface_country: str
+    _interface_country = Setting(
+        _("Country"),
+        "",
+        _("Whose flag and colors to use. Automatic follows the region of this computer."),
+    )
+
+    interface_color: str
+    _interface_color = Setting(_("Color"), "#3d7be0", _("The one color of the plain look"))
 
     auto_update: bool
     _auto_update = Setting(

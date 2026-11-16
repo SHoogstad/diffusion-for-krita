@@ -107,6 +107,8 @@ class HistoryWidget(QListWidget):
         self.setIconSize(theme.screen_scale(self, QSize(self._thumb_size, self._thumb_size)))
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet(self._list_css)
+        self.setItemDelegate(theme.HistoryDelegate(self))
+        self.setMouseTracking(True)
         self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.setDragEnabled(False)
         self.itemClicked.connect(self.handle_preview_click)
@@ -168,7 +170,7 @@ class HistoryWidget(QListWidget):
             header.setFlags(Qt.ItemFlag.NoItemFlags)
             header.setData(Qt.ItemDataRole.UserRole, job.id)
             header.setData(Qt.ItemDataRole.ToolTipRole, job.params.prompt)
-            header.setSizeHint(QSize(9999, self.fontMetrics().lineSpacing() + 4))
+            header.setSizeHint(QSize(9999, self.fontMetrics().lineSpacing() + 12))
             header.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
             self.addItem(header)
 
@@ -318,7 +320,7 @@ class HistoryWidget(QListWidget):
         if height < 70 or width < 120:
             return
         band = QRectF(width * 0.18, min(height * 0.3, 90) - 22, width * 0.64, 44)
-        theme.paint_dissolve(painter, band, step=8, seed=9, opacity=0.55)
+        theme.paint_dissolve(painter, band, step=8, seed=9, opacity=0.7 if theme.is_dark else 0.9)
         painter.setPen(QColor(theme.grey))
         text = QRectF(0, band.bottom() + 6, width, 24)
         painter.drawText(text, Qt.AlignmentFlag.AlignCenter, _("Results appear here"))

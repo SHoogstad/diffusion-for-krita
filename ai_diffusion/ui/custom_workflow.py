@@ -708,6 +708,7 @@ class CustomWorkflowWidget(QWidget):
         self._workflow_select_widgets = QWidget(self)
 
         self._workflow_select = QComboBox(self._workflow_select_widgets)
+        theme.style_select(self._workflow_select)
         self._workflow_select.setModel(SortedWorkflows(root.workflows))
         self._workflow_select.currentIndexChanged.connect(self._change_workflow)
 

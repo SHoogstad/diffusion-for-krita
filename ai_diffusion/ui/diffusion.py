@@ -308,6 +308,7 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._live)
         self._frame.addWidget(self._animation)
         self._frame.addWidget(self._custom)
+        self._frame.setStyleSheet(theme.docker_stylesheet)
         self.setWidget(self._frame)
 
         self._welcome.accepted.connect(self.update_content)

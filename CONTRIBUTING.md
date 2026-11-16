@@ -108,6 +108,27 @@ The easiest way to run a development version of the plugin is to create symlinks
 1. `git submodule update --init`
 1. `./install.py`
 
+### Look and icons
+
+The plugin has its own look, in the red, white and blue of the Dutch flag. It lives in
+`ai_diffusion/ui/theme.py`:
+
+* **Colors.** `accent` (red) is the primary action, `accent_cool` (blue) marks what is on,
+  focused or a link, `blue_fill` is the blue ground under white text. Each has a value for
+  dark and for light Krita themes. Use these names, not color codes, in widgets.
+* **Standard widgets** get their look from `docker_stylesheet`, which is set once on the
+  docker and on the settings dialog. A new field, checkbox, slider or button needs no styling
+  of its own. Use `primary_button_stylesheet` for the one main action of a screen and
+  `style_select()` for a selector at the top of a workspace.
+* **Signature.** `paint_dissolve()` draws the flag as a halftone that thins out, and
+  `paint_flag_bar()` a small flag. Red is above white above blue; side by side reads as a
+  different flag.
+* **Icons** are generated. Do not edit the SVG files in `ai_diffusion/icons`: change the
+  drawing in `scripts/make_icons.py` and run it. It writes every icon for dark and for light
+  themes. Icons are drawn on a 24 unit grid with round 2 unit lines, in the text color, with
+  the detail that matters in red (`r`) or blue (`b`).
+* The logo is `ai_diffusion/icons/logo.svg`. `logo-128.png` is rendered from it.
+
 ### Code formatting
 
 The codebase uses [ruff](https://docs.astral.sh/ruff/) for linting. You can

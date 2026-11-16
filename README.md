@@ -3,7 +3,7 @@
 Generative AI painting in **Krita 5 and Krita 6** with diffusion models: inpaint, outpaint, refine, live painting,
 regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the backend.
 
-⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | 🦴 [Poses](#poses) | ❓ [Common issues](#common-issues) | 💬 [Discussions](https://github.com/SHoogstad/diffusion-for-krita/discussions)
+⭳ [Download](https://github.com/SHoogstad/diffusion-for-krita/releases) | ✨ [Features](#features) | 🎨 [Interface](#interface) | 🛠️ [Installation](#installation) | ☁️ [Runpod](#runpod) | 🧩 [ComfyUI setup](#comfyui-setup) | 🧠 [Base models](#base-models) | 🦴 [Poses](#poses) | ❓ [Common issues](#common-issues) | 💬 [Discussions](https://github.com/SHoogstad/diffusion-for-krita/discussions)
 
 ## <a name="features"></a> Features
 
@@ -50,6 +50,22 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
   27 GB). On Runpod, pick a GPU with 48 GB or more.
 * MiniMax-H3 video checkpoints (FL2VA, Ref2VA) are not a base model of their own any more. They only run
   P-H3-Image through its LoRA (style **P-H3-Image (MiniMax-H3 + LoRA)**).
+
+## <a name="interface"></a> Interface
+
+The docker has its own look, in the red, white and blue of the Dutch flag.
+
+* **Workspaces** are tabs at the top: Generate, Upscale, Live, Animation and Graph.
+* **Style** is the selector below the tabs. It shows the model family as a badge next to the
+  style name. The button beside it opens the style for editing.
+* **Red** is the one main action of each screen, such as Generate. **Blue** marks what is
+  switched on, selected or focused.
+* **History** shows results as thumbnails under a header with the time and the prompt. Click a
+  result to preview it, double-click to apply it.
+* The **queue** button next to Generate shows the number of jobs and lights up while they run.
+  Click it for batches, seed, resolution and cancel.
+
+The look follows Krita's theme and works with dark and light themes.
 
 ## <a name="installation"></a> Installation
 

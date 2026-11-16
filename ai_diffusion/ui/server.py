@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from krita import Krita
-
 from .. import eventloop, util
 from ..backend import resources, server
 from ..backend.comfy_client import ComfyClient
@@ -42,7 +40,8 @@ from ..qt.QtWidgets import (
 from ..settings import Settings, settings
 from ..style import Arch
 from ..util import ensure
-from .theme import SignalBlocker, add_header, green, grey, highlight, red, set_text_clipped, yellow
+from . import theme
+from .theme import SignalBlocker, add_header, green, grey, red, set_text_clipped, yellow
 
 
 class PackageState(Enum):
@@ -839,7 +838,7 @@ class ServerWidget(QWidget):
         self._location_edit.textChanged.connect(self._change_location)
 
         self._location_select = QToolButton(self)
-        self._location_select.setIcon(Krita.instance().icon("document-open"))
+        self._location_select.setIcon(theme.icon("folder"))
         self._location_select.clicked.connect(self._select_location)
 
         location_layout = QHBoxLayout()
@@ -866,6 +865,7 @@ class ServerWidget(QWidget):
         self._backend_select.currentIndexChanged.connect(self._change_backend)
 
         self._launch_button = QPushButton("Launch", self)
+        self._launch_button.setStyleSheet(theme.primary_button_stylesheet)
         self._launch_button.setMinimumWidth(150)
         self._launch_button.setMinimumHeight(35)
         self._launch_button.clicked.connect(self._launch)
@@ -1072,7 +1072,7 @@ class ServerWidget(QWidget):
 
         self._launch_button.setEnabled(False)
         self._manage_button.setEnabled(False)
-        self._status_label.setStyleSheet(f"color:{highlight};font-weight:bold")
+        self._status_label.setStyleSheet(f"color:{theme.highlight};font-weight:bold")
         self._backend_select.setVisible(False)
         self._progress_bar.setVisible(True)
         self._progress_info.setVisible(True)
