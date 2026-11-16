@@ -61,7 +61,10 @@ class InactiveRegionWidget(QFrame):
 
         self.setObjectName("InactiveRegionWidget")
         self.setFrameStyle(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(f"QFrame#InactiveRegionWidget {{ background-color: {theme.base} }}")
+        self.setStyleSheet(
+            f"QFrame#InactiveRegionWidget {{ background-color: {theme.base};"
+            f" border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
+        )
 
         thumbnail = RegionThumbnailWidget(region, self)
 
@@ -104,8 +107,8 @@ class PromptHeader(Enum):
 
 
 class ActiveRegionWidget(QFrame):
-    _style_base = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.line_base}; }}"
-    _style_focus = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.active}; }}"
+    _style_base = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
+    _style_focus = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.accent}; border-radius: {theme.radius}px; }}"
 
     focused = pyqtSignal()
 

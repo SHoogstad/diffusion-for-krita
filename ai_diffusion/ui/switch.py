@@ -2,9 +2,10 @@
 from https://stackoverflow.com/a/51825815
 """
 
-from ..qt.QtCore import QPropertyAnimation, QSize, Qt, pyqtProperty  # type: ignore
-from ..qt.QtGui import QPainter
+from ..qt.QtCore import QPropertyAnimation, QRectF, QSize, Qt, pyqtProperty  # type: ignore
+from ..qt.QtGui import QBrush, QColor, QPainter
 from ..qt.QtWidgets import QAbstractButton, QSizePolicy
+from . import theme
 
 
 class SwitchWidget(QAbstractButton):
@@ -60,8 +61,12 @@ class SwitchWidget(QAbstractButton):
         track_opacity = 1.0
         thumb_opacity = 1.0
         if self.isEnabled():
-            track_brush = palette.highlight() if self.isChecked() else palette.dark()
-            thumb_brush = palette.text() if self.isChecked() else palette.light()
+            if self.isChecked():
+                track_brush = QBrush(theme.accent_gradient(QRectF(self.rect())))
+                thumb_brush = QBrush(QColor(theme.accent_text))
+            else:
+                track_brush = palette.dark()
+                thumb_brush = palette.light()
         else:
             track_opacity = 0.8
             track_brush = palette.shadow()

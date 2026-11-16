@@ -6,8 +6,17 @@ from ..backend.client import Client
 from ..files import FileFormat
 from ..localization import translate as _
 from ..platform_tools import is_windows
-from ..qt.QtCore import QObject, QSize, Qt
-from ..qt.QtGui import QFontMetrics, QGuiApplication, QIcon, QPalette, QPixmap
+from ..qt.QtCore import QObject, QPointF, QRectF, QSize, Qt
+from ..qt.QtGui import (
+    QColor,
+    QFontMetrics,
+    QGuiApplication,
+    QIcon,
+    QLinearGradient,
+    QPainter,
+    QPalette,
+    QPixmap,
+)
 from ..qt.QtWidgets import QLabel, QVBoxLayout, QWidget
 from ..settings import Setting
 from ..style import Arch
@@ -22,12 +31,40 @@ green = "#30b030" if is_dark else "#209020"
 yellow = "#c0c030" if is_dark else "#706020"
 red = "#d07a40" if is_dark else "#c07630"
 grey = "#888888" if is_dark else "#666666"
-highlight = "#80d0f0" if is_dark else "#335577"
-strong_highlight = "#70d0ff" if is_dark else "#2040ff"
+highlight = "#7ee0d0" if is_dark else "#1c7a6d"
+strong_highlight = "#ffc857" if is_dark else "#b4540f"
 progress_alt = "#a16207" if is_dark else "#ca8a04"
 active = _palette.color(QPalette.ColorRole.Highlight).name()
 line = _palette.color(QPalette.ColorRole.Window).darker(120).name()
 line_base = _palette.color(QPalette.ColorRole.Base).darker(120).name()
+
+# Brand colors, taken from the logo: a warm stroke (coral to amber) that dissolves into mint.
+accent = "#ff8a5c" if is_dark else "#ee6f3c"
+accent_warm = "#ffc857" if is_dark else "#f2a52c"
+accent_cool = "#7ee0d0" if is_dark else "#1f9e8c"
+accent_text = "#2a1f45"  # text and icons on top of the warm accent
+radius = 5
+
+primary_button_stylesheet = f"""
+    QPushButton {{
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {accent}, stop:1 {accent_warm});
+        color: {accent_text}; font-weight: bold; border: none; border-radius: {radius}px;
+        padding: 6px 14px;
+    }}
+    QPushButton:hover {{ background: {accent_warm}; }}
+    QPushButton:pressed {{ background: {accent}; }}
+    QPushButton:disabled {{ background: {line}; color: {grey}; }}
+"""
+
+ghost_button_stylesheet = f"""
+    QToolButton {{
+        border: 1px solid {line_base}; border-radius: {radius}px; background: transparent;
+        padding: 2px;
+    }}
+    QToolButton:hover {{ border-color: {accent_cool}; }}
+    QToolButton:checked {{ border-color: {accent}; background: {base}; }}
+    QToolButton::menu-indicator {{ image: none; }}
+"""
 
 flat_combo_stylesheet = f"""
     QComboBox {{ border: none; background-color: transparent; padding: 1px 12px 1px 2px; }}
@@ -98,6 +135,46 @@ def checkpoint_icon(arch: Arch, format: FileFormat | None = None, client: Client
     else:
         log.warning(f"Unresolved SD version {arch}, cannot fetch icon")
         return icon("warning")
+
+
+def accent_gradient(rect: QRectF, cool_end=False):
+    """The brand gradient across `rect`: coral to amber, optionally running on into mint."""
+    gradient = QLinearGradient(QPointF(rect.left(), 0), QPointF(rect.right(), 0))
+    gradient.setColorAt(0, QColor(accent))
+    if cool_end:
+        gradient.setColorAt(0.6, QColor(accent_warm))
+        gradient.setColorAt(1, QColor(accent_cool))
+    else:
+        gradient.setColorAt(1, QColor(accent_warm))
+    return gradient
+
+
+def tinted(pixmap: QPixmap, color: str | QColor):
+    """A copy of `pixmap` with every visible pixel painted in `color` (alpha is kept)."""
+    result = QPixmap(pixmap)
+    if result.isNull():
+        return result
+    painter = QPainter(result)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(result.rect(), QColor(color))
+    painter.end()
+    return result
+
+
+class AccentLine(QWidget):
+    """A thin horizontal rule in the brand gradient."""
+
+    def __init__(self, parent: QWidget | None = None, height=2):
+        super().__init__(parent)
+        self.setFixedHeight(height)
+
+    def paintEvent(self, a0):
+        rect = QRectF(self.rect())
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(accent_gradient(rect, cool_end=True))
+        painter.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
 
 
 def logo():

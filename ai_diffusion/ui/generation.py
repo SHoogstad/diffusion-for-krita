@@ -26,13 +26,11 @@ from ..qt.QtCore import (
     pyqtSignal,
 )
 from ..qt.QtGui import (
-    QColor,
     QGuiApplication,
     QIcon,
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
-    QPalette,
 )
 from ..qt.QtWidgets import (
     QAction,
@@ -45,7 +43,6 @@ from ..qt.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -58,6 +55,7 @@ from ..util import ensure, flatten, is_one, sequence_equal
 from . import theme
 from .region import RegionPromptWidget
 from .widget import (
+    AccentProgressBar,
     ErrorBox,
     GenerateButton,
     LayerCountWidget,
@@ -80,17 +78,17 @@ class HistoryWidget(QListWidget):
     _applied_icon = Image.load(theme.icon_path / "star.png")
     _list_css = f"""
         QListWidget {{ background-color: transparent; }}
-        QListWidget::item:selected {{ border: 1px solid {theme.grey}; }}
+        QListWidget::item:selected {{
+            border: 2px solid {theme.accent}; border-radius: 4px; background: transparent;
+        }}
     """
     _button_css = f"""
         QPushButton {{
-            border: 1px solid {theme.grey};
-            background: {"rgba(64, 64, 64, 170)" if theme.is_dark else "rgba(240, 240, 240, 160)"};
+            border: 1px solid {theme.grey}; border-radius: 4px;
+            background: {"rgba(48, 48, 48, 210)" if theme.is_dark else "rgba(240, 240, 240, 200)"};
             padding: 2px;
         }}
-        QPushButton:hover {{
-            background: {"rgba(72, 72, 72, 210)" if theme.is_dark else "rgba(240, 240, 240, 200)"};
-        }}
+        QPushButton:hover {{ border-color: {theme.accent_warm}; }}
     """
 
     def __init__(self, parent: QWidget | None):
@@ -694,16 +692,13 @@ class CustomInpaintWidget(QWidget):
             self._model.inpaint.context = data
 
 
-class ProgressBar(QProgressBar):
+class ProgressBar(AccentProgressBar):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self._model = root.active_model
         self._model_bindings: list[QMetaObject.Connection] = []
-        self._palette = self.palette()
         self.setMinimum(0)
         self.setMaximum(1000)
-        self.setTextVisible(False)
-        self.setFixedHeight(6)
 
     @property
     def model(self):
@@ -720,11 +715,9 @@ class ProgressBar(QProgressBar):
             ]
 
     def _update_progress_kind(self):
-        palette = self._palette
-        if self._model.progress_kind is ProgressKind.upload:
-            palette = self.palette()
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(theme.progress_alt))
-        self.setPalette(palette)
+        is_upload = self._model.progress_kind is ProgressKind.upload
+        self.alt_color = theme.accent_cool if is_upload else None
+        self.update()
 
     def _update_progress(self):
         if self._model.progress >= 0:
@@ -748,10 +741,8 @@ class GenerationWidget(QWidget):
         self.workspace_select = WorkspaceSelectWidget(self)
         self.style_select = StyleSelectWidget(self)
 
-        style_layout = QHBoxLayout()
-        style_layout.addWidget(self.workspace_select)
-        style_layout.addWidget(self.style_select)
-        layout.addLayout(style_layout)
+        layout.addWidget(self.workspace_select)
+        layout.addWidget(self.style_select)
 
         self.region_prompt = RegionPromptWidget(self)
         layout.addWidget(self.region_prompt)
@@ -778,6 +769,7 @@ class GenerationWidget(QWidget):
         self.inpaint_mode_button = QToolButton(self)
         self.inpaint_mode_button.setArrowType(Qt.ArrowType.DownArrow)
         self.inpaint_mode_button.setFixedHeight(self.generate_button.minimumSizeHint().height() - 3)
+        self.inpaint_mode_button.setStyleSheet(theme.ghost_button_stylesheet)
         self.inpaint_mode_button.clicked.connect(self.show_inpaint_menu)
         self.generate_menu = self._create_generate_menu()
         self.inpaint_menu = self._create_inpaint_menu()
@@ -790,13 +782,14 @@ class GenerationWidget(QWidget):
         self.region_mask_button = QToolButton(self)
         self.region_mask_button.setIcon(theme.icon("region-alpha"))
         self.region_mask_button.setCheckable(True)
+        self.region_mask_button.setStyleSheet(theme.ghost_button_stylesheet)
         self.region_mask_button.setFixedHeight(self.generate_button.height() - 2)
         self.region_mask_button.setToolTip(
             _("Generate the active layer region only (use layer transparency as mask)")
         )
 
         generate_layout = QHBoxLayout()
-        generate_layout.setSpacing(0)
+        generate_layout.setSpacing(3)
         generate_layout.addWidget(self.generate_button)
         generate_layout.addWidget(self.inpaint_mode_button)
         generate_layout.addWidget(self.region_mask_button)

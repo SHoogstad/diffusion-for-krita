@@ -10,7 +10,6 @@ from ..qt.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QRadioButton,
     QSizePolicy,
@@ -21,6 +20,7 @@ from ..settings import settings
 from . import theme
 from .control import ControlListWidget
 from .widget import (
+    AccentProgressBar,
     ErrorBox,
     QueueButton,
     StrengthWidget,
@@ -48,10 +48,8 @@ class AnimationWidget(QWidget):
         self.workspace_select = WorkspaceSelectWidget(self)
         self.style_select = StyleSelectWidget(self, show_quality=True)
 
-        style_layout = QHBoxLayout()
-        style_layout.addWidget(self.workspace_select)
-        style_layout.addWidget(self.style_select)
-        layout.addLayout(style_layout)
+        layout.addWidget(self.workspace_select)
+        layout.addWidget(self.style_select)
 
         self.prompt_textbox = TextPromptWidget(parent=self)
         self.prompt_textbox.line_count = settings.prompt_line_count
@@ -86,6 +84,8 @@ class AnimationWidget(QWidget):
         layout.addLayout(mode_layout)
 
         self.generate_button = QPushButton(self)
+        self.generate_button.setStyleSheet(theme.primary_button_stylesheet)
+        self.generate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.generate_button.setMinimumHeight(int(self.generate_button.sizeHint().height() * 1.2))
 
         self.queue_button = QueueButton(parent=self, supports_batch=False)
@@ -96,11 +96,9 @@ class AnimationWidget(QWidget):
         actions_layout.addWidget(self.queue_button)
         layout.addLayout(actions_layout)
 
-        self.progress_bar = QProgressBar(self)
+        self.progress_bar = AccentProgressBar(self)
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(6)
         layout.addWidget(self.progress_bar)
 
         self.error_box = ErrorBox(self)

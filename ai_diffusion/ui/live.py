@@ -211,8 +211,9 @@ class LiveWidget(QWidget):
 
         self.style_select = StyleSelectWidget(self)
 
+        layout.addWidget(self.workspace_select)
+
         controls_layout = QHBoxLayout()
-        controls_layout.addWidget(self.workspace_select)
         controls_layout.addWidget(self.active_button)
         controls_layout.addWidget(self.record_button)
         controls_layout.addWidget(self.apply_button)

@@ -16,6 +16,8 @@ from ..qt.QtWidgets import QApplication, QDoubleSpinBox, QLineEdit, QWidget
 from ..util import client_logger as log
 from ..util import ensure
 
+_bar_color = "#ff8a5c"  # brand accent (theme.accent), not imported: theme needs a QApplication
+
 
 def spin_box(widget: QWidget | None) -> QDoubleSpinBox | None:
     if widget is None:
@@ -113,8 +115,8 @@ class _SliderSpinBox(QDoubleSpinBox):
             return
         rect = QRectF(self._line_edit().geometry()).adjusted(-1, -1, 1, 1)
         rect.setWidth(rect.width() * ratio)
-        color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
-        color.setAlpha(110 if self.isEnabled() else 45)
+        color = QColor(_bar_color)
+        color.setAlpha(120 if self.isEnabled() else 45)
         painter = QPainter(self)
         painter.fillRect(rect, color)
 

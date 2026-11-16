@@ -12,7 +12,6 @@ from ..qt.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QSlider,
     QSpinBox,
     QVBoxLayout,
@@ -23,6 +22,7 @@ from .settings_widgets import WarningIcon
 from .switch import SwitchWidget
 from .theme import SignalBlocker, set_text_clipped
 from .widget import (
+    AccentProgressBar,
     ErrorBox,
     GenerateButton,
     QueueButton,
@@ -125,10 +125,8 @@ class UpscaleWidget(QWidget):
 
         self.workspace_select = WorkspaceSelectWidget(self)
         self.model_select = QComboBox(self)
-        model_layout = QHBoxLayout()
-        model_layout.addWidget(self.workspace_select)
-        model_layout.addWidget(self.model_select)
-        layout.addLayout(model_layout)
+        layout.addWidget(self.workspace_select)
+        layout.addWidget(self.model_select)
 
         self.factor_widget = FactorWidget(self)
         self.factor_widget.value_changed.connect(self._update_factor)
@@ -197,11 +195,9 @@ class UpscaleWidget(QWidget):
         actions_layout.addWidget(self.queue_button)
         layout.addLayout(actions_layout)
 
-        self.progress_bar = QProgressBar(self)
+        self.progress_bar = AccentProgressBar(self)
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(6)
         layout.addWidget(self.progress_bar)
 
         self.error_box = ErrorBox(self)

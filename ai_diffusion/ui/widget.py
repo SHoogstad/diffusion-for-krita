@@ -23,7 +23,7 @@ from ..model.model import (
 )
 from ..model.properties import Bind, Binding, bind, bind_combo
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QSize, Qt, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QRectF, QSize, Qt, pyqtSignal
 from ..qt.QtGui import (
     QCloseEvent,
     QColor,
@@ -42,7 +42,6 @@ from ..qt.QtGui import (
     QTextCursor,
 )
 from ..qt.QtWidgets import (
-    QAction,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -52,6 +51,7 @@ from ..qt.QtWidgets import (
     QLabel,
     QMenu,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollBar,
     QSizePolicy,
@@ -872,7 +872,71 @@ class LayerCountWidget(QWidget):
         self._update()
 
 
-class WorkspaceSelectWidget(QToolButton):
+class WorkspaceTab(QToolButton):
+    """One workspace in the tab strip. The active tab shows its name, the others only an icon."""
+
+    def __init__(self, workspace: Workspace, icon: QIcon, text: str, parent: QWidget):
+        super().__init__(parent)
+        self.workspace = workspace
+        self._icon = icon
+        self._text = text
+        font = self.font()
+        font.setBold(True)
+        self.setFont(font)
+        self.setCheckable(True)
+        self.setToolTip(text)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+    def _icon_size(self):
+        return self.fontMetrics().height() + 2
+
+    def sizeHint(self) -> QSize:
+        fm = self.fontMetrics()
+        height = fm.height() + 12
+        width = self._icon_size() + 14
+        if self.isChecked():
+            width += fm.horizontalAdvance(self._text) + 6
+        return QSize(width, height)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, a0):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        is_hover = self.underMouse() and self.isEnabled()
+        painter.setPen(Qt.PenStyle.NoPen)
+        if self.isChecked():
+            painter.setBrush(QColor(theme.base))
+            painter.drawRoundedRect(rect, theme.radius, theme.radius)
+            bar = QRectF(rect.left() + 7, rect.bottom() - 2.5, rect.width() - 14, 2)
+            painter.setBrush(theme.accent_gradient(bar))
+            painter.drawRoundedRect(bar, 1, 1)
+        elif is_hover:
+            painter.setBrush(QColor(theme.line))
+            painter.drawRoundedRect(rect, theme.radius, theme.radius)
+
+        size = self._icon_size()
+        ratio = self.devicePixelRatioF() or 1.0
+        pixmap = self._icon.pixmap(int(size * ratio))
+        icon_rect = QRectF(7, (self.height() - size) / 2 - 1, size, size)
+        painter.setOpacity(1.0 if self.isChecked() else (0.9 if is_hover else 0.55))
+        painter.drawPixmap(icon_rect, pixmap, QRectF(pixmap.rect()))
+        if self.isChecked():
+            painter.setOpacity(1.0)
+            painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+            text_rect = QRectF(self.rect()).adjusted(7 + size + 6, -1, -4, -1)
+            align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            painter.drawText(text_rect, align, self._text)
+
+
+class WorkspaceSelectWidget(QWidget):
+    """Tab strip to switch between workspaces. All of them are visible at once."""
+
     _icons: ClassVar[dict[Workspace, QIcon]] = {
         Workspace.generation: theme.icon("workspace-generation"),
         Workspace.upscaling: theme.icon("workspace-upscaling"),
@@ -885,25 +949,24 @@ class WorkspaceSelectWidget(QToolButton):
 
     def __init__(self, parent):
         super().__init__(parent)
-
-        menu = QMenu(self)
-        menu.addAction(self._create_action(_("Generate"), Workspace.generation))
-        menu.addAction(self._create_action(_("Upscale"), Workspace.upscaling))
-        menu.addAction(self._create_action(_("Live"), Workspace.live))
-        menu.addAction(self._create_action(_("Animation"), Workspace.animation))
-        menu.addAction(self._create_action(_("Graph"), Workspace.custom))
-
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        self.setMenu(menu)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.setToolTip(
-            _("Switch between workspaces: image generation, upscaling, live preview and animation.")
-        )
-        self.setMinimumWidth(int(self.sizeHint().width() * 1.6))
+        names = {
+            Workspace.generation: _("Generate"),
+            Workspace.upscaling: _("Upscale"),
+            Workspace.live: _("Live"),
+            Workspace.animation: _("Animation"),
+            Workspace.custom: _("Graph"),
+        }
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        self._tabs: list[WorkspaceTab] = []
+        for workspace, name in names.items():
+            tab = WorkspaceTab(workspace, self._icons[workspace], name, self)
+            tab.clicked.connect(self._activate(workspace))
+            layout.addWidget(tab)
+            self._tabs.append(tab)
+        layout.addStretch()
         self.value = Workspace.generation
-
-    def paintEvent(self, a0):
-        _paint_tool_drop_down(self)
 
     @property
     def value(self):
@@ -912,14 +975,18 @@ class WorkspaceSelectWidget(QToolButton):
     @value.setter
     def value(self, workspace: Workspace):
         self._value = workspace
-        self.setIcon(self._icons[workspace])
+        for tab in self._tabs:
+            tab.setChecked(tab.workspace is workspace)
+            tab.updateGeometry()
 
-    def _create_action(self, name: str, workspace: Workspace):
-        action = QAction(name, self)
-        action.setIcon(self._icons[workspace])
-        action.setIconVisibleInMenu(True)
-        action.triggered.connect(actions.set_workspace(workspace))
-        return action
+    def _activate(self, workspace: Workspace):
+        switch = actions.set_workspace(workspace)
+
+        def handler():
+            self.value = self._value  # the tab follows the model, not the click
+            switch()
+
+        return handler
 
 
 def _get_width_dip(s: QPaintDevice):
@@ -939,6 +1006,10 @@ class GenerateButton(QPushButton):
         self._kind = kind
         self._seed_icon = theme.icon("seed")
         self._resolution_icon = theme.icon("resolution-multiplier")
+        font = self.font()
+        font.setBold(True)
+        self.setFont(font)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
     @property
@@ -967,44 +1038,86 @@ class GenerateButton(QPushButton):
             super().mouseReleaseEvent(e)
 
     def paintEvent(self, a0: QPaintEvent | None) -> None:
-        opt = QStyleOption()
-        opt.initFrom(self)
-        opt.state |= QStyle.StateFlag.State_Sunken if self.isDown() else QStyle.StateFlag(0)
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         fm = self.fontMetrics()
-        style = ensure(self.style())
-        align = (
-            Qt.AlignmentFlag.AlignLeft
-            | Qt.AlignmentFlag.AlignVCenter
-            | Qt.AlignmentFlag.AlignAbsolute
-        )
-        rect = self.rect()
-        pixmap = self.icon().pixmap(int(fm.height() * 1.3))
-        pixmap_width = _get_width_dip(pixmap)
-        is_hover = opt.state & QStyle.StateFlag.State_MouseOver
-        element = QStyle.PrimitiveElement.PE_PanelButtonCommand
-        content_width = fm.horizontalAdvance(self._operation) + 5 + pixmap_width
-        content_rect = rect.adjusted(int(0.5 * (rect.width() - content_width)), 0, 0, 0)
-        style.drawPrimitive(element, opt, painter, self)
-        style.drawItemPixmap(painter, content_rect, align, pixmap)
-        content_rect = content_rect.adjusted(pixmap_width + 5, 0, 0, 0)
-        style.drawItemText(painter, content_rect, align, self.palette(), True, self._operation)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        is_enabled = self.isEnabled()
+        is_hover = self.underMouse() and is_enabled
 
-        cost_width = 0
+        # the one filled, warm button of the docker
+        painter.setPen(Qt.PenStyle.NoPen)
+        if is_enabled:
+            painter.setBrush(theme.accent_gradient(rect))
+        else:
+            painter.setBrush(QColor(theme.line))
+        painter.drawRoundedRect(rect, theme.radius, theme.radius)
+        if self.isDown():
+            painter.setBrush(QColor(0, 0, 0, 40))
+            painter.drawRoundedRect(rect, theme.radius, theme.radius)
+        elif is_hover:
+            painter.setBrush(QColor(255, 255, 255, 50))
+            painter.drawRoundedRect(rect, theme.radius, theme.radius)
 
-        seed_width = 0
+        color = QColor(theme.accent_text if is_enabled else theme.grey)
+        ratio = self.devicePixelRatioF() or 1.0
+
+        def draw_icon(icon: QIcon, size: float, x: float):
+            pixmap = theme.tinted(icon.pixmap(int(size * ratio)), color)
+            target = QRectF(x, (self.height() - size) / 2, size, size)
+            painter.drawPixmap(target, pixmap, QRectF(pixmap.rect()))
+
+        icon_size = 0.0 if self.icon().isNull() else fm.height() * 1.2
+        gap = 6 if icon_size else 0
+        content_width = fm.horizontalAdvance(self._operation) + gap + icon_size
+        x = max(6.0, 0.5 * (self.width() - content_width))
+        if icon_size:
+            draw_icon(self.icon(), icon_size, x)
+        painter.setPen(color)
+        text_rect = QRectF(self.rect()).adjusted(x + icon_size + gap, 0, 0, 0)
+        align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        painter.drawText(text_rect, align, self._operation)
+
+        # hints on hover: fixed seed and resolution multiplier are active
+        hint_size = float(fm.height())
+        hint_x = self.width() - hint_size - 8
         if is_hover and self.model.fixed_seed:
-            pixmap = self._seed_icon.pixmap(fm.height())
-            seed_width = pixmap_width + 4
-            seed_rect = rect.adjusted(rect.width() - cost_width - seed_width, 0, 0, 0)
-            style.drawItemPixmap(painter, seed_rect, align, pixmap)
-
+            draw_icon(self._seed_icon, hint_size, hint_x)
+            hint_x -= hint_size + 4
         if is_hover and self.model.resolution_multiplier != 1:
-            pixmap = self._resolution_icon.pixmap(fm.height())
-            resolution_rect = rect.adjusted(
-                rect.width() - cost_width - seed_width - pixmap_width - 4, 0, 0, 0
-            )
-            style.drawItemPixmap(painter, resolution_rect, align, pixmap)
+            draw_icon(self._resolution_icon, hint_size, hint_x)
+
+
+class AccentProgressBar(QProgressBar):
+    """A slim, rounded progress line filled with the brand gradient."""
+
+    alt_color: str | None = None  # plain color instead of the gradient (eg. while uploading)
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setTextVisible(False)
+        self.setFixedHeight(5)
+
+    def paintEvent(self, a0):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        rect = QRectF(self.rect())
+        radius = rect.height() / 2
+        painter.setBrush(QColor(theme.line_base))
+        painter.drawRoundedRect(rect, radius, radius)
+        span = self.maximum() - self.minimum()
+        if span <= 0 or self.value() <= self.minimum():
+            return
+        ratio = min(1.0, (self.value() - self.minimum()) / span)
+        fill = QRectF(rect)
+        fill.setWidth(max(rect.height(), rect.width() * ratio))
+        if self.alt_color:
+            painter.setBrush(QColor(self.alt_color))
+        else:
+            painter.setBrush(theme.accent_gradient(rect, cool_end=True))
+        painter.drawRoundedRect(fill, radius, radius)
 
 
 class ErrorBox(QFrame):
@@ -1039,7 +1152,9 @@ class ErrorBox(QFrame):
         self._copy_button.setVisible(False)
         self._label.setStyleSheet(f"color: {color};")
         if color == theme.red:
-            self.setStyleSheet("QFrame#errorBox { border: 1px solid #a01020; }")
+            self.setStyleSheet(
+                f"QFrame#errorBox {{ border: 1px solid #a01020; border-radius: {theme.radius}px; }}"
+            )
         else:
             self.setStyleSheet(None)
         self.setVisible(False)
