@@ -954,8 +954,8 @@ class WorkspaceTab(QToolButton):
             painter.setBrush(QColor(theme.base))
             painter.drawRoundedRect(rect, theme.radius, theme.radius)
             bar = QRectF(rect.left() + 7, rect.bottom() - 2.5, rect.width() - 14, 2)
-            painter.setBrush(theme.accent_gradient(bar))
-            painter.drawRoundedRect(bar, 1, 1)
+            theme.paint_flag_bar(painter, bar)
+            painter.setPen(Qt.PenStyle.NoPen)
         elif is_hover:
             painter.setBrush(QColor(theme.line))
             painter.drawRoundedRect(rect, theme.radius, theme.radius)
@@ -1113,7 +1113,7 @@ class GenerateButton(QPushButton):
                 step=5,
                 seed=5,
                 opacity=0.95,
-                color=QColor(theme.accent_cool),
+                color=QColor(theme.accent_white),
                 reverse=True,
             )
             painter.restore()
@@ -1155,7 +1155,7 @@ class GenerateButton(QPushButton):
 
 
 class ChipToggle(QCheckBox):
-    """A checkbox drawn as a pill: outlined when off, filled with the accent when on."""
+    """A checkbox drawn as a pill: outlined when off, filled blue when on."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -1181,7 +1181,7 @@ class ChipToggle(QCheckBox):
         painter.setOpacity(1.0 if self.isEnabled() else 0.45)
         if self.isChecked():
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(theme.accent_gradient(rect))
+            painter.setBrush(QColor(theme.blue_fill))
             painter.drawRoundedRect(rect, radius, radius)
             text_color = QColor(theme.accent_text)
         else:
@@ -1193,7 +1193,7 @@ class ChipToggle(QCheckBox):
         painter.setPen(text_color)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.text())
         if self.hasFocus() and not self.isChecked():
-            painter.setPen(QPen(QColor(theme.accent), 1))
+            painter.setPen(QPen(QColor(theme.accent_cool), 1))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect, radius, radius)
 

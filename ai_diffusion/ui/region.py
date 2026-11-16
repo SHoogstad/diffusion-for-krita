@@ -108,7 +108,7 @@ class PromptHeader(Enum):
 
 class ActiveRegionWidget(QFrame):
     _style_base = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
-    _style_focus = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.accent}; border-radius: {theme.radius}px; }}"
+    _style_focus = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.accent_cool}; border-radius: {theme.radius}px; }}"
 
     focused = pyqtSignal()
 

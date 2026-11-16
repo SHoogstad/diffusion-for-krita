@@ -35,18 +35,22 @@ green = "#30b030" if is_dark else "#209020"
 yellow = "#c0c030" if is_dark else "#706020"
 red = "#d07a40" if is_dark else "#c07630"
 grey = "#888888" if is_dark else "#666666"
-highlight = "#7ee0d0" if is_dark else "#1c7a6d"
-strong_highlight = "#ffc857" if is_dark else "#b4540f"
+highlight = "#8db4f7" if is_dark else "#21468b"
+strong_highlight = "#f4626c" if is_dark else "#ae1c28"
 progress_alt = "#a16207" if is_dark else "#ca8a04"
 active = _palette.color(QPalette.ColorRole.Highlight).name()
 line = _palette.color(QPalette.ColorRole.Window).darker(120).name()
 line_base = _palette.color(QPalette.ColorRole.Base).darker(120).name()
 
-# Brand colors, taken from the logo: a warm stroke (coral to amber) that dissolves into mint.
-accent = "#ff8a5c" if is_dark else "#ee6f3c"
-accent_warm = "#ffc857" if is_dark else "#f2a52c"
-accent_cool = "#7ee0d0" if is_dark else "#1f9e8c"
-accent_text = "#2a1f45"  # text and icons on top of the warm accent
+# Brand colors: red, white and blue, after the Dutch flag (#ae1c28, #ffffff, #21468b).
+# Dark themes get brighter red and blue so they keep their contrast.
+accent = "#e5343f" if is_dark else "#ae1c28"  # red: the primary action
+accent_warm = "#f25560" if is_dark else "#c7303b"  # red, lit (hover, end of a red fill)
+accent_cool = "#6c9bf0" if is_dark else "#21468b"  # blue: state that is on, focus, links
+accent_white = "#ffffff"
+accent_text = "#ffffff"  # text and icons on top of red or blue
+flag_blue = "#21468b"
+blue_fill = "#2f5fc4" if is_dark else flag_blue  # blue ground under white text
 radius = 5
 
 primary_button_stylesheet = f"""
@@ -142,11 +146,11 @@ def checkpoint_icon(arch: Arch, format: FileFormat | None = None, client: Client
 
 
 def accent_gradient(rect: QRectF, cool_end=False):
-    """The brand gradient across `rect`: coral to amber, optionally running on into mint."""
+    """The red fill across `rect`, or with `cool_end` the whole flag: red, white, blue."""
     gradient = QLinearGradient(QPointF(rect.left(), 0), QPointF(rect.right(), 0))
     gradient.setColorAt(0, QColor(accent))
     if cool_end:
-        gradient.setColorAt(0.6, QColor(accent_warm))
+        gradient.setColorAt(0.5, QColor(accent_white))
         gradient.setColorAt(1, QColor(accent_cool))
     else:
         gradient.setColorAt(1, QColor(accent_warm))
@@ -154,8 +158,8 @@ def accent_gradient(rect: QRectF, cool_end=False):
 
 
 def accent_at(t: float):
-    """Color of the brand stroke at position t: coral (0), amber (0.5), mint (1)."""
-    a, b, c = QColor(accent), QColor(accent_warm), QColor(accent_cool)
+    """Color of the brand stroke at position t: red (0), white (0.5), blue (1)."""
+    a, b, c = QColor(accent), QColor(accent_white), QColor(accent_cool)
     lo, hi, f = (a, b, t * 2) if t < 0.5 else (b, c, t * 2 - 1)
     f = min(max(f, 0.0), 1.0)
     return QColor(
@@ -193,7 +197,7 @@ def paint_dissolve(
             pos = 1 - t if reverse else t
             x = rect.left() + (rect.width() - step) * pos + step / 2
             y = top + row * step + (step / 2 if col % 2 else 0) - step / 4
-            dot = QColor(color) if color else accent_at(0.3 + 0.7 * t)
+            dot = QColor(color) if color else accent_at(t)
             dot.setAlphaF(opacity * (0.35 + 0.65 * (1 - t)))
             painter.setBrush(dot)
             painter.drawEllipse(QPointF(x, y), radius, radius)
@@ -284,6 +288,20 @@ def paint_workspace_glyph(painter: QPainter, rect: QRectF, name: str, color: QCo
     painter.restore()
 
 
+def paint_flag_bar(painter: QPainter, rect: QRectF):
+    """A small tricolor: red, white and blue side by side."""
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    clip = QPainterPath()
+    clip.addRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+    painter.setClipPath(clip)
+    third = rect.width() / 3
+    for i, color in enumerate((accent, accent_white, accent_cool)):
+        part = QRectF(rect.left() + i * third, rect.top(), third + 0.5, rect.height())
+        painter.fillRect(part, QColor(color))
+    painter.restore()
+
+
 def tinted(pixmap: QPixmap, color: str | QColor):
     """A copy of `pixmap` with every visible pixel painted in `color` (alpha is kept)."""
     result = QPixmap(pixmap)
@@ -308,8 +326,8 @@ class AccentLine(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(accent_gradient(rect, cool_end=True))
         painter.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+        paint_flag_bar(painter, rect)
 
 
 class BrandBanner(QWidget):
@@ -328,8 +346,8 @@ class BrandBanner(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         rect = QRectF(self.rect())
         ground = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        ground.setColorAt(0, QColor("#1d3b53"))
-        ground.setColorAt(1, QColor("#2a1f45"))
+        ground.setColorAt(0, QColor(flag_blue))
+        ground.setColorAt(1, QColor("#14294f"))
         card = QPainterPath()
         card.addRoundedRect(rect, 10, 10)
         painter.fillPath(card, ground)
@@ -350,13 +368,13 @@ class BrandBanner(QWidget):
         painter.drawText(title_rect, align, "Diffusion")
         title_width = QFontMetrics(title_font).horizontalAdvance("Diffusion")
         painter.setFont(self.font())
-        painter.setPen(QColor("#9fc4cf"))
+        painter.setPen(QColor("#c9d6ee"))
         painter.drawText(QRectF(text_x, 46, rect.width() - text_x, 22), align, self._subtitle)
 
         subtitle_width = QFontMetrics(self.font()).horizontalAdvance(self._subtitle)
         dots_left = text_x + max(title_width, subtitle_width) + 18
         if rect.width() - dots_left > 40:
-            dots = QRectF(dots_left, 0, rect.width() - dots_left, rect.height())
+            dots = QRectF(dots_left, 0, min(rect.width() - dots_left, 300), rect.height())
             paint_dissolve(painter, dots, step=8, seed=11, opacity=0.9)
 
 

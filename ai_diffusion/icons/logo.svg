@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d3b53"/>
-      <stop offset="1" stop-color="#2a1f45"/>
+      <stop offset="0" stop-color="#21468b"/>
+      <stop offset="1" stop-color="#14294f"/>
     </linearGradient>
     <linearGradient id="stroke" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#ff8a5c"/>
-      <stop offset="0.55" stop-color="#ffc857"/>
-      <stop offset="1" stop-color="#7ee0d0"/>
+      <stop offset="0" stop-color="#e5343f"/>
+      <stop offset="0.55" stop-color="#f6a3a8"/>
+      <stop offset="1" stop-color="#ffffff"/>
     </linearGradient>
   </defs>
   <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bg)"/>
   <!-- brush stroke, solid at the start -->
   <path d="M22 98 C 34 70, 52 58, 72 52" fill="none" stroke="url(#stroke)" stroke-width="15" stroke-linecap="round"/>
   <!-- the stroke dissolving into noise -->
-  <g fill="#7ee0d0">
+  <g fill="#ffffff">
     <circle cx="82" cy="47" r="6.5"/>
     <circle cx="92" cy="40" r="5.2" opacity="0.9"/>
     <circle cx="86" cy="33" r="3.6" opacity="0.8"/>

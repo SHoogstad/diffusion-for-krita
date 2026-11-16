@@ -2,7 +2,7 @@
 from https://stackoverflow.com/a/51825815
 """
 
-from ..qt.QtCore import QPropertyAnimation, QRectF, QSize, Qt, pyqtProperty  # type: ignore
+from ..qt.QtCore import QPropertyAnimation, QSize, Qt, pyqtProperty  # type: ignore
 from ..qt.QtGui import QBrush, QColor, QPainter
 from ..qt.QtWidgets import QAbstractButton, QSizePolicy
 from . import theme
@@ -62,7 +62,7 @@ class SwitchWidget(QAbstractButton):
         thumb_opacity = 1.0
         if self.isEnabled():
             if self.isChecked():
-                track_brush = QBrush(theme.accent_gradient(QRectF(self.rect())))
+                track_brush = QBrush(QColor(theme.blue_fill))
                 thumb_brush = QBrush(QColor(theme.accent_text))
             else:
                 track_brush = palette.dark()

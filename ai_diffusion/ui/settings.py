@@ -24,12 +24,14 @@ from ..qt.QtGui import (
     QFontMetrics,
     QGuiApplication,
     QPainter,
+    QPalette,
 )
 from ..qt.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -58,6 +60,7 @@ from ..settings import (
     settings,
 )
 from ..style import Style
+from . import theme
 from .server import ServerWidget
 from .settings_widgets import (
     ComboBoxSetting,
@@ -69,7 +72,7 @@ from .settings_widgets import (
     TextSetting,
 )
 from .style import StylePresets
-from .theme import add_header, green, grey, logo, prompt_max_line_count, red, yellow
+from .theme import add_header, green, grey, prompt_max_line_count, red, yellow
 
 
 class InitialSetupWidget(QWidget):
@@ -1226,15 +1229,8 @@ class AboutSettings(SettingsTab):
         italic = self.font()
         italic.setItalic(True)
 
-        header_layout = QHBoxLayout()
-        header_logo = QLabel(self)
+        header = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
         font_height = QFontMetrics(extra_large).height() + 4
-        header_logo.setPixmap(logo().scaled(font_height * 2, font_height * 2))
-        header_logo.setMaximumSize(font_height * 2, font_height * 2)
-        header_text = QLabel("Generative AI\nfor Krita", self)
-        header_text.setFont(extra_large)
-        header_layout.addWidget(header_logo)
-        header_layout.addWidget(header_text)
 
         current_version_name = QLabel(_("Current version") + ":", self)
         current_version_value = QLabel(__release__, self)
@@ -1283,7 +1279,7 @@ class AboutSettings(SettingsTab):
         doc_contact = QLabel(_contact_text, self)
         doc_contact.setOpenExternalLinks(True)
 
-        self._layout.addLayout(header_layout)
+        self._layout.addWidget(header)
         self._layout.addSpacing(10)
         current_version_layout = QHBoxLayout()
         current_version_layout.addWidget(current_version_name)
@@ -1430,6 +1426,11 @@ class SettingsDialog(QDialog):
             self.resize(QSize(min_w, int(size.height() * 0.8)))
         self.setMinimumSize(min_size)
 
+        palette = self.palette()  # links in the brand blue instead of the default
+        palette.setColor(QPalette.ColorRole.Link, QColor(theme.accent_cool))
+        palette.setColor(QPalette.ColorRole.LinkVisited, QColor(theme.accent_cool))
+        self.setPalette(palette)
+
         layout = QHBoxLayout()
         self.setLayout(layout)
 
@@ -1461,9 +1462,23 @@ class SettingsDialog(QDialog):
             self._stack.addWidget(widget)
         self._list.setFixedWidth(max(120, text_width + 32))
 
+        self._list.setFrameShape(QFrame.Shape.NoFrame)
+        self._list.setStyleSheet(
+            f"""
+            QListWidget {{ background: transparent; outline: none; }}
+            QListWidget::item {{ border-radius: {theme.radius}px; padding-left: 8px; margin: 1px 0; }}
+            QListWidget::item:hover {{ background: {theme.line}; }}
+            QListWidget::item:selected {{
+                background: {theme.blue_fill}; color: {theme.accent_text}; font-weight: bold;
+            }}
+            """
+        )
         self._list.setCurrentRow(0)
         self._list.currentRowChanged.connect(self._change_page)
-        layout.addWidget(self._list)
+        side = QVBoxLayout()
+        side.addWidget(self._list, 1)
+        side.addWidget(theme.AccentLine(self, height=4))
+        layout.addLayout(side)
 
         inner = QVBoxLayout()
         layout.addLayout(inner)
@@ -1482,6 +1497,7 @@ class SettingsDialog(QDialog):
         self._open_folder_link.setToolTip(str(util.user_data_dir))
 
         self._close_button = QPushButton(_("Ok"), self)
+        self._close_button.setStyleSheet(theme.primary_button_stylesheet)
         self._close_button.clicked.connect(self._close)
 
         button_layout = QHBoxLayout()
