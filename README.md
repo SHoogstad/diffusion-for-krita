@@ -55,9 +55,9 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 
 The docker has its own look. Pick it in *Configure ▸ Interface ▸ Look*; a change applies right away:
 
-* **Country** (default): the colors and flag of your country, detected from the system or picked
-  from the list.
-* **Plain**: one color of your choice.
+* **Plain** (default): one color, orange unless you pick another.
+* **Country**: the colors and flag of your country, from the region setting of your system
+  (Windows: *Country or region*) or picked from the list.
 * **Legacy**: the interface as it was before the redesign (v1.65.0 and earlier): Krita's own
   widgets, the workspace drop-down and the original icons.
 
