@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from typing import ClassVar
 
 import krita
 from krita import DockWidget, Krita
 
-from .. import eventloop
+from .. import __release__, eventloop
 from ..backend.server import Server, ServerState
 from ..document import KritaDocument
 from ..localization import translate as _
 from ..model.connection import ConnectionState
 from ..model.model import DocumentModel, Workspace
+from ..model.properties import Binding
 from ..model.root import root
 from ..model.updates import UpdateState
+from ..qt import sip
 from ..qt.QtCore import Qt, pyqtSignal
+from ..qt.QtGui import QIcon
 from ..qt.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -24,6 +29,7 @@ from ..qt.QtWidgets import (
     QWidget,
 )
 from ..settings import ServerMode, settings
+from ..util import client_logger as log
 from . import theme
 from .animation import AnimationWidget
 from .custom_workflow import CustomWorkflowWidget
@@ -46,6 +52,7 @@ class AutoUpdateWidget(QWidget):
         self._update_checkbox.stateChanged.connect(self._toggle_auto_update)
 
         self._update_button = QPushButton(_("Download and Install"), self)
+        self._update_button.setStyleSheet(theme.primary_button_stylesheet)
         self._update_button.setMinimumHeight(32)
         self._update_button.clicked.connect(self._run_update)
 
@@ -83,8 +90,16 @@ class AutoUpdateWidget(QWidget):
                 self._update_status.setText(_("Update failed"))
                 self._update_error.setText(au.error)
                 self._update_button.setEnabled(True)
+            case UpdateState.reloading:
+                self._update_status.setText(
+                    _("Loading the new version (after the running generation)...")
+                    if any(m.jobs.any_executing() for m in root.models)
+                    else _("Loading the new version...")
+                )
+                self._update_button.setEnabled(False)
             case UpdateState.restart_required:
                 self._update_status.setText(_("Please restart Krita to complete the update!"))
+                self._update_error.setText(au.error)
                 self._update_button.setEnabled(False)
 
         self.setVisible(self.is_visible)
@@ -112,14 +127,24 @@ class ConnectionWidget(QWidget):
         self._server = server
 
         self._connect_status = QLabel(_("Not connected to server."), self)
+        if not theme.legacy:
+            self._connect_status.setWordWrap(True)
+            self._connect_status.setTextFormat(Qt.TextFormat.RichText)
 
         self._connect_error = QLabel(self)
         self._connect_error.setVisible(False)
         self._connect_error.setWordWrap(True)
         self._connect_error.setStyleSheet(f"color: {theme.yellow};")
 
-        self._settings_button = QPushButton(theme.icon("settings"), _("Configure"), self)
-        self._settings_button.setMinimumHeight(32)
+        if theme.legacy:
+            self._settings_button = QPushButton(theme.icon("settings"), _("Configure"), self)
+            self._settings_button.setMinimumHeight(32)
+        else:
+            settings_icon = theme.tinted(theme.icon("settings").pixmap(64), theme.accent_text)
+            self._settings_button = QPushButton(QIcon(settings_icon), _("Configure"), self)
+            self._settings_button.setStyleSheet(theme.primary_button_stylesheet)
+            self._settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._settings_button.setMinimumHeight(34)
         self._settings_button.clicked.connect(self.show_settings)
 
         layout = QVBoxLayout()
@@ -133,10 +158,20 @@ class ConnectionWidget(QWidget):
         root.connection.pod_status_changed.connect(self.update_content)
         self.update_content()
 
+    def _set_status(self, text: str, color: str):
+        if theme.legacy:  # plain text, no colored dot
+            self._connect_status.setTextFormat(Qt.TextFormat.PlainText)
+            self._connect_status.setText(text)
+            return
+        text = text.replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>")
+        self._connect_status.setText(f"<span style='color:{color}'>\u25cf</span>&nbsp; {text}")
+
     def update_content(self):
         connection = root.connection
-        if connection.state in [ConnectionState.disconnected, ConnectionState.error]:
-            self._connect_status.setText(_("Not connected to server."))
+        if connection.state is ConnectionState.disconnected:
+            self._set_status(_("Not connected to server."), theme.grey)
+        if connection.state is ConnectionState.error:
+            self._set_status(_("Not connected to server."), theme.red)
         if connection.state is ConnectionState.error:
             self._connect_error.setText(
                 _("Connection attempt failed! Click below to configure and reconnect.")
@@ -156,19 +191,20 @@ class ConnectionWidget(QWidget):
                 )
             self._connect_error.setVisible(True)
         if connection.state is ConnectionState.pod_starting:
-            self._connect_status.setText(connection.pod_status or _("Starting Runpod pod..."))
+            self._set_status(connection.pod_status or _("Starting Runpod pod..."), theme.yellow)
             self._connect_error.setVisible(False)
         if connection.state is ConnectionState.connecting:
-            self._connect_status.setText(_("Connecting to server..."))
+            self._set_status(_("Connecting to server..."), theme.yellow)
         if connection.state is ConnectionState.discover_models:
             progress = f" ({connection.progress[0]}/{connection.progress[1]})"
-            self._connect_status.setText(_("Discovering models") + progress)
+            self._set_status(_("Discovering models") + progress, theme.yellow)
         if connection.state is ConnectionState.connected:
-            self._connect_status.setText(
+            self._set_status(
                 _(
                     "Connected to server at {url}.\n\nCreate a new document or open an existing image to start!",
                     url=connection.client.url,
-                )
+                ),
+                theme.green,
             )
             self._connect_error.setVisible(False)
 
@@ -188,6 +224,7 @@ class NewsWidget(QWidget):
         self._news_text.setOpenExternalLinks(True)
 
         self._ok_button = QPushButton(_("Ok"), self)
+        self._ok_button.setStyleSheet(theme.primary_button_stylesheet)
         self._ok_button.setMinimumHeight(32)
         self._ok_button.clicked.connect(self._mark_news_seen)
 
@@ -225,14 +262,20 @@ class WelcomeWidget(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        header_layout = QHBoxLayout()
-        header_logo = QLabel(self)
-        header_logo.setPixmap(theme.logo().scaled(64, 64))
-        header_logo.setMaximumSize(64, 64)
-        header_text = QLabel("Diffusion\nfor Krita", self)
-        header_text.setStyleSheet("font-size: 12pt")
-        header_layout.addWidget(header_logo)
-        header_layout.addWidget(header_text)
+        if theme.legacy:
+            banner = QWidget(self)
+            header_layout = QHBoxLayout(banner)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_logo = QLabel(banner)
+            header_logo.setPixmap(theme.logo().scaled(64, 64))
+            header_logo.setMaximumSize(64, 64)
+            header_text = QLabel("Diffusion\nfor Krita", banner)
+            header_text.setStyleSheet("font-size: 12pt")
+            header_layout.addWidget(header_logo)
+            header_layout.addWidget(header_text)
+        else:
+            layout.setContentsMargins(14, 14, 14, 10)
+            banner = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
 
         self._update_widget = AutoUpdateWidget(self)
         self._news_widget = NewsWidget(self)
@@ -240,22 +283,43 @@ class WelcomeWidget(QWidget):
         self._news_widget.accepted.connect(self.accepted)
         self._connection_widget = ConnectionWidget(server, self)
 
-        info = QLabel(
-            "<a href='https://github.com/SHoogstad/diffusion-for-krita'>GitHub Project</a> | "
-            + "<a href='https://github.com/SHoogstad/diffusion-for-krita#readme'>Documentation</a> | "
-            + "<a href='https://github.com/SHoogstad/diffusion-for-krita/issues'>Issues</a>",
-            self,
-        )
+        repo = "https://github.com/SHoogstad/diffusion-for-krita"
+        if theme.legacy:
+            info = QLabel(
+                f"<a href='{repo}'>GitHub Project</a> | "
+                + f"<a href='{repo}#readme'>Documentation</a> | "
+                + f"<a href='{repo}/issues'>Issues</a>",
+                self,
+            )
+        else:
+            link = f"style='color: {theme.accent_cool}; text-decoration: none;'"
+            separator = f" <span style='color: {theme.grey};'>&nbsp;\u00b7&nbsp;</span> "
+            info = QLabel(
+                separator.join([
+                    f"<a {link} href='{repo}'>GitHub</a>",
+                    f"<a {link} href='{repo}#readme'>Documentation</a>",
+                    f"<a {link} href='{repo}/issues'>Issues</a>",
+                ]),
+                self,
+            )
         info.setOpenExternalLinks(True)
 
-        layout.addLayout(header_layout)
-        layout.addSpacing(12)
-        layout.addWidget(self._update_widget)
-        layout.addWidget(self._news_widget)
-        layout.addWidget(self._connection_widget)
-        layout.addSpacing(24)
-        layout.addWidget(info, 0, Qt.AlignmentFlag.AlignRight)
-        layout.addStretch()
+        layout.addWidget(banner)
+        if theme.legacy:
+            layout.addSpacing(12)
+            layout.addWidget(self._update_widget)
+            layout.addWidget(self._news_widget)
+            layout.addWidget(self._connection_widget)
+            layout.addSpacing(24)
+            layout.addWidget(info, 0, Qt.AlignmentFlag.AlignRight)
+            layout.addStretch()
+        else:
+            layout.addSpacing(10)
+            layout.addWidget(self._update_widget)
+            layout.addWidget(self._news_widget)
+            layout.addWidget(self._connection_widget)
+            layout.addStretch()
+            layout.addWidget(info, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.update_content()
         root.auto_update.state_changed.connect(self.update_content)
@@ -278,10 +342,77 @@ class WelcomeWidget(QWidget):
         return self._news_widget.has_news
 
 
+_binding_lists = ("_model_bindings", "_bindings", "_connections", "_model_connections")
+
+
+def _release_bindings(widget: QWidget):
+    """Disconnect the widgets below `widget` from the models they show, so model signals don't
+    reach them once they are deleted (lambdas are not disconnected by Qt)."""
+    for w in [widget, *widget.findChildren(QWidget)]:
+        for name in _binding_lists:
+            bindings = getattr(w, name, None)
+            if isinstance(bindings, list):
+                try:
+                    Binding.disconnect_all(bindings)
+                except Exception as e:
+                    log.warning(f"Could not disconnect {type(w).__name__}.{name}: {e}")
+                bindings.clear()
+
+
 class ImageDiffusionWidget(DockWidget):
+    """The docker. Krita keeps it (and this class) for the whole session, also after a plugin
+    update was loaded without a restart (see reload.py). So it is only a shell around a panel
+    that the new version replaces. Keep this contract stable between versions:
+    `instances`, `panel_factory`, `set_panel(panel)`, and panels with `canvas_changed(canvas)`
+    and `shutdown()`."""
+
+    instances: ClassVar[list[ImageDiffusionWidget]] = []
+    panel_factory: ClassVar[Callable[[], QWidget] | None] = None
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle(_("Diffusion for Krita"))
+        type(self).instances.append(self)
+        factory = type(self).panel_factory or DiffusionPanel
+        self.set_panel(factory())
+
+    def set_panel(self, panel: QWidget):
+        old = self.widget()
+        self.setWidget(panel)
+        if old is not None and old is not panel:
+            if shutdown := getattr(old, "shutdown", None):
+                shutdown()
+            old.hide()
+            old.deleteLater()
+
+    def canvasChanged(self, canvas: krita.Canvas):
+        if canvas_changed := getattr(self.widget(), "canvas_changed", None):
+            canvas_changed(canvas)
+
+    @classmethod
+    def alive(cls):
+        cls.instances = [d for d in cls.instances if not sip.isdeleted(d)]
+        return list(cls.instances)
+
+
+class DiffusionPanel(QWidget):
+    """Everything inside the docker: the welcome screen and the workspaces."""
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._frame: QStackedWidget | None = None
+        self._build()
+
+        root.connection.state_changed.connect(self.update_content)
+        root.auto_update.state_changed.connect(self.update_content)
+        root.model_created.connect(self.register_model)
+        theme.look_events.changed.connect(self._rebuild)
+        for model in root.models:  # models made before this panel (after a reload)
+            self.register_model(model)
+
+    def _build(self):
         self._welcome = WelcomeWidget(root.server)
         self._generation = GenerationWidget()
         self._upscaling = UpscaleWidget()
@@ -295,14 +426,28 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._live)
         self._frame.addWidget(self._animation)
         self._frame.addWidget(self._custom)
-        self.setWidget(self._frame)
-
+        self._frame.setStyleSheet(theme.docker_stylesheet)
+        self.layout().addWidget(self._frame)
         self._welcome.accepted.connect(self.update_content)
-        root.connection.state_changed.connect(self.update_content)
-        root.auto_update.state_changed.connect(self.update_content)
-        root.model_created.connect(self.register_model)
 
-    def canvasChanged(self, canvas: krita.Canvas):
+    def _rebuild(self):
+        """The look changed: colors, style sheets and icons are baked into the pages when they
+        are made, so make them again (the state lives in the models, not in the widgets)."""
+        old = self._frame
+        assert old is not None
+        _release_bindings(old)
+        self.layout().removeWidget(old)
+        self._build()
+        old.hide()
+        old.deleteLater()
+        self.update_content()
+
+    def shutdown(self):
+        """The panel is replaced (plugin update): let go of the models."""
+        if self._frame is not None:
+            _release_bindings(self._frame)
+
+    def canvas_changed(self, canvas: krita.Canvas):
         if canvas is not None and canvas.view() is not None:
             eventloop.run(self._update_active_document())
 

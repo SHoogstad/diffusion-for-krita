@@ -11,10 +11,12 @@ from typing import TYPE_CHECKING
 
 from ..qt import sip
 from ..qt.QtCore import QEvent, QObject, QRectF, Qt, pyqtSignal
-from ..qt.QtGui import QColor, QMouseEvent, QPainter, QPalette
+from ..qt.QtGui import QColor, QLinearGradient, QMouseEvent, QPainter, QPalette
 from ..qt.QtWidgets import QApplication, QDoubleSpinBox, QLineEdit, QWidget
 from ..util import client_logger as log
 from ..util import ensure
+
+_bar_color_end = QColor("#ffffff")
 
 
 def spin_box(widget: QWidget | None) -> QDoubleSpinBox | None:
@@ -113,10 +115,25 @@ class _SliderSpinBox(QDoubleSpinBox):
             return
         rect = QRectF(self._line_edit().geometry()).adjusted(-1, -1, 1, 1)
         rect.setWidth(rect.width() * ratio)
-        color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
-        color.setAlpha(110 if self.isEnabled() else 45)
+        from . import theme  # imported late: the theme needs a QApplication
+
+        if theme.legacy:
+            color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
+            color.setAlpha(110 if self.isEnabled() else 45)
+            QPainter(self).fillRect(rect, color)
+            return
+        alpha = 130 if self.isEnabled() else 45
+
+        start, end = QColor(theme.accent_cool), QColor(theme.accent_cool)
+        start.setAlpha(alpha)
+        end.setAlpha(alpha)
+        gradient = QLinearGradient(rect.topLeft(), rect.topRight())
+        gradient.setColorAt(0, start)
+        gradient.setColorAt(1, end)
         painter = QPainter(self)
-        painter.fillRect(rect, color)
+        painter.fillRect(rect, gradient)
+        if self.isEnabled():  # handle: a bright line at the value
+            painter.fillRect(QRectF(rect.right() - 2, rect.top(), 2, rect.height()), _bar_color_end)
 
 
 class FallbackDoubleSliderSpinBox(QObject):

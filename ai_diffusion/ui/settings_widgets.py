@@ -4,10 +4,11 @@ from enum import Enum
 from typing import Any
 
 from ..localization import translate as _
-from ..qt.QtCore import QAbstractItemModel, QSize, Qt, pyqtSignal
-from ..qt.QtGui import QIcon
+from ..qt.QtCore import QAbstractItemModel, QRectF, QSize, Qt, pyqtSignal
+from ..qt.QtGui import QColor, QConicalGradient, QIcon, QPainter, QPen
 from ..qt.QtWidgets import (
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -463,6 +464,93 @@ class SwitchSetting(SettingWidget):
     def value(self, v):
         self._switch.is_checked = v
         self._update_text()
+
+
+class ColorSwatch(QToolButton):
+    """A round color chip; the chosen one gets a ring."""
+
+    def __init__(self, color: str, parent=None, custom=False):
+        super().__init__(parent)
+        self.color = color
+        self.custom = custom  # the "other color" chip: a rainbow until a color is picked
+        self.setCheckable(True)
+        self.setToolTip(color)
+        self.setFixedSize(24, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, a0):
+        from . import theme
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(self.rect()).adjusted(4, 4, -4, -4)
+        if self.isChecked() or self.underMouse():
+            ring = QColor(theme.text_color if self.isChecked() else theme.grey)
+            painter.setPen(QPen(ring, 1.6))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QRectF(self.rect()).adjusted(1, 1, -1, -1))
+        painter.setPen(Qt.PenStyle.NoPen)
+        if self.custom and not self.isChecked():
+            wheel = QConicalGradient(rect.center(), 90)
+            for i, hue in enumerate((0, 60, 120, 180, 240, 300, 0)):
+                wheel.setColorAt(i / 6, QColor.fromHsv(hue, 190, 235))
+            painter.setBrush(wheel)
+        else:
+            painter.setBrush(QColor(self.color))
+        painter.drawEllipse(rect)
+
+
+class ColorSetting(SettingWidget):
+    """A color: a row of preset chips and a button for any other color."""
+
+    presets = (
+        "#3d7be0", "#1d9bb8", "#2e9e57", "#d9a21b", "#ef6c2f",
+        "#d9363e", "#d6458f", "#8257d9", "#6f7787",
+    )  # fmt: skip
+
+    def __init__(self, setting: Setting, parent=None):
+        super().__init__(setting, parent)
+        self._value = setting.default
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        self._chips = [ColorSwatch(c, row) for c in self.presets]
+        self._custom = ColorSwatch(self._value, row, custom=True)
+        self._custom.setToolTip(_("Other color..."))
+        for chip in self._chips:
+            chip.clicked.connect(lambda _=False, c=chip.color: self._choose(c))
+            layout.addWidget(chip)
+        layout.addSpacing(6)
+        layout.addWidget(self._custom)
+        self._custom.clicked.connect(self._pick)
+        self.set_widget(row)
+
+    def _choose(self, color: str):
+        self.value = color
+        self._notify_value_changed()
+
+    def _pick(self):
+        color = QColorDialog.getColor(QColor(self._value), self, _("Color"))
+        if color.isValid():
+            self._choose(color.name())
+        else:
+            self.value = self._value  # restore the check marks
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, v: str):
+        self._value = v
+        is_preset = v.lower() in self.presets
+        for chip in self._chips:
+            chip.setChecked(chip.color == v.lower())
+        self._custom.setChecked(not is_preset)
+        if not is_preset:
+            self._custom.color = v
+        self._custom.update()
 
 
 class SettingsTab(QWidget):

@@ -134,6 +134,12 @@ class DockWidget(QDockWidget):
 
 
 class DockWidgetFactoryBase:
+    class DockPosition:
+        DockLeft = 0
+        DockRight = 1
+        DockTop = 2
+        DockBottom = 3
+
     DockLeft = 0
     DockRight = 1
     DockTop = 2

@@ -14,8 +14,9 @@ from ..model.prompt_enhance import improve_prompt
 from ..model.properties import Binding, bind
 from ..model.region import Region, RegionLink, RootRegion, translate_prompt
 from ..model.root import root
-from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QRectF, QSize, Qt, QUrl, pyqtSignal
 from ..qt.QtGui import (
+    QColor,
     QDesktopServices,
     QFontMetrics,
     QGuiApplication,
@@ -23,6 +24,8 @@ from ..qt.QtGui import (
     QImage,
     QMouseEvent,
     QPainter,
+    QPainterPath,
+    QPen,
     QPixmap,
     QResizeEvent,
     QTextCursor,
@@ -61,15 +64,23 @@ class InactiveRegionWidget(QFrame):
 
         self.setObjectName("InactiveRegionWidget")
         self.setFrameStyle(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(f"QFrame#InactiveRegionWidget {{ background-color: {theme.base} }}")
-
         thumbnail = RegionThumbnailWidget(region, self)
-
         self._prompt = QLabel(self)
-        self._prompt.setCursor(Qt.CursorShape.IBeamCursor)
-
         layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 5, 0)
+        if theme.legacy:
+            self.setStyleSheet(f"QFrame#InactiveRegionWidget {{ background-color: {theme.base} }}")
+            self._prompt.setCursor(Qt.CursorShape.IBeamCursor)
+            layout.setContentsMargins(0, 0, 5, 0)
+        else:
+            self.setStyleSheet(
+                f"QFrame#InactiveRegionWidget {{ background-color: {theme.base};"
+                f" border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
+                f"QFrame#InactiveRegionWidget:hover {{ border-color: {theme.accent_cool}; }}"
+            )
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+            layout.setContentsMargins(4, 3, 6, 3)
+            layout.setSpacing(8)
         layout.addWidget(thumbnail, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._prompt, 1)
         self.setLayout(layout)
@@ -104,8 +115,21 @@ class PromptHeader(Enum):
 
 
 class ActiveRegionWidget(QFrame):
-    _style_base = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.line_base}; }}"
-    _style_focus = f"QFrame#ActiveRegionWidget {{ background-color: {theme.base}; border: 1px solid {theme.active}; }}"
+    @staticmethod
+    def _style(border: str):  # read when used: the look can change while Krita runs
+        radius = "" if theme.legacy else f" border-radius: {theme.radius}px;"
+        return (
+            f"QFrame#ActiveRegionWidget {{ background-color: {theme.base};"
+            f" border: 1px solid {border};{radius} }}"
+        )
+
+    @property
+    def _style_base(self):
+        return self._style(theme.line_base)
+
+    @property
+    def _style_focus(self):
+        return self._style(theme.active if theme.legacy else theme.accent_cool)
 
     focused = pyqtSignal()
 
@@ -805,4 +829,25 @@ class RegionThumbnailWidget(QLabel):
             painter.drawPixmap(offset, offset, icon_image.pixmap(size, size))
             painter.end()
             icon_image = QPixmap.fromImage(image)
+        elif not theme.legacy:
+            icon_image = self._rounded(icon_image)
         self.setPixmap(icon_image)
+
+    @staticmethod
+    def _rounded(pixmap: QPixmap):
+        result = QPixmap(pixmap.size())
+        result.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = QRectF(result.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        clip = QPainterPath()
+        clip.addRoundedRect(rect, 4, 4)
+        painter.setClipPath(clip)
+        painter.fillRect(result.rect(), QColor(theme.line))
+        painter.drawPixmap(0, 0, pixmap)
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(theme.grey), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, 4, 4)
+        painter.end()
+        return result

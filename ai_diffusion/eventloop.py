@@ -37,13 +37,16 @@ def run(future):
     return task
 
 
-def stop():
+def stop(close=True):
+    """Stop running Python tasks. `close=False` (a plugin reload) keeps the loop open, so
+    callbacks that still arrive for it (network replies) are queued instead of failing."""
     global _timer
     try:
         _timer.stop()
         _timer = None
         _loop.stop()
-        _loop.close()
+        if close:
+            _loop.close()
     except Exception:  # noqa
         pass
 

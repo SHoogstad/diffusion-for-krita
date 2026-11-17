@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
-
-from krita import Krita
+from typing import ClassVar, cast
 
 from .. import __release__, eventloop, util
 from ..backend import resources, runpod, runpod_serverless
@@ -24,12 +22,14 @@ from ..qt.QtGui import (
     QFontMetrics,
     QGuiApplication,
     QPainter,
+    QPalette,
 )
 from ..qt.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -49,6 +49,7 @@ from ..qt.QtWidgets import (
 )
 from ..settings import (
     ImageFileFormat,
+    InterfaceLook,
     PerformancePreset,
     PromptEnhancer,
     RunpodMode,
@@ -58,8 +59,10 @@ from ..settings import (
     settings,
 )
 from ..style import Style
+from . import flags, theme
 from .server import ServerWidget
 from .settings_widgets import (
+    ColorSetting,
     ComboBoxSetting,
     FileListSetting,
     SettingsTab,
@@ -69,7 +72,7 @@ from .settings_widgets import (
     TextSetting,
 )
 from .style import StylePresets
-from .theme import add_header, green, grey, logo, prompt_max_line_count, red, yellow
+from .theme import add_header, green, grey, prompt_max_line_count, red, yellow
 
 
 class InitialSetupWidget(QWidget):
@@ -94,19 +97,56 @@ class InitialSetupWidget(QWidget):
         layout.addWidget(label_sub)
         layout.addSpacing(20)
 
-        def add_option(title: str, desc_text: str, button_text: str, mode: ServerMode):
-            header = QLabel("<b>" + title + "</b>", self)
-            desc = QLabel(desc_text, self)
-            desc.setMaximumWidth(600)
+        def add_option(title: str, desc_text: str, button_text: str, mode: ServerMode, icon: str):
+            if theme.legacy:  # title, text and a button below each other
+                header = QLabel("<b>" + title + "</b>", self)
+                desc = QLabel(desc_text, self)
+                desc.setMaximumWidth(600)
+                desc.setWordWrap(True)
+                desc.setOpenExternalLinks(True)
+                button = QPushButton(button_text, self)
+                button.setMinimumHeight(int(1.3 * button.sizeHint().height()))
+                button.setMaximumWidth(300)
+                button.clicked.connect(self._choose(mode))
+                layout.addWidget(header)
+                layout.addWidget(desc)
+                layout.addWidget(button)
+                layout.addSpacing(16)
+                return
+            # each option is a card: symbol, what it is, and one button
+            card = QFrame(self)
+            card.setObjectName("optionCard")
+            card.setStyleSheet(
+                f"QFrame#optionCard {{ background: {theme.base}; border: 1px solid"
+                f" {theme.line_base}; border-radius: 8px; }}"
+                f"QFrame#optionCard:hover {{ border-color: {theme.accent_cool}; }}"
+            )
+            card.setMaximumWidth(720)
+            symbol = QLabel(card)
+            symbol.setPixmap(theme.icon(icon).pixmap(56, 56))
+            symbol.setScaledContents(True)
+            symbol.setFixedSize(28, 28)
+            header = QLabel("<b>" + title + "</b>", card)
+            desc = QLabel(desc_text, card)
             desc.setWordWrap(True)
-            button = QPushButton(button_text, self)
+            desc.setOpenExternalLinks(True)
+            button = QPushButton(button_text, card)
             button.setMinimumHeight(int(1.3 * button.sizeHint().height()))
-            button.setMaximumWidth(300)
+            button.setMinimumWidth(170)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(self._choose(mode))
-            layout.addWidget(header)
-            layout.addWidget(desc)
-            layout.addWidget(button)
-            layout.addSpacing(16)
+            text_layout = QVBoxLayout()
+            text_layout.setSpacing(4)
+            text_layout.addWidget(header)
+            text_layout.addWidget(desc)
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(14, 12, 14, 12)
+            card_layout.setSpacing(14)
+            card_layout.addWidget(symbol, 0, Qt.AlignmentFlag.AlignTop)
+            card_layout.addLayout(text_layout, 1)
+            card_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
+            layout.addWidget(card)
+            layout.addSpacing(8)
 
         add_option(
             _("Option {number}", number=1) + ": " + _("Runpod"),
@@ -116,6 +156,7 @@ class InitialSetupWidget(QWidget):
             ),
             _("Set up Runpod"),
             ServerMode.runpod,
+            "web-connection",
         )
         add_option(
             _("Option {number}", number=2) + ": " + _("Local Managed Server"),
@@ -124,6 +165,7 @@ class InitialSetupWidget(QWidget):
             ),
             _("Start Installation"),
             ServerMode.managed,
+            "root",
         )
         add_option(
             _("Option {number}", number=3) + ": " + _("Custom ComfyUI"),
@@ -133,6 +175,7 @@ class InitialSetupWidget(QWidget):
             + "<br><a href='https://github.com/SHoogstad/diffusion-for-krita#comfyui-setup'>ComfyUI Setup Guide</a>",
             _("Connect via URL"),
             ServerMode.external,
+            "link",
         )
         layout.addStretch()
 
@@ -919,6 +962,14 @@ class InterfaceSettings(SettingsTab):
 
         S = Settings
         self.add("language", ComboBoxSetting(S._language, parent=self))
+        self.add("interface_look", ComboBoxSetting(S._interface_look, parent=self))
+        self.add("interface_country", ComboBoxSetting(S._interface_country, parent=self))
+        self.add("interface_color", ColorSetting(S._interface_color, parent=self))
+        self._widgets["interface_country"].set_items(self._country_items())
+        cast(ComboBoxSetting, self._widgets["interface_country"])._combo.setIconSize(QSize(24, 16))
+        self._widgets["interface_look"].value_changed.connect(self._update_look_widgets)
+        for w in ("interface_country", "interface_color"):
+            self._widgets[w].indent = 1
         self.add("prompt_translation", ComboBoxSetting(S._prompt_translation, parent=self))
         self.add(
             "prompt_line_count",
@@ -935,12 +986,12 @@ class InterfaceSettings(SettingsTab):
         tag_files = cast(FileListSetting, self._widgets["tag_files"])
         self._layout.addWidget(tag_files.list_widget)
         tag_files.add_button(
-            Krita.instance().icon("reload-preset"),
+            theme.krita_icon("refresh", "reload-preset"),
             _("Look for new tag files"),
             self._update_tag_files,
         )
         tag_files.add_button(
-            Krita.instance().icon("document-open"),
+            theme.krita_icon("folder", "document-open"),
             _("Open folder where custom tag files can be placed"),
             self._open_tag_folder,
         )
@@ -975,6 +1026,24 @@ class InterfaceSettings(SettingsTab):
     def read(self):
         super().read()
         self._update_image_format_widgets()
+        self._update_look_widgets()
+
+    def _country_items(self):
+        detected = flags.resolve("")
+        auto = _("Automatic") + (
+            f" ({detected.name})" if detected else f" ({_('no flag for this region, plain look')})"
+        )
+        items = [(auto, "", theme.flag_icon(detected))]
+        items += [
+            (name, code, theme.flag_icon(flags.countries[code]))
+            for name, code in flags.country_items()
+        ]
+        return items
+
+    def _update_look_widgets(self):
+        look = self._widgets["interface_look"].value
+        self._widgets["interface_country"].visible = look is InterfaceLook.country
+        self._widgets["interface_color"].visible = look is InterfaceLook.plain
 
     def _tag_files(self) -> list[str]:
         plugin_tags_path = util.plugin_dir / "tags"
@@ -1226,15 +1295,20 @@ class AboutSettings(SettingsTab):
         italic = self.font()
         italic.setItalic(True)
 
-        header_layout = QHBoxLayout()
-        header_logo = QLabel(self)
         font_height = QFontMetrics(extra_large).height() + 4
-        header_logo.setPixmap(logo().scaled(font_height * 2, font_height * 2))
-        header_logo.setMaximumSize(font_height * 2, font_height * 2)
-        header_text = QLabel("Generative AI\nfor Krita", self)
-        header_text.setFont(extra_large)
-        header_layout.addWidget(header_logo)
-        header_layout.addWidget(header_text)
+        if theme.legacy:
+            header = QWidget(self)
+            header_layout = QHBoxLayout(header)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_logo = QLabel(header)
+            header_logo.setPixmap(theme.logo().scaled(font_height * 2, font_height * 2))
+            header_logo.setMaximumSize(font_height * 2, font_height * 2)
+            header_text = QLabel("Generative AI\nfor Krita", header)
+            header_text.setFont(extra_large)
+            header_layout.addWidget(header_logo)
+            header_layout.addWidget(header_text)
+        else:
+            header = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
 
         current_version_name = QLabel(_("Current version") + ":", self)
         current_version_value = QLabel(__release__, self)
@@ -1283,7 +1357,7 @@ class AboutSettings(SettingsTab):
         doc_contact = QLabel(_contact_text, self)
         doc_contact.setOpenExternalLinks(True)
 
-        self._layout.addLayout(header_layout)
+        self._layout.addWidget(header)
         self._layout.addSpacing(10)
         current_version_layout = QHBoxLayout()
         current_version_layout.addWidget(current_version_name)
@@ -1354,10 +1428,13 @@ class AboutSettings(SettingsTab):
                 self._update_error.setText(au.error)
                 self._check_button.setEnabled(True)
                 self._update_button.setEnabled(True)
+            case UpdateState.reloading:
+                self._latest_version_value.setText(_("Loading the new version..."))
             case UpdateState.restart_required:
                 self._latest_version_value.setText(
                     _("Please restart Krita to complete the update!")
                 )
+                self._update_error.setText(au.error)
 
     def _check_updates(self):
         root.auto_update.check()
@@ -1385,7 +1462,11 @@ class AboutSettings(SettingsTab):
         text = QTextEdit(window)
         text.setReadOnly(True)
         text.setText(diagnostics)
-        text.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.SmallestReadableFont))
+        small = self.font()  # same font as everywhere else, a little smaller
+        small.setPointSizeF(max(7.0, small.pointSizeF() * 0.9))
+        if theme.legacy:
+            small = QFontDatabase.systemFont(QFontDatabase.SystemFont.SmallestReadableFont)
+        text.setFont(small)
         if clipboard is not None:
             msg = _("System information has been copied to the clipboard.")
             layout.addWidget(QLabel("✔️ " + msg))
@@ -1409,6 +1490,14 @@ _contact_text = """
 """
 
 
+_busy_server_states = (
+    ServerState.installing,
+    ServerState.uninstalling,
+    ServerState.verifying,
+    ServerState.starting,
+)
+
+
 class SettingsDialog(QDialog):
     _instance = None
 
@@ -1429,6 +1518,14 @@ class SettingsDialog(QDialog):
             min_w = min(size.width(), QFontMetrics(self.font()).horizontalAdvance("M") * 100)
             self.resize(QSize(min_w, int(size.height() * 0.8)))
         self.setMinimumSize(min_size)
+
+        if not theme.legacy:
+            palette = self.palette()  # links in the brand blue instead of the default
+            palette.setColor(QPalette.ColorRole.Link, QColor(theme.accent_cool))
+            palette.setColor(QPalette.ColorRole.LinkVisited, QColor(theme.accent_cool))
+            self.setPalette(palette)
+
+        self.setStyleSheet(theme.docker_stylesheet)
 
         layout = QHBoxLayout()
         self.setLayout(layout)
@@ -1461,9 +1558,27 @@ class SettingsDialog(QDialog):
             self._stack.addWidget(widget)
         self._list.setFixedWidth(max(120, text_width + 32))
 
+        if not theme.legacy:
+            self._list.setFrameShape(QFrame.Shape.NoFrame)
+            self._list.setStyleSheet(
+                f"""
+                QListWidget {{ background: transparent; outline: none; }}
+                QListWidget::item {{
+                    border-radius: {theme.radius}px; padding-left: 8px; margin: 1px 0;
+                }}
+                QListWidget::item:hover {{ background: {theme.line}; }}
+                QListWidget::item:selected {{
+                    background: {theme.blue_fill}; color: {theme.fill_text}; font-weight: bold;
+                }}
+                """
+            )
         self._list.setCurrentRow(0)
         self._list.currentRowChanged.connect(self._change_page)
-        layout.addWidget(self._list)
+        side = QVBoxLayout()
+        side.addWidget(self._list, 1)
+        if not theme.legacy:
+            side.addWidget(theme.AccentLine(self, height=9))
+        layout.addLayout(side)
 
         inner = QVBoxLayout()
         layout.addLayout(inner)
@@ -1482,6 +1597,7 @@ class SettingsDialog(QDialog):
         self._open_folder_link.setToolTip(str(util.user_data_dir))
 
         self._close_button = QPushButton(_("Ok"), self)
+        self._close_button.setStyleSheet(theme.primary_button_stylesheet)
         self._close_button.clicked.connect(self._close)
 
         button_layout = QHBoxLayout()
@@ -1494,9 +1610,44 @@ class SettingsDialog(QDialog):
         button_layout.addWidget(self._close_button)
         inner.addLayout(button_layout)
 
+        # Links in the brand blue. Under a style sheet labels ignore the palette's link color,
+        # so the color goes into the anchors themselves.
+        anchor = f"<a style='color: {theme.accent_cool};' href"
+        for label in self.findChildren(QLabel):
+            if "<a href" in label.text() and not theme.legacy:
+                label.setText(label.text().replace("<a href", anchor))
+
         root.connection.state_changed.connect(self._update_connection)
         root.connection.models_changed.connect(self.styles.update_model_lists)
         root.connection.models_changed.connect(self._update_llms)
+        theme.look_events.changed.connect(self._renew)
+        self._server = server
+
+    _retired: ClassVar[list[SettingsDialog]] = []
+
+    def _renew(self):
+        """The look changed: colors, style sheets and icons are baked into the pages when they
+        are made, so make a new dialog in the new look, on the same page and spot."""
+        if type(self)._instance is not self:
+            return  # an older dialog that is kept alive (see below)
+        fresh = SettingsDialog(self._server)
+        fresh.setGeometry(self.geometry())
+        fresh._list.setCurrentRow(self._list.currentRow())
+        if (style := self.styles.current_style) is not None:
+            fresh.styles.current_style = style
+        if root.connection.client_if_connected:
+            fresh.styles.update_model_lists()
+            fresh._update_connection()
+            fresh._update_llms()
+        if self.isVisible():
+            fresh.show()
+            fresh._list.setCurrentRow(self._list.currentRow())
+        self.hide()
+        if root.server.state in _busy_server_states:
+            # A running install or start reports to the widgets of this dialog: keep them.
+            type(self)._retired.append(self)
+        else:
+            self.deleteLater()
 
     def read(self):
         self.connection.read()

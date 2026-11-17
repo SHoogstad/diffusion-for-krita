@@ -708,6 +708,7 @@ class CustomWorkflowWidget(QWidget):
         self._workflow_select_widgets = QWidget(self)
 
         self._workflow_select = QComboBox(self._workflow_select_widgets)
+        theme.style_select(self._workflow_select)
         self._workflow_select.setModel(SortedWorkflows(root.workflows))
         self._workflow_select.currentIndexChanged.connect(self._change_workflow)
 
@@ -780,11 +781,13 @@ class CustomWorkflowWidget(QWidget):
         self._apply_button = QToolButton(self._bottom)
         self._apply_button.setIcon(theme.icon("apply"))
         self._apply_button.setFixedHeight(self._generate_button.minimumSizeHint().height() - 3)
+        self._apply_button.setStyleSheet(theme.ghost_button_stylesheet)
         self._apply_button.setToolTip(_("Create a new layer with the current result"))
         self._apply_button.clicked.connect(self.apply_live_result)
 
         self._mode_button = QToolButton(self._bottom)
         self._mode_button.setArrowType(Qt.ArrowType.DownArrow)
+        self._mode_button.setStyleSheet(theme.ghost_button_stylesheet)
         self._mode_button.setFixedHeight(self._generate_button.minimumSizeHint().height() - 3)
         self._mode_button.clicked.connect(self._show_generate_menu)
         menu = QMenu(self)
@@ -839,7 +842,10 @@ class CustomWorkflowWidget(QWidget):
         edit_layout.addWidget(self._cancel_name_button)
         self._workflow_edit_widgets.setLayout(edit_layout)
         header_layout = QHBoxLayout()
-        header_layout.addWidget(self._workspace_select)
+        if theme.legacy:  # the drop-down button sits in the row
+            header_layout.addWidget(self._workspace_select)
+        else:
+            layout.addWidget(self._workspace_select)
         header_layout.addWidget(self._workflow_select_widgets)
         header_layout.addWidget(self._workflow_edit_widgets)
         layout.addLayout(header_layout)
@@ -847,7 +853,7 @@ class CustomWorkflowWidget(QWidget):
         layout.addWidget(self._prompt_widget)
         layout.addWidget(self._splitter)
         actions_layout = QHBoxLayout()
-        actions_layout.setSpacing(0)
+        actions_layout.setSpacing(0 if theme.legacy else 3)
         actions_layout.addWidget(self._generate_button)
         actions_layout.addWidget(self._apply_button)
         actions_layout.addWidget(self._mode_button)

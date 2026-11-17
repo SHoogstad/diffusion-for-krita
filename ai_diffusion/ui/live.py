@@ -157,11 +157,12 @@ class LivePreviewArea(QWidget):
 
 
 class LiveWidget(QWidget):
-    _play_icon = theme.icon("play")
-    _pause_icon = theme.icon("pause")
+    # icons are looked up when used: the look can change while Krita runs
+    _play_icon = property(lambda self: theme.icon("play"))
+    _pause_icon = property(lambda self: theme.icon("pause"))
 
-    _record_icon = theme.icon("record")
-    _record_active_icon = theme.icon("record-active")
+    _record_icon = property(lambda self: theme.icon("record"))
+    _record_active_icon = property(lambda self: theme.icon("record-active"))
 
     _model: DocumentModel
     _model_bindings: list[QMetaObject.Connection | Binding]
@@ -212,7 +213,10 @@ class LiveWidget(QWidget):
         self.style_select = StyleSelectWidget(self)
 
         controls_layout = QHBoxLayout()
-        controls_layout.addWidget(self.workspace_select)
+        if theme.legacy:  # the drop-down button sits in the row
+            controls_layout.addWidget(self.workspace_select)
+        else:
+            layout.addWidget(self.workspace_select)
         controls_layout.addWidget(self.active_button)
         controls_layout.addWidget(self.record_button)
         controls_layout.addWidget(self.apply_button)

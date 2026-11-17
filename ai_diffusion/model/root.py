@@ -48,6 +48,7 @@ class Root(QObject):
         self._null_model = DocumentModel(Document(), self._connection, self._workflows)
         self._recent = RecentlyUsedSync.from_settings()
         self._auto_update = AutoUpdate()
+        self._auto_update.reload_after_install = True
         if settings.auto_update:
             self._auto_update.check()
         self._connection.message_received.connect(self._handle_message)

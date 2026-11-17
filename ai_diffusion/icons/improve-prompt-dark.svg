@@ -1,8 +1,1 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="42px" height="42px" viewBox="0 0 42 42" version="1.1">
-  <path d="M 7,35 L 25,17" style="fill:none;stroke:#c8c8c8;stroke-width:3;stroke-linecap:round" />
-  <path d="M 23.5,13.5 L 28.5,18.5" style="fill:none;stroke:#c8c8c8;stroke-width:2;stroke-linecap:round" />
-  <path d="M 29,3 L 30.8,8.2 L 36,10 L 30.8,11.8 L 29,17 L 27.2,11.8 L 22,10 L 27.2,8.2 Z" style="fill:#c8c8c8;stroke:none" />
-  <path d="M 13,6 L 14.1,9 L 17,10 L 14.1,11 L 13,14 L 11.9,11 L 9,10 L 11.9,9 Z" style="fill:#c8c8c8;stroke:none" />
-  <path d="M 34,22 L 35.1,25 L 38,26 L 35.1,27 L 34,30 L 32.9,27 L 30,26 L 32.9,25 Z" style="fill:#c8c8c8;stroke:none" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M4 20L14.5 9.5" stroke="#d2d2d2" stroke-width="2.0" /><path d="M17.5 1.5Q18.2 5.8 22.5 6.5Q18.2 7.2 17.5 11.5Q16.8 7.2 12.5 6.5Q16.8 5.8 17.5 1.5Z" fill="#f0505a" stroke="none" /><circle cx="7" cy="7" r="1.1" fill="#d2d2d2" stroke="none" /><circle cx="19" cy="16" r="1.1" fill="#d2d2d2" stroke="none" /></svg>
