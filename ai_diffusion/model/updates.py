@@ -26,6 +26,7 @@ class UpdateState(Enum):
     restart_required = 7
     failed_check = 8
     failed_update = 9
+    reloading = 10  # loading the new version without a restart
 
 
 class UpdatePackage(NamedTuple):
@@ -82,7 +83,7 @@ class AutoUpdate(QObject, ObservableProperties):
         )
 
     async def _check(self):
-        if self.state is UpdateState.restart_required:
+        if self.state in (UpdateState.restart_required, UpdateState.reloading):
             return
 
         self.state = UpdateState.checking
@@ -159,6 +160,18 @@ class AutoUpdate(QObject, ObservableProperties):
         log.info(f"Installing new plugin version to {self.plugin_dir}")
         shutil.copytree(source_dir, self.plugin_dir, dirs_exist_ok=True)
         self.current_version = self.latest_version
+        if self.reload_after_install:
+            from .. import reload
+
+            self.state = UpdateState.reloading
+            reload.request(self._reload_failed)
+        else:
+            self.state = UpdateState.restart_required
+
+    reload_after_install = False  # load the new version without a restart (set by root)
+
+    def _reload_failed(self, error: Exception):
+        self.error = str(error)
         self.state = UpdateState.restart_required
 
     @property

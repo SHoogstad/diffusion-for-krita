@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from typing import ClassVar
 
 import krita
 from krita import DockWidget, Krita
@@ -14,6 +16,7 @@ from ..model.model import DocumentModel, Workspace
 from ..model.properties import Binding
 from ..model.root import root
 from ..model.updates import UpdateState
+from ..qt import sip
 from ..qt.QtCore import Qt, pyqtSignal
 from ..qt.QtGui import QIcon
 from ..qt.QtWidgets import (
@@ -86,8 +89,16 @@ class AutoUpdateWidget(QWidget):
                 self._update_status.setText(_("Update failed"))
                 self._update_error.setText(au.error)
                 self._update_button.setEnabled(True)
+            case UpdateState.reloading:
+                self._update_status.setText(
+                    _("Loading the new version (after the running generation)...")
+                    if any(m.jobs.any_executing() for m in root.models)
+                    else _("Loading the new version...")
+                )
+                self._update_button.setEnabled(False)
             case UpdateState.restart_required:
                 self._update_status.setText(_("Please restart Krita to complete the update!"))
+                self._update_error.setText(au.error)
                 self._update_button.setEnabled(False)
 
         self.setVisible(self.is_visible)
@@ -311,15 +322,57 @@ def _release_bindings(widget: QWidget):
 
 
 class ImageDiffusionWidget(DockWidget):
+    """The docker. Krita keeps it (and this class) for the whole session, also after a plugin
+    update was loaded without a restart (see reload.py). So it is only a shell around a panel
+    that the new version replaces. Keep this contract stable between versions:
+    `instances`, `panel_factory`, `set_panel(panel)`, and panels with `canvas_changed(canvas)`
+    and `shutdown()`."""
+
+    instances: ClassVar[list[ImageDiffusionWidget]] = []
+    panel_factory: ClassVar[Callable[[], QWidget] | None] = None
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle(_("Diffusion for Krita"))
+        type(self).instances.append(self)
+        factory = type(self).panel_factory or DiffusionPanel
+        self.set_panel(factory())
+
+    def set_panel(self, panel: QWidget):
+        old = self.widget()
+        self.setWidget(panel)
+        if old is not None and old is not panel:
+            if shutdown := getattr(old, "shutdown", None):
+                shutdown()
+            old.hide()
+            old.deleteLater()
+
+    def canvasChanged(self, canvas: krita.Canvas):
+        if canvas_changed := getattr(self.widget(), "canvas_changed", None):
+            canvas_changed(canvas)
+
+    @classmethod
+    def alive(cls):
+        cls.instances = [d for d in cls.instances if not sip.isdeleted(d)]
+        return list(cls.instances)
+
+
+class DiffusionPanel(QWidget):
+    """Everything inside the docker: the welcome screen and the workspaces."""
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._frame: QStackedWidget | None = None
         self._build()
 
         root.connection.state_changed.connect(self.update_content)
         root.auto_update.state_changed.connect(self.update_content)
         root.model_created.connect(self.register_model)
         theme.look_events.changed.connect(self._rebuild)
+        for model in root.models:  # models made before this panel (after a reload)
+            self.register_model(model)
 
     def _build(self):
         self._welcome = WelcomeWidget(root.server)
@@ -336,20 +389,27 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._animation)
         self._frame.addWidget(self._custom)
         self._frame.setStyleSheet(theme.docker_stylesheet)
-        self.setWidget(self._frame)
+        self.layout().addWidget(self._frame)
         self._welcome.accepted.connect(self.update_content)
 
     def _rebuild(self):
         """The look changed: colors, style sheets and icons are baked into the pages when they
         are made, so make them again (the state lives in the models, not in the widgets)."""
         old = self._frame
+        assert old is not None
         _release_bindings(old)
+        self.layout().removeWidget(old)
         self._build()
         old.hide()
         old.deleteLater()
         self.update_content()
 
-    def canvasChanged(self, canvas: krita.Canvas):
+    def shutdown(self):
+        """The panel is replaced (plugin update): let go of the models."""
+        if self._frame is not None:
+            _release_bindings(self._frame)
+
+    def canvas_changed(self, canvas: krita.Canvas):
         if canvas is not None and canvas.view() is not None:
             eventloop.run(self._update_active_document())
 

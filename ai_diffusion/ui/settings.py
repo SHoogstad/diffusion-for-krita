@@ -1400,10 +1400,13 @@ class AboutSettings(SettingsTab):
                 self._update_error.setText(au.error)
                 self._check_button.setEnabled(True)
                 self._update_button.setEnabled(True)
+            case UpdateState.reloading:
+                self._latest_version_value.setText(_("Loading the new version..."))
             case UpdateState.restart_required:
                 self._latest_version_value.setText(
                     _("Please restart Krita to complete the update!")
                 )
+                self._update_error.setText(au.error)
 
     def _check_updates(self):
         root.auto_update.check()

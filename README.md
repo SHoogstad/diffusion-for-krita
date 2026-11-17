@@ -80,6 +80,9 @@ The look follows Krita's theme and works with dark and light themes.
 
 **Updates:** the plugin checks this repository's releases on startup and verifies each download against the
 SHA-256 digest that GitHub publishes. *Configure ▸ Plugin ▸ Include Pre-releases* also offers pre-releases.
+After installing, the new version loads right away without restarting Krita (once nothing is generating).
+A local server restarts with it; a Runpod pod keeps running. Updates from versions before this one still need
+a restart.
 
 ### Hardware
 Windows, Linux and macOS. To run locally, a graphics card with at least 6 GB VRAM is recommended.

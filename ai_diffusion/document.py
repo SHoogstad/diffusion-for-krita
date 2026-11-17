@@ -444,3 +444,13 @@ class PoseLayers:
 
 
 _pose_layers = PoseLayers()
+
+
+def stop_polling():
+    """A new plugin version takes over (reload.py): stop the timers of this one, its objects
+    are left behind and must not keep watching the documents."""
+    _pose_layers._timer.stop()
+    for doc in list(KritaDocument._instances.values()):
+        doc._poller.stop()
+        if timer := getattr(doc._layers, "_timer", None):
+            timer.stop()
