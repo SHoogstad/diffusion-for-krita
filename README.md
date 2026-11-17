@@ -53,13 +53,21 @@ regions, control layers and upscaling, with [ComfyUI](https://github.com/comfyan
 
 ## <a name="interface"></a> Interface
 
-The docker has its own look, in the red, white and blue of the Dutch flag.
+The docker has its own look. Pick it in *Configure ▸ Interface ▸ Look*; a change applies right away:
+
+* **Country** (default): the colors and flag of your country, detected from the system or picked
+  from the list.
+* **Plain**: one color of your choice.
+* **Legacy**: the interface as it was before the redesign (v1.65.0 and earlier): Krita's own
+  widgets, the workspace drop-down and the original icons.
+
+In the Country and Plain looks:
 
 * **Workspaces** are tabs at the top: Generate, Upscale, Live, Animation and Graph.
 * **Style** is the selector below the tabs. It shows the model family as a badge next to the
   style name. The button beside it opens the style for editing.
-* **Red** is the one main action of each screen, such as Generate. **Blue** marks what is
-  switched on, selected or focused.
+* The **main color** is the one main action of each screen, such as Generate. The **second
+  color** marks what is switched on, selected or focused.
 * **History** shows results as thumbnails under a header with the time and the prompt. Click a
   result to preview it, double-click to apply it.
 * The **queue** button next to Generate shows the number of jobs and lights up while they run.

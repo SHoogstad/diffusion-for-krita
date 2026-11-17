@@ -365,7 +365,7 @@ class LoraList(QWidget):
 
         self._refresh_button = QToolButton(self)
         self._refresh_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        self._refresh_button.setIcon(theme.icon("refresh"))
+        self._refresh_button.setIcon(theme.krita_icon("refresh", "reload-preset"))
         self._refresh_button.setToolTip(_("Look for new LoRA files"))
         self._refresh_button.clicked.connect(root.connection.refresh)
         header_layout.addWidget(self._refresh_button, 0)
@@ -373,7 +373,7 @@ class LoraList(QWidget):
         if settings.server_mode is ServerMode.managed:
             open_folder = self.open_folder_button = QToolButton(self)
             open_folder.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            open_folder.setIcon(theme.icon("folder"))
+            open_folder.setIcon(theme.krita_icon("folder", "document-open"))
             open_folder.setToolTip(_("Open folder containing LoRA files"))
             header_layout.addWidget(open_folder, 0)
 
@@ -427,7 +427,7 @@ class LoraList(QWidget):
                 if lora.source is not FileSource.unavailable:
                     parts = Path(lora.id).parts
                     folders.update("/".join(parts[:i]) for i in range(1, len(parts)))
-            folder_icon = theme.icon("folder")
+            folder_icon = theme.krita_icon("folder", "document-open")
             for folder in sorted(folders, key=lambda x: x.lower()):
                 self._filter_combo.addItem(folder_icon, folder)
         self._filter_combo.setCurrentText(LoraList.last_filter)
@@ -661,27 +661,27 @@ class StylePresets(SettingsTab):
         self._style_list.currentIndexChanged.connect(self._change_style)
 
         self._create_style_button = QToolButton(self)
-        self._create_style_button.setIcon(theme.icon("add"))
+        self._create_style_button.setIcon(theme.krita_icon("add", "list-add"))
         self._create_style_button.setToolTip(_("Create a new style"))
         self._create_style_button.clicked.connect(self._create_style)
 
         self._duplicate_style_button = QToolButton(self)
-        self._duplicate_style_button.setIcon(theme.icon("duplicate"))
+        self._duplicate_style_button.setIcon(theme.krita_icon("duplicate", "duplicate"))
         self._duplicate_style_button.setToolTip(_("Duplicate the current style"))
         self._duplicate_style_button.clicked.connect(self._duplicate_style)
 
         self._delete_style_button = QToolButton(self)
-        self._delete_style_button.setIcon(theme.icon("discard"))
+        self._delete_style_button.setIcon(theme.krita_icon("discard", "deletelayer"))
         self._delete_style_button.setToolTip(_("Delete the current style"))
         self._delete_style_button.clicked.connect(self._delete_style)
 
         self._refresh_button = QToolButton(self)
-        self._refresh_button.setIcon(theme.icon("refresh"))
+        self._refresh_button.setIcon(theme.krita_icon("refresh", "reload-preset"))
         self._refresh_button.setToolTip(_("Look for new style files"))
         self._refresh_button.clicked.connect(Styles.list().reload)
 
         self._open_folder_button = QToolButton(self)
-        self._open_folder_button.setIcon(theme.icon("folder"))
+        self._open_folder_button.setIcon(theme.krita_icon("folder", "document-open"))
         self._open_folder_button.setToolTip(_("Open folder containing style files"))
         self._open_folder_button.clicked.connect(self._open_style_folder)
 
@@ -738,7 +738,7 @@ class StylePresets(SettingsTab):
         )
         self._checkpoint_select.value_changed.connect(self.write)
         self._checkpoint_select.add_button(
-            theme.icon("refresh"),
+            theme.krita_icon("refresh", "reload-preset"),
             _("Look for new checkpoint files"),
             root.connection.refresh,
         )
@@ -839,7 +839,7 @@ class StylePresets(SettingsTab):
 
         if settings.server_mode is ServerMode.managed:
             self._checkpoint_select.add_button(
-                theme.icon("folder"),
+                theme.krita_icon("folder", "document-open"),
                 _("Open the folder where checkpoints are stored"),
                 self._open_checkpoints_folder,
             )

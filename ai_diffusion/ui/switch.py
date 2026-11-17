@@ -61,7 +61,10 @@ class SwitchWidget(QAbstractButton):
         track_opacity = 1.0
         thumb_opacity = 1.0
         if self.isEnabled():
-            if self.isChecked():
+            if self.isChecked() and theme.legacy:
+                track_brush = palette.highlight()
+                thumb_brush = palette.text()
+            elif self.isChecked():
                 track_brush = QBrush(QColor(theme.blue_fill))
                 thumb_brush = QBrush(QColor(theme.accent_text))
             else:

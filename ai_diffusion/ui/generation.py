@@ -34,6 +34,7 @@ from ..qt.QtGui import (
     QKeySequence,
     QMouseEvent,
     QPainter,
+    QPalette,
 )
 from ..qt.QtWidgets import (
     QAction,
@@ -66,6 +67,7 @@ from .widget import (
     StrengthWidget,
     StyleSelectWidget,
     WorkspaceSelectWidget,
+    add_workspace_header,
     create_wide_tool_button,
 )
 
@@ -79,20 +81,42 @@ class HistoryWidget(QListWidget):
 
     _thumb_size = 96
     _applied_icon = Image.load(theme.icon_path / "star.png")
-    _list_css = f"""
-        QListWidget {{ background-color: transparent; }}
-        QListWidget::item:selected {{
-            border: 2px solid {theme.accent}; border-radius: 4px; background: transparent;
-        }}
-    """
-    _button_css = f"""
-        QPushButton {{
-            border: 1px solid {theme.grey}; border-radius: 4px;
-            background: {"rgba(48, 48, 48, 210)" if theme.is_dark else "rgba(240, 240, 240, 200)"};
-            padding: 2px;
-        }}
-        QPushButton:hover {{ border-color: {theme.accent_warm}; }}
-    """
+
+    @property
+    def _list_css(self):  # read when used: the look can change while Krita runs
+        if theme.legacy:
+            return f"""
+                QListWidget {{ background-color: transparent; }}
+                QListWidget::item:selected {{ border: 1px solid {theme.grey}; }}
+            """
+        return f"""
+            QListWidget {{ background-color: transparent; }}
+            QListWidget::item:selected {{
+                border: 2px solid {theme.accent}; border-radius: 4px; background: transparent;
+            }}
+        """
+
+    @property
+    def _button_css(self):
+        if theme.legacy:
+            return f"""
+                QPushButton {{
+                    border: 1px solid {theme.grey};
+                    background: {"rgba(64, 64, 64, 170)" if theme.is_dark else "rgba(240, 240, 240, 160)"};
+                    padding: 2px;
+                }}
+                QPushButton:hover {{
+                    background: {"rgba(72, 72, 72, 210)" if theme.is_dark else "rgba(240, 240, 240, 200)"};
+                }}
+            """
+        return f"""
+            QPushButton {{
+                border: 1px solid {theme.grey}; border-radius: 4px;
+                background: {"rgba(48, 48, 48, 210)" if theme.is_dark else "rgba(240, 240, 240, 200)"};
+                padding: 2px;
+            }}
+            QPushButton:hover {{ border-color: {theme.accent_warm}; }}
+        """
 
     def __init__(self, parent: QWidget | None):
         super().__init__(parent)
@@ -107,8 +131,9 @@ class HistoryWidget(QListWidget):
         self.setIconSize(theme.screen_scale(self, QSize(self._thumb_size, self._thumb_size)))
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet(self._list_css)
-        self.setItemDelegate(theme.HistoryDelegate(self))
-        self.setMouseTracking(True)
+        if not theme.legacy:
+            self.setItemDelegate(theme.HistoryDelegate(self))
+            self.setMouseTracking(True)
         self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.setDragEnabled(False)
         self.itemClicked.connect(self.handle_preview_click)
@@ -170,7 +195,8 @@ class HistoryWidget(QListWidget):
             header.setFlags(Qt.ItemFlag.NoItemFlags)
             header.setData(Qt.ItemDataRole.UserRole, job.id)
             header.setData(Qt.ItemDataRole.ToolTipRole, job.params.prompt)
-            header.setSizeHint(QSize(9999, self.fontMetrics().lineSpacing() + 12))
+            padding = 4 if theme.legacy else 12
+            header.setSizeHint(QSize(9999, self.fontMetrics().lineSpacing() + padding))
             header.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
             self.addItem(header)
 
@@ -311,7 +337,7 @@ class HistoryWidget(QListWidget):
 
     def paintEvent(self, e):
         super().paintEvent(e)
-        if self.count() > 0:
+        if self.count() > 0 or theme.legacy:
             return
         # empty state: the dissolving stroke and a hint
         viewport = ensure(self.viewport())
@@ -718,6 +744,7 @@ class ProgressBar(AccentProgressBar):
         super().__init__(parent)
         self._model = root.active_model
         self._model_bindings: list[QMetaObject.Connection] = []
+        self._palette = self.palette()
         self.setMinimum(0)
         self.setMaximum(1000)
 
@@ -737,6 +764,12 @@ class ProgressBar(AccentProgressBar):
 
     def _update_progress_kind(self):
         is_upload = self._model.progress_kind is ProgressKind.upload
+        if theme.legacy:  # the old look marks uploads in amber
+            palette = self._palette
+            if is_upload:
+                palette = QPalette(self._palette)
+                palette.setColor(QPalette.ColorRole.Highlight, QColor(theme.progress_alt))
+            self.setPalette(palette)
         self.alt_color = theme.accent_cool if is_upload else None
         self.update()
 
@@ -762,8 +795,7 @@ class GenerationWidget(QWidget):
         self.workspace_select = WorkspaceSelectWidget(self)
         self.style_select = StyleSelectWidget(self)
 
-        layout.addWidget(self.workspace_select)
-        layout.addWidget(self.style_select)
+        add_workspace_header(layout, self.workspace_select, self.style_select)
 
         self.region_prompt = RegionPromptWidget(self)
         layout.addWidget(self.region_prompt)
@@ -810,7 +842,7 @@ class GenerationWidget(QWidget):
         )
 
         generate_layout = QHBoxLayout()
-        generate_layout.setSpacing(3)
+        generate_layout.setSpacing(0 if theme.legacy else 3)
         generate_layout.addWidget(self.generate_button)
         generate_layout.addWidget(self.inpaint_mode_button)
         generate_layout.addWidget(self.region_mask_button)
@@ -1020,7 +1052,7 @@ class GenerationWidget(QWidget):
         is_edit = self.model.is_editing
         self.region_mask_button.setVisible(has_regions)
         self.region_mask_button.setEnabled(has_active_region)
-        self.region_mask_button.setIcon(_region_mask_button_icons[is_region_only])
+        self.region_mask_button.setIcon(_region_mask_button_icon(is_region_only))
 
         if self.model.document.selection_bounds is None and not is_region_only:
             self.inpaint_mode_button.setVisible(self.model.can_toggle_edit)
@@ -1072,7 +1104,5 @@ class GenerationWidget(QWidget):
         self.generate_button.setIcon(theme.icon(icon))
 
 
-_region_mask_button_icons = {
-    True: theme.icon("region-alpha-active"),
-    False: theme.icon("region-alpha"),
-}
+def _region_mask_button_icon(is_region_only: bool):
+    return theme.icon("region-alpha-active" if is_region_only else "region-alpha")

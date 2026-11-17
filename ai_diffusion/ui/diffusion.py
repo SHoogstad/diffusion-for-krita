@@ -21,6 +21,7 @@ from ..qt.QtCore import Qt, pyqtSignal
 from ..qt.QtGui import QIcon
 from ..qt.QtWidgets import (
     QCheckBox,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QStackedWidget,
@@ -126,19 +127,24 @@ class ConnectionWidget(QWidget):
         self._server = server
 
         self._connect_status = QLabel(_("Not connected to server."), self)
-        self._connect_status.setWordWrap(True)
-        self._connect_status.setTextFormat(Qt.TextFormat.RichText)
+        if not theme.legacy:
+            self._connect_status.setWordWrap(True)
+            self._connect_status.setTextFormat(Qt.TextFormat.RichText)
 
         self._connect_error = QLabel(self)
         self._connect_error.setVisible(False)
         self._connect_error.setWordWrap(True)
         self._connect_error.setStyleSheet(f"color: {theme.yellow};")
 
-        settings_icon = theme.tinted(theme.icon("settings").pixmap(64), theme.accent_text)
-        self._settings_button = QPushButton(QIcon(settings_icon), _("Configure"), self)
-        self._settings_button.setStyleSheet(theme.primary_button_stylesheet)
-        self._settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._settings_button.setMinimumHeight(34)
+        if theme.legacy:
+            self._settings_button = QPushButton(theme.icon("settings"), _("Configure"), self)
+            self._settings_button.setMinimumHeight(32)
+        else:
+            settings_icon = theme.tinted(theme.icon("settings").pixmap(64), theme.accent_text)
+            self._settings_button = QPushButton(QIcon(settings_icon), _("Configure"), self)
+            self._settings_button.setStyleSheet(theme.primary_button_stylesheet)
+            self._settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._settings_button.setMinimumHeight(34)
         self._settings_button.clicked.connect(self.show_settings)
 
         layout = QVBoxLayout()
@@ -153,6 +159,10 @@ class ConnectionWidget(QWidget):
         self.update_content()
 
     def _set_status(self, text: str, color: str):
+        if theme.legacy:  # plain text, no colored dot
+            self._connect_status.setTextFormat(Qt.TextFormat.PlainText)
+            self._connect_status.setText(text)
+            return
         text = text.replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>")
         self._connect_status.setText(f"<span style='color:{color}'>\u25cf</span>&nbsp; {text}")
 
@@ -252,9 +262,20 @@ class WelcomeWidget(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        layout.setContentsMargins(14, 14, 14, 10)
-
-        banner = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
+        if theme.legacy:
+            banner = QWidget(self)
+            header_layout = QHBoxLayout(banner)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_logo = QLabel(banner)
+            header_logo.setPixmap(theme.logo().scaled(64, 64))
+            header_logo.setMaximumSize(64, 64)
+            header_text = QLabel("Diffusion\nfor Krita", banner)
+            header_text.setStyleSheet("font-size: 12pt")
+            header_layout.addWidget(header_logo)
+            header_layout.addWidget(header_text)
+        else:
+            layout.setContentsMargins(14, 14, 14, 10)
+            banner = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
 
         self._update_widget = AutoUpdateWidget(self)
         self._news_widget = NewsWidget(self)
@@ -263,25 +284,42 @@ class WelcomeWidget(QWidget):
         self._connection_widget = ConnectionWidget(server, self)
 
         repo = "https://github.com/SHoogstad/diffusion-for-krita"
-        link = f"style='color: {theme.accent_cool}; text-decoration: none;'"
-        separator = f" <span style='color: {theme.grey};'>&nbsp;\u00b7&nbsp;</span> "
-        info = QLabel(
-            separator.join([
-                f"<a {link} href='{repo}'>GitHub</a>",
-                f"<a {link} href='{repo}#readme'>Documentation</a>",
-                f"<a {link} href='{repo}/issues'>Issues</a>",
-            ]),
-            self,
-        )
+        if theme.legacy:
+            info = QLabel(
+                f"<a href='{repo}'>GitHub Project</a> | "
+                + f"<a href='{repo}#readme'>Documentation</a> | "
+                + f"<a href='{repo}/issues'>Issues</a>",
+                self,
+            )
+        else:
+            link = f"style='color: {theme.accent_cool}; text-decoration: none;'"
+            separator = f" <span style='color: {theme.grey};'>&nbsp;\u00b7&nbsp;</span> "
+            info = QLabel(
+                separator.join([
+                    f"<a {link} href='{repo}'>GitHub</a>",
+                    f"<a {link} href='{repo}#readme'>Documentation</a>",
+                    f"<a {link} href='{repo}/issues'>Issues</a>",
+                ]),
+                self,
+            )
         info.setOpenExternalLinks(True)
 
         layout.addWidget(banner)
-        layout.addSpacing(10)
-        layout.addWidget(self._update_widget)
-        layout.addWidget(self._news_widget)
-        layout.addWidget(self._connection_widget)
-        layout.addStretch()
-        layout.addWidget(info, 0, Qt.AlignmentFlag.AlignHCenter)
+        if theme.legacy:
+            layout.addSpacing(12)
+            layout.addWidget(self._update_widget)
+            layout.addWidget(self._news_widget)
+            layout.addWidget(self._connection_widget)
+            layout.addSpacing(24)
+            layout.addWidget(info, 0, Qt.AlignmentFlag.AlignRight)
+            layout.addStretch()
+        else:
+            layout.addSpacing(10)
+            layout.addWidget(self._update_widget)
+            layout.addWidget(self._news_widget)
+            layout.addWidget(self._connection_widget)
+            layout.addStretch()
+            layout.addWidget(info, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.update_content()
         root.auto_update.state_changed.connect(self.update_content)

@@ -115,8 +115,14 @@ class _SliderSpinBox(QDoubleSpinBox):
             return
         rect = QRectF(self._line_edit().geometry()).adjusted(-1, -1, 1, 1)
         rect.setWidth(rect.width() * ratio)
-        alpha = 130 if self.isEnabled() else 45
         from . import theme  # imported late: the theme needs a QApplication
+
+        if theme.legacy:
+            color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
+            color.setAlpha(110 if self.isEnabled() else 45)
+            QPainter(self).fillRect(rect, color)
+            return
+        alpha = 130 if self.isEnabled() else 45
 
         start, end = QColor(theme.accent_cool), QColor(theme.accent_cool)
         start.setAlpha(alpha)

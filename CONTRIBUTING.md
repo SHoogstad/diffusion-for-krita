@@ -110,20 +110,28 @@ The easiest way to run a development version of the plugin is to create symlinks
 
 ### Look and icons
 
-The plugin has its own look, in the red, white and blue of the Dutch flag. It lives in
-`ai_diffusion/ui/theme.py`:
+The plugin has its own look. It lives in `ai_diffusion/ui/theme.py`, and `apply_look()` sets
+it from the Look setting: **Country** (colors and flag of a country, `ui/flags.py`), **Plain**
+(one color) or **Legacy** (the interface before the redesign). A change applies without a
+restart: `theme.look_events.changed` rebuilds the docker and the settings dialog, so read theme
+values when a widget is made or painted, never at import (no class attributes with colors,
+style sheets or icons).
 
-* **Colors.** `accent` (red) is the primary action, `accent_cool` (blue) marks what is on,
-  focused or a link, `blue_fill` is the blue ground under white text. Each has a value for
-  dark and for light Krita themes. Use these names, not color codes, in widgets.
+* **Colors.** `accent` is the primary action, `accent_cool` marks what is on, focused or a
+  link, `blue_fill` is the ground under light text. Each has a value for dark and for light
+  Krita themes. Use these names, not color codes, in widgets.
+* **Legacy look.** Where a widget looks different from v1.65.0, it checks `theme.legacy` and
+  does what it did before (the old icons are in `ai_diffusion/icons/legacy`, Krita's own icons
+  come from `theme.krita_icon()`). New controls need no legacy branch, they simply use
+  Krita's own widgets there because the style sheets are empty.
 * **Standard widgets** get their look from `docker_stylesheet`, which is set once on the
   docker and on the settings dialog. A new field, checkbox, slider or button needs no styling
   of its own. Use `primary_button_stylesheet` for the one main action of a screen and
   `style_select()` for a selector at the top of a workspace.
 * **Signature.** `paint_dissolve()` draws the flag as a halftone that thins out, and
-  `paint_flag_bar()` a small flag. Red is above white above blue; side by side reads as a
-  different flag.
-* **Icons** are generated. Do not edit the SVG files in `ai_diffusion/icons`: change the
+  `paint_flag_bar()` a small flag, both in the shape of the look's flag.
+* **Icons** are generated. Do not edit the SVG files in `ai_diffusion/icons` (except
+  `icons/legacy`, which keeps the old ones as they were): change the
   drawing in `scripts/make_icons.py` and run it. It writes every icon for dark and for light
   themes. Icons are drawn on a 24 unit grid with round 2 unit lines, in the text color, with
   the detail that matters in red (`r`) or blue (`b`).

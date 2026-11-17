@@ -27,6 +27,7 @@ from .widget import (
     StyleSelectWidget,
     TextPromptWidget,
     WorkspaceSelectWidget,
+    add_workspace_header,
     create_wide_tool_button,
 )
 
@@ -48,8 +49,7 @@ class AnimationWidget(QWidget):
         self.workspace_select = WorkspaceSelectWidget(self)
         self.style_select = StyleSelectWidget(self, show_quality=True)
 
-        layout.addWidget(self.workspace_select)
-        layout.addWidget(self.style_select)
+        add_workspace_header(layout, self.workspace_select, self.style_select)
 
         self.prompt_textbox = TextPromptWidget(parent=self)
         self.prompt_textbox.line_count = settings.prompt_line_count
@@ -85,7 +85,8 @@ class AnimationWidget(QWidget):
 
         self.generate_button = QPushButton(self)
         self.generate_button.setStyleSheet(theme.primary_button_stylesheet)
-        self.generate_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        if not theme.legacy:
+            self.generate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.generate_button.setMinimumHeight(int(self.generate_button.sizeHint().height() * 1.2))
 
         self.queue_button = QueueButton(parent=self, supports_batch=False)

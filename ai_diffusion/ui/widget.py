@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from itertools import chain
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 from ..backend.client import filter_supported_styles, resolve_arch
 from ..backend.workflow import apply_strength, snap_to_percent
@@ -42,6 +42,7 @@ from ..qt.QtGui import (
     QTextCursor,
 )
 from ..qt.QtWidgets import (
+    QAction,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -60,6 +61,7 @@ from ..qt.QtWidgets import (
     QStyle,
     QStyleOption,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
@@ -91,14 +93,23 @@ class QueuePopup(QMenu):
 
         palette = self.palette()
         self.setObjectName("QueuePopup")
-        self.setStyleSheet(
-            theme.docker_stylesheet
-            + f"""
-            QWidget#QueuePopup {{
-                background-color: {palette.window().color().name()};
-                border: 1px solid {theme.accent_cool}; padding: 6px;
-            }}"""
-        )
+        if theme.legacy:
+            self.setStyleSheet(
+                f"""
+                QWidget#QueuePopup {{
+                    background-color: {palette.window().color().name()};
+                    border: 1px solid {palette.dark().color().name()};
+                }}"""
+            )
+        else:
+            self.setStyleSheet(
+                theme.docker_stylesheet
+                + f"""
+                QWidget#QueuePopup {{
+                    background-color: {palette.window().color().name()};
+                    border: 1px solid {theme.accent_cool}; padding: 6px;
+                }}"""
+            )
 
         self._layout = QGridLayout()
         self.setLayout(self._layout)
@@ -318,10 +329,14 @@ class QueueButton(QToolButton):
 
     def sizeHint(self) -> QSize:
         original = super().sizeHint()
-        width = original.height() * 0.75 + self.fontMetrics().horizontalAdvance(" 99 ") + 30
+        extra = 20 if theme.legacy else 30
+        width = original.height() * 0.75 + self.fontMetrics().horizontalAdvance(" 99 ") + extra
         return QSize(int(width), original.height())
 
     def paintEvent(self, a0):
+        if theme.legacy:
+            _paint_tool_drop_down(self, self.text())
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -380,7 +395,8 @@ class StyleSelectWidget(QWidget):
 
         self._combo = QComboBox(self)
         theme.style_select(self._combo)
-        self._combo.setIconSize(QSize(22, 22))
+        if not theme.legacy:
+            self._combo.setIconSize(QSize(22, 22))
         self._combo.setToolTip(_("Style: the model and its settings used to generate"))
         self.update_styles()
         self._combo.currentIndexChanged.connect(self.change_style)
@@ -396,9 +412,13 @@ class StyleSelectWidget(QWidget):
 
         settings_btn = QToolButton(self)
         settings_btn.setIcon(theme.icon("settings"))
-        settings_btn.setStyleSheet(theme.ghost_button_stylesheet)
         settings_btn.setToolTip(_("Edit this style"))
-        settings_btn.setFixedSize(self._combo.sizeHint().height(), self._combo.sizeHint().height())
+        if theme.legacy:
+            settings_btn.setAutoRaise(True)
+        else:
+            settings_btn.setStyleSheet(theme.ghost_button_stylesheet)
+            height = self._combo.sizeHint().height()
+            settings_btn.setFixedSize(height, height)
         settings_btn.clicked.connect(self.show_settings)
         layout.addWidget(settings_btn)
 
@@ -984,16 +1004,63 @@ class WorkspaceTab(QToolButton):
             painter.drawText(text_rect, align, self._text)
 
 
-class WorkspaceSelectWidget(QWidget):
-    """Tab strip to switch between workspaces. All of them are visible at once."""
+def WorkspaceSelectWidget(parent: QWidget) -> WorkspaceTabs | WorkspaceMenuButton:
+    """The workspace selector: a tab strip, or the drop-down button of the legacy look."""
+    return WorkspaceMenuButton(parent) if theme.legacy else WorkspaceTabs(parent)
 
-    _icons: ClassVar[dict[Workspace, QIcon]] = {
-        Workspace.generation: theme.icon("workspace-generation"),
-        Workspace.upscaling: theme.icon("workspace-upscaling"),
-        Workspace.live: theme.icon("workspace-live"),
-        Workspace.animation: theme.icon("workspace-animation"),
-        Workspace.custom: theme.icon("workspace-custom"),
-    }
+
+class WorkspaceMenuButton(QToolButton):
+    """Workspace selector of the legacy look: an icon button with a menu."""
+
+    _value = Workspace.generation
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._icons = {
+            Workspace.generation: theme.icon("workspace-generation"),
+            Workspace.upscaling: theme.icon("workspace-upscaling"),
+            Workspace.live: theme.icon("workspace-live"),
+            Workspace.animation: theme.icon("workspace-animation"),
+            Workspace.custom: theme.icon("workspace-custom"),
+        }
+        menu = QMenu(self)
+        menu.addAction(self._create_action(_("Generate"), Workspace.generation))
+        menu.addAction(self._create_action(_("Upscale"), Workspace.upscaling))
+        menu.addAction(self._create_action(_("Live"), Workspace.live))
+        menu.addAction(self._create_action(_("Animation"), Workspace.animation))
+        menu.addAction(self._create_action(_("Graph"), Workspace.custom))
+
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.setMenu(menu)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setToolTip(
+            _("Switch between workspaces: image generation, upscaling, live preview and animation.")
+        )
+        self.setMinimumWidth(int(self.sizeHint().width() * 1.6))
+        self.value = Workspace.generation
+
+    def paintEvent(self, a0):
+        _paint_tool_drop_down(self)
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, workspace: Workspace):
+        self._value = workspace
+        self.setIcon(self._icons[workspace])
+
+    def _create_action(self, name: str, workspace: Workspace):
+        action = QAction(name, self)
+        action.setIcon(self._icons[workspace])
+        action.setIconVisibleInMenu(True)
+        action.triggered.connect(actions.set_workspace(workspace))
+        return action
+
+
+class WorkspaceTabs(QWidget):
+    """Tab strip to switch between workspaces. All of them are visible at once."""
 
     _value = Workspace.generation
 
@@ -1063,10 +1130,11 @@ class GenerateButton(QPushButton):
         self._kind = kind
         self._seed_icon = theme.icon("seed")
         self._resolution_icon = theme.icon("resolution-multiplier")
-        font = self.font()
-        font.setBold(True)
-        self.setFont(font)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        if not theme.legacy:
+            font = self.font()
+            font.setBold(True)
+            self.setFont(font)
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
     @property
@@ -1095,6 +1163,9 @@ class GenerateButton(QPushButton):
             super().mouseReleaseEvent(e)
 
     def paintEvent(self, a0: QPaintEvent | None) -> None:
+        if theme.legacy:
+            self._paint_legacy()
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -1163,26 +1234,69 @@ class GenerateButton(QPushButton):
         if is_hover and self.model.resolution_multiplier != 1:
             draw_icon(self._resolution_icon, hint_size, hint_x)
 
+    def _paint_legacy(self):
+        """The button of the legacy look: Krita's own button with icon and text."""
+        opt = QStyleOption()
+        opt.initFrom(self)
+        opt.state |= QStyle.StateFlag.State_Sunken if self.isDown() else QStyle.StateFlag(0)
+        painter = QPainter(self)
+        fm = self.fontMetrics()
+        style = ensure(self.style())
+        align = (
+            Qt.AlignmentFlag.AlignLeft
+            | Qt.AlignmentFlag.AlignVCenter
+            | Qt.AlignmentFlag.AlignAbsolute
+        )
+        rect = self.rect()
+        pixmap = self.icon().pixmap(int(fm.height() * 1.3))
+        pixmap_width = _get_width_dip(pixmap)
+        is_hover = opt.state & QStyle.StateFlag.State_MouseOver
+        element = QStyle.PrimitiveElement.PE_PanelButtonCommand
+        content_width = fm.horizontalAdvance(self._operation) + 5 + pixmap_width
+        content_rect = rect.adjusted(int(0.5 * (rect.width() - content_width)), 0, 0, 0)
+        style.drawPrimitive(element, opt, painter, self)
+        style.drawItemPixmap(painter, content_rect, align, pixmap)
+        content_rect = content_rect.adjusted(pixmap_width + 5, 0, 0, 0)
+        style.drawItemText(painter, content_rect, align, self.palette(), True, self._operation)
+
+        seed_width = 0
+        if is_hover and self.model.fixed_seed:
+            pixmap = self._seed_icon.pixmap(fm.height())
+            seed_width = pixmap_width + 4
+            seed_rect = rect.adjusted(rect.width() - seed_width, 0, 0, 0)
+            style.drawItemPixmap(painter, seed_rect, align, pixmap)
+
+        if is_hover and self.model.resolution_multiplier != 1:
+            pixmap = self._resolution_icon.pixmap(fm.height())
+            resolution_rect = rect.adjusted(rect.width() - seed_width - pixmap_width - 4, 0, 0, 0)
+            style.drawItemPixmap(painter, resolution_rect, align, pixmap)
+
 
 class ChipToggle(QCheckBox):
     """A checkbox drawn as a pill: outlined when off, filled blue when on."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        if not theme.legacy:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
     def sizeHint(self) -> QSize:
+        if theme.legacy:
+            return super().sizeHint()
         fm = self.fontMetrics()
         return QSize(fm.horizontalAdvance(self.text()) + 20, fm.height() + 8)
 
     def minimumSizeHint(self) -> QSize:
-        return self.sizeHint()
+        return super().minimumSizeHint() if theme.legacy else self.sizeHint()
 
     def hitButton(self, pos):
-        return self.rect().contains(pos)
+        return super().hitButton(pos) if theme.legacy else self.rect().contains(pos)
 
     def paintEvent(self, a0):
+        if theme.legacy:
+            super().paintEvent(a0)
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
@@ -1216,9 +1330,12 @@ class AccentProgressBar(QProgressBar):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setTextVisible(False)
-        self.setFixedHeight(5)
+        self.setFixedHeight(6 if theme.legacy else 5)
 
     def paintEvent(self, a0):
+        if theme.legacy:  # Krita's own progress bar (uploads: see ProgressBar)
+            super().paintEvent(a0)
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -1255,7 +1372,7 @@ class ErrorBox(QFrame):
 
         self._copy_button = QToolButton(self)
         self._copy_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        self._copy_button.setIcon(theme.icon("copy"))
+        self._copy_button.setIcon(theme.krita_icon("copy", "edit-copy"))
         self._copy_button.setToolTip(_("Copy error message to clipboard"))
         self._copy_button.setAutoRaise(True)
         self._copy_button.clicked.connect(self._copy_error)
@@ -1265,18 +1382,30 @@ class ErrorBox(QFrame):
         self._icon.setScaledContents(True)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 4, 6)
-        layout.setSpacing(8)
-        layout.addWidget(self._icon, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._label, 1)
-        layout.addWidget(self._copy_button, 0, Qt.AlignmentFlag.AlignTop)
+        if theme.legacy:
+            self._icon.setVisible(False)
+            layout.setContentsMargins(2, 2, 2, 2)
+            layout.addWidget(self._label)
+            layout.addWidget(self._copy_button)
+        else:
+            layout.setContentsMargins(8, 6, 4, 6)
+            layout.setSpacing(8)
+            layout.addWidget(self._icon, 0, Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(self._label, 1)
+            layout.addWidget(self._copy_button, 0, Qt.AlignmentFlag.AlignTop)
 
         self.reset()
 
-    def reset(self, color: str = theme.red):
+    def reset(self, color: str | None = None):
+        color = color or theme.red
         self._copy_button.setVisible(False)
         self._label.setStyleSheet(f"color: {color};")
         is_error = color == theme.red
+        if theme.legacy:
+            style = "QFrame#errorBox { border: 1px solid #a01020; }" if is_error else ""
+            self.setStyleSheet(style)
+            self.setVisible(False)
+            return
         tint = QColor(theme.accent if is_error else color)
         ground = f"rgba({tint.red()}, {tint.green()}, {tint.blue()}, {34 if is_error else 22})"
         self._icon.setPixmap(theme.icon("alert" if is_error else "warning").pixmap(36, 36))
@@ -1395,3 +1524,16 @@ def _paint_tool_drop_down(widget: QToolButton, text: str | None = None):
         style.drawItemText(painter, text_rect, align, widget.palette(), True, text)
     painter.translate(int(0.5 * rect.width() - 10), 0)
     style.drawPrimitive(QStyle.PrimitiveElement.PE_IndicatorArrowDown, opt, painter)
+
+
+def add_workspace_header(layout: QVBoxLayout, workspace_select: QWidget, selector: QWidget):
+    """The workspace tabs on a row of their own above the selector; in the legacy look the
+    drop-down button and the selector share one row."""
+    if theme.legacy:
+        row = QHBoxLayout()
+        row.addWidget(workspace_select)
+        row.addWidget(selector)
+        layout.addLayout(row)
+    else:
+        layout.addWidget(workspace_select)
+        layout.addWidget(selector)

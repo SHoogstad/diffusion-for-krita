@@ -838,7 +838,7 @@ class ServerWidget(QWidget):
         self._location_edit.textChanged.connect(self._change_location)
 
         self._location_select = QToolButton(self)
-        self._location_select.setIcon(theme.icon("folder"))
+        self._location_select.setIcon(theme.krita_icon("folder", "document-open"))
         self._location_select.clicked.connect(self._select_location)
 
         location_layout = QHBoxLayout()

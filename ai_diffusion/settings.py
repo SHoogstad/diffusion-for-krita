@@ -59,6 +59,7 @@ class PromptEnhancer(Enum):
 class InterfaceLook(Enum):
     country = _("Country: colors and flag of your country")
     plain = _("Plain: one color of your choice")
+    legacy = _("Legacy: the interface before the redesign")
 
 
 class GenerationFinishedAction(Enum):

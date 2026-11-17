@@ -146,6 +146,7 @@ def apply_look(look=None, country_code: str | None = None, color: str | None = N
     global strong_highlight, primary_button_stylesheet, ghost_button_stylesheet
     global select_stylesheet, docker_stylesheet, flat_combo_stylesheet, _icon_map, _badge_colors
     global _icon_cache_dir, _chevron, _icons, _mode, _edge, ui_bands, _band_outline, _logo
+    global legacy, red
     from ..settings import InterfaceLook
 
     values = _peek_settings() if look is None else {}
@@ -372,6 +373,26 @@ def apply_look(look=None, country_code: str | None = None, color: str | None = N
         QComboBox QAbstractItemView {{ selection-color: {highlight}; }}
     """
 
+    legacy = look is InterfaceLook.legacy
+    if legacy:
+        # The interface before the redesign: Krita's own widgets, the old colors and icons.
+        # Widgets that the redesign changed check `legacy` and do what they did before.
+        red = "#d07a40" if is_dark else "#c07630"
+        highlight = "#80d0f0" if is_dark else "#335577"
+        strong_highlight = "#70d0ff" if is_dark else "#2040ff"
+        primary_button_stylesheet = ghost_button_stylesheet = ""
+        select_stylesheet = docker_stylesheet = ""
+        flat_combo_stylesheet = f"""
+            QComboBox {{ border: none; background-color: transparent; padding: 1px 12px 1px 2px; }}
+            QComboBox QAbstractItemView {{ selection-color: {highlight}; }}
+        """
+    else:
+        red = "#f4626c" if is_dark else "#ae1c28"
+
+
+legacy = False  # the interface before the redesign (InterfaceLook.legacy), set by apply_look
+legacy_icon_path = Path(__file__).parent.parent / "icons" / "legacy"
+
 
 def settings_country():
     from ..settings import settings
@@ -472,7 +493,17 @@ def model_badge(name: str):
     return _badge_cache[name]
 
 
+def _legacy_icon(name: str):
+    theme = "dark" if is_dark else "light"
+    for path in (legacy_icon_path / f"{name}-{theme}.svg", legacy_icon_path / f"{name}.png"):
+        if path.exists():
+            return QIcon(str(path))
+    return None
+
+
 def icon(name: str):
+    if legacy and (old := _legacy_icon(name)):
+        return old  # icons the redesign added have no old version, they fall through
     if name.startswith("sd-version-") and name[11:] in _badges:
         return model_badge(name[11:])
     theme = "dark" if is_dark else "light"
@@ -625,8 +656,19 @@ class HistoryDelegate(QStyledItemDelegate):
             painter.drawRoundedRect(target.adjusted(-1.5, -1.5, 1.5, 1.5), 7, 7)
 
 
+def krita_icon(name: str, krita_name: str):
+    """One of the plugin's icons; in the legacy look Krita's own icon that was used before."""
+    if legacy:
+        from krita import Krita
+
+        return Krita.instance().icon(krita_name)
+    return icon(name)
+
+
 def style_select(combo: QComboBox):
     """Give a combo box the look of the docker's selectors (see select_stylesheet)."""
+    if legacy:
+        return
     combo.setItemDelegate(SelectDelegate(combo))  # a plain combo list ignores the stylesheet
     combo.setStyleSheet(select_stylesheet)
 
@@ -990,6 +1032,8 @@ def logo(size=128):
     """The logo in the colors of the look. In the country look the flag shows through the
     three strokes as it is (a vertical tricolor runs along them, a disc sits across them); in
     the plain look the strokes take the one color. Both on a deep ground of the look's hue."""
+    if legacy:
+        return QPixmap(str(legacy_icon_path / "logo-128.png"))
     if country is None:
         pixmap = QIcon(str(_logo)).pixmap(size, size) if _logo.suffix == ".svg" else QPixmap()
         return pixmap if not pixmap.isNull() else QPixmap(str(icon_path / "logo-128.png"))

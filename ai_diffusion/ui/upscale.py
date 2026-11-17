@@ -29,6 +29,7 @@ from .widget import (
     StrengthWidget,
     StyleSelectWidget,
     WorkspaceSelectWidget,
+    add_workspace_header,
 )
 
 
@@ -126,8 +127,7 @@ class UpscaleWidget(QWidget):
         self.workspace_select = WorkspaceSelectWidget(self)
         self.model_select = QComboBox(self)
         theme.style_select(self.model_select)
-        layout.addWidget(self.workspace_select)
-        layout.addWidget(self.model_select)
+        add_workspace_header(layout, self.workspace_select, self.model_select)
 
         self.factor_widget = FactorWidget(self)
         self.factor_widget.value_changed.connect(self._update_factor)

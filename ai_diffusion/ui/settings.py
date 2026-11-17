@@ -18,6 +18,7 @@ from ..qt.QtGui import (
     QColor,
     QCursor,
     QDesktopServices,
+    QFontDatabase,
     QFontMetrics,
     QGuiApplication,
     QPainter,
@@ -97,6 +98,21 @@ class InitialSetupWidget(QWidget):
         layout.addSpacing(20)
 
         def add_option(title: str, desc_text: str, button_text: str, mode: ServerMode, icon: str):
+            if theme.legacy:  # title, text and a button below each other
+                header = QLabel("<b>" + title + "</b>", self)
+                desc = QLabel(desc_text, self)
+                desc.setMaximumWidth(600)
+                desc.setWordWrap(True)
+                desc.setOpenExternalLinks(True)
+                button = QPushButton(button_text, self)
+                button.setMinimumHeight(int(1.3 * button.sizeHint().height()))
+                button.setMaximumWidth(300)
+                button.clicked.connect(self._choose(mode))
+                layout.addWidget(header)
+                layout.addWidget(desc)
+                layout.addWidget(button)
+                layout.addSpacing(16)
+                return
             # each option is a card: symbol, what it is, and one button
             card = QFrame(self)
             card.setObjectName("optionCard")
@@ -970,12 +986,12 @@ class InterfaceSettings(SettingsTab):
         tag_files = cast(FileListSetting, self._widgets["tag_files"])
         self._layout.addWidget(tag_files.list_widget)
         tag_files.add_button(
-            theme.icon("refresh"),
+            theme.krita_icon("refresh", "reload-preset"),
             _("Look for new tag files"),
             self._update_tag_files,
         )
         tag_files.add_button(
-            theme.icon("folder"),
+            theme.krita_icon("folder", "document-open"),
             _("Open folder where custom tag files can be placed"),
             self._open_tag_folder,
         )
@@ -1025,9 +1041,9 @@ class InterfaceSettings(SettingsTab):
         return items
 
     def _update_look_widgets(self):
-        is_country = self._widgets["interface_look"].value is InterfaceLook.country
-        self._widgets["interface_country"].visible = is_country
-        self._widgets["interface_color"].visible = not is_country
+        look = self._widgets["interface_look"].value
+        self._widgets["interface_country"].visible = look is InterfaceLook.country
+        self._widgets["interface_color"].visible = look is InterfaceLook.plain
 
     def _tag_files(self) -> list[str]:
         plugin_tags_path = util.plugin_dir / "tags"
@@ -1279,8 +1295,20 @@ class AboutSettings(SettingsTab):
         italic = self.font()
         italic.setItalic(True)
 
-        header = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
         font_height = QFontMetrics(extra_large).height() + 4
+        if theme.legacy:
+            header = QWidget(self)
+            header_layout = QHBoxLayout(header)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_logo = QLabel(header)
+            header_logo.setPixmap(theme.logo().scaled(font_height * 2, font_height * 2))
+            header_logo.setMaximumSize(font_height * 2, font_height * 2)
+            header_text = QLabel("Generative AI\nfor Krita", header)
+            header_text.setFont(extra_large)
+            header_layout.addWidget(header_logo)
+            header_layout.addWidget(header_text)
+        else:
+            header = theme.BrandBanner(f"for Krita  \u00b7  {__release__}", self)
 
         current_version_name = QLabel(_("Current version") + ":", self)
         current_version_value = QLabel(__release__, self)
@@ -1436,6 +1464,8 @@ class AboutSettings(SettingsTab):
         text.setText(diagnostics)
         small = self.font()  # same font as everywhere else, a little smaller
         small.setPointSizeF(max(7.0, small.pointSizeF() * 0.9))
+        if theme.legacy:
+            small = QFontDatabase.systemFont(QFontDatabase.SystemFont.SmallestReadableFont)
         text.setFont(small)
         if clipboard is not None:
             msg = _("System information has been copied to the clipboard.")
@@ -1489,10 +1519,11 @@ class SettingsDialog(QDialog):
             self.resize(QSize(min_w, int(size.height() * 0.8)))
         self.setMinimumSize(min_size)
 
-        palette = self.palette()  # links in the brand blue instead of the default
-        palette.setColor(QPalette.ColorRole.Link, QColor(theme.accent_cool))
-        palette.setColor(QPalette.ColorRole.LinkVisited, QColor(theme.accent_cool))
-        self.setPalette(palette)
+        if not theme.legacy:
+            palette = self.palette()  # links in the brand blue instead of the default
+            palette.setColor(QPalette.ColorRole.Link, QColor(theme.accent_cool))
+            palette.setColor(QPalette.ColorRole.LinkVisited, QColor(theme.accent_cool))
+            self.setPalette(palette)
 
         self.setStyleSheet(theme.docker_stylesheet)
 
@@ -1527,22 +1558,26 @@ class SettingsDialog(QDialog):
             self._stack.addWidget(widget)
         self._list.setFixedWidth(max(120, text_width + 32))
 
-        self._list.setFrameShape(QFrame.Shape.NoFrame)
-        self._list.setStyleSheet(
-            f"""
-            QListWidget {{ background: transparent; outline: none; }}
-            QListWidget::item {{ border-radius: {theme.radius}px; padding-left: 8px; margin: 1px 0; }}
-            QListWidget::item:hover {{ background: {theme.line}; }}
-            QListWidget::item:selected {{
-                background: {theme.blue_fill}; color: {theme.fill_text}; font-weight: bold;
-            }}
-            """
-        )
+        if not theme.legacy:
+            self._list.setFrameShape(QFrame.Shape.NoFrame)
+            self._list.setStyleSheet(
+                f"""
+                QListWidget {{ background: transparent; outline: none; }}
+                QListWidget::item {{
+                    border-radius: {theme.radius}px; padding-left: 8px; margin: 1px 0;
+                }}
+                QListWidget::item:hover {{ background: {theme.line}; }}
+                QListWidget::item:selected {{
+                    background: {theme.blue_fill}; color: {theme.fill_text}; font-weight: bold;
+                }}
+                """
+            )
         self._list.setCurrentRow(0)
         self._list.currentRowChanged.connect(self._change_page)
         side = QVBoxLayout()
         side.addWidget(self._list, 1)
-        side.addWidget(theme.AccentLine(self, height=9))
+        if not theme.legacy:
+            side.addWidget(theme.AccentLine(self, height=9))
         layout.addLayout(side)
 
         inner = QVBoxLayout()
@@ -1579,7 +1614,7 @@ class SettingsDialog(QDialog):
         # so the color goes into the anchors themselves.
         anchor = f"<a style='color: {theme.accent_cool};' href"
         for label in self.findChildren(QLabel):
-            if "<a href" in label.text():
+            if "<a href" in label.text() and not theme.legacy:
                 label.setText(label.text().replace("<a href", anchor))
 
         root.connection.state_changed.connect(self._update_connection)

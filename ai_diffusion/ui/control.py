@@ -36,16 +36,17 @@ class ControlWidget(QWidget):
         self._control = control
         self._connections: list[QMetaObject.Connection | Binding] = []
 
-        # each control layer is a card
-        self.setObjectName("ControlRow")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(
-            f"QWidget#ControlRow {{ background: {theme.base}; border: 1px solid {theme.line_base};"
-            f" border-radius: {theme.radius}px; }}"
-        )
-
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 2, 4, 2)
+        if theme.legacy:
+            layout.setContentsMargins(0, 0, 0, 0)
+        else:  # each control layer is a card
+            self.setObjectName("ControlRow")
+            self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.setStyleSheet(
+                f"QWidget#ControlRow {{ background: {theme.base};"
+                f" border: 1px solid {theme.line_base}; border-radius: {theme.radius}px; }}"
+            )
+            layout.setContentsMargins(4, 2, 4, 2)
         self.setLayout(layout)
 
         self.mode_select = QComboBox(self)

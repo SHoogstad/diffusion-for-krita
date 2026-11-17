@@ -841,8 +841,11 @@ class CustomWorkflowWidget(QWidget):
         edit_layout.addWidget(self._accept_name_button)
         edit_layout.addWidget(self._cancel_name_button)
         self._workflow_edit_widgets.setLayout(edit_layout)
-        layout.addWidget(self._workspace_select)
         header_layout = QHBoxLayout()
+        if theme.legacy:  # the drop-down button sits in the row
+            header_layout.addWidget(self._workspace_select)
+        else:
+            layout.addWidget(self._workspace_select)
         header_layout.addWidget(self._workflow_select_widgets)
         header_layout.addWidget(self._workflow_edit_widgets)
         layout.addLayout(header_layout)
@@ -850,7 +853,7 @@ class CustomWorkflowWidget(QWidget):
         layout.addWidget(self._prompt_widget)
         layout.addWidget(self._splitter)
         actions_layout = QHBoxLayout()
-        actions_layout.setSpacing(3)
+        actions_layout.setSpacing(0 if theme.legacy else 3)
         actions_layout.addWidget(self._generate_button)
         actions_layout.addWidget(self._apply_button)
         actions_layout.addWidget(self._mode_button)
