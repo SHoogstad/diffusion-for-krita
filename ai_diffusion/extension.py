@@ -51,7 +51,10 @@ class AIToolsExtension(Extension):
         notifier.applicationClosing.connect(self.shutdown)  # type: ignore
 
     def setup(self):
-        eventloop.run(root.autostart(self._settings_dialog.connection.update_ui))
+        eventloop.run(root.autostart(self._update_server_ui))
+
+    def _update_server_ui(self):
+        SettingsDialog.instance().connection.update_ui()  # the dialog is renewed on a look change
 
     def shutdown(self):
         root.server.terminate()
@@ -64,7 +67,7 @@ class AIToolsExtension(Extension):
         self._actions[name] = action
 
     def createActions(self, window):
-        self._create_action(window, "settings", self._settings_dialog.show)
+        self._create_action(window, "settings", lambda *_: SettingsDialog.instance().show())
         self._create_action(window, "generate", actions.generate)
         self._create_action(window, "cancel", actions.cancel_active)
         self._create_action(window, "cancel_queued", actions.cancel_queued)

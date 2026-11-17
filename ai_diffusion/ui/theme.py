@@ -9,7 +9,7 @@ from ..backend.client import Client
 from ..files import FileFormat
 from ..localization import translate as _
 from ..platform_tools import is_windows
-from ..qt.QtCore import QObject, QPointF, QRectF, QSize, Qt
+from ..qt.QtCore import QObject, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
 from ..qt.QtGui import (
     QColor,
     QFontMetrics,
@@ -50,7 +50,7 @@ line_base = _palette.color(QPalette.ColorRole.Base).darker(120).name()
 
 # Brand colors. The country look takes them from the flag of the user's country (see flags.py),
 # the plain look from one chosen color. apply_look() sets everything below, at import from the
-# saved settings and again after the settings are loaded; a change needs a restart of Krita.
+# saved settings and again whenever a look setting changes (look_events tells the widgets).
 radius = 5
 _white, _ink = "#ffffff", "#141414"
 _window = _palette.color(QPalette.ColorRole.Window)
@@ -1061,4 +1061,42 @@ class SignalBlocker:
         self._obj.blockSignals(False)
 
 
+class _LookEvents(QObject):
+    changed = pyqtSignal()
+
+
+look_events = _LookEvents()
+"""`changed` fires after the look was switched in the settings: widgets that baked colors,
+style sheets or icons into themselves restyle or rebuild then, so no restart is needed."""
+
+_look_settings = ("interface_look", "interface_country", "interface_color")
+_refresh_pending = False
+
+
+def refresh_look():
+    """Apply the look from the settings now and tell the widgets."""
+    global _refresh_pending
+    from ..settings import settings
+
+    _refresh_pending = False
+    apply_look(settings.interface_look, settings.interface_country, settings.interface_color)
+    look_events.changed.emit()
+
+
+def _look_setting_changed(key: str, value: object):
+    global _refresh_pending
+    if key in _look_settings and not _refresh_pending:
+        # Later and once: the widget that changed the setting may be rebuilt, which must not
+        # happen inside its own signal.
+        _refresh_pending = True
+        QTimer.singleShot(0, refresh_look)
+
+
+def _watch_settings():
+    from ..settings import settings
+
+    settings.changed.connect(_look_setting_changed)
+
+
 apply_look()
+_watch_settings()

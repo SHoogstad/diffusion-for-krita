@@ -193,7 +193,7 @@ class Settings(QObject):
     _interface_look = Setting(
         _("Look"),
         InterfaceLook.country,
-        _("Colors of the plugin - requires restart!"),
+        _("Colors of the plugin"),
     )
 
     interface_country: str

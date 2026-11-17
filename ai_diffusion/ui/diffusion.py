@@ -11,6 +11,7 @@ from ..document import KritaDocument
 from ..localization import translate as _
 from ..model.connection import ConnectionState
 from ..model.model import DocumentModel, Workspace
+from ..model.properties import Binding
 from ..model.root import root
 from ..model.updates import UpdateState
 from ..qt.QtCore import Qt, pyqtSignal
@@ -24,6 +25,7 @@ from ..qt.QtWidgets import (
     QWidget,
 )
 from ..settings import ServerMode, settings
+from ..util import client_logger as log
 from . import theme
 from .animation import AnimationWidget
 from .custom_workflow import CustomWorkflowWidget
@@ -291,10 +293,35 @@ class WelcomeWidget(QWidget):
         return self._news_widget.has_news
 
 
+_binding_lists = ("_model_bindings", "_bindings", "_connections", "_model_connections")
+
+
+def _release_bindings(widget: QWidget):
+    """Disconnect the widgets below `widget` from the models they show, so model signals don't
+    reach them once they are deleted (lambdas are not disconnected by Qt)."""
+    for w in [widget, *widget.findChildren(QWidget)]:
+        for name in _binding_lists:
+            bindings = getattr(w, name, None)
+            if isinstance(bindings, list):
+                try:
+                    Binding.disconnect_all(bindings)
+                except Exception as e:
+                    log.warning(f"Could not disconnect {type(w).__name__}.{name}: {e}")
+                bindings.clear()
+
+
 class ImageDiffusionWidget(DockWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(_("Diffusion for Krita"))
+        self._build()
+
+        root.connection.state_changed.connect(self.update_content)
+        root.auto_update.state_changed.connect(self.update_content)
+        root.model_created.connect(self.register_model)
+        theme.look_events.changed.connect(self._rebuild)
+
+    def _build(self):
         self._welcome = WelcomeWidget(root.server)
         self._generation = GenerationWidget()
         self._upscaling = UpscaleWidget()
@@ -310,11 +337,17 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._custom)
         self._frame.setStyleSheet(theme.docker_stylesheet)
         self.setWidget(self._frame)
-
         self._welcome.accepted.connect(self.update_content)
-        root.connection.state_changed.connect(self.update_content)
-        root.auto_update.state_changed.connect(self.update_content)
-        root.model_created.connect(self.register_model)
+
+    def _rebuild(self):
+        """The look changed: colors, style sheets and icons are baked into the pages when they
+        are made, so make them again (the state lives in the models, not in the widgets)."""
+        old = self._frame
+        _release_bindings(old)
+        self._build()
+        old.hide()
+        old.deleteLater()
+        self.update_content()
 
     def canvasChanged(self, canvas: krita.Canvas):
         if canvas is not None and canvas.view() is not None:

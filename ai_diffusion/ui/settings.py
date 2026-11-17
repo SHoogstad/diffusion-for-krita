@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import ClassVar, cast
 
 from .. import __release__, eventloop, util
 from ..backend import resources, runpod, runpod_serverless
@@ -1457,6 +1457,14 @@ _contact_text = """
 """
 
 
+_busy_server_states = (
+    ServerState.installing,
+    ServerState.uninstalling,
+    ServerState.verifying,
+    ServerState.starting,
+)
+
+
 class SettingsDialog(QDialog):
     _instance = None
 
@@ -1574,6 +1582,34 @@ class SettingsDialog(QDialog):
         root.connection.state_changed.connect(self._update_connection)
         root.connection.models_changed.connect(self.styles.update_model_lists)
         root.connection.models_changed.connect(self._update_llms)
+        theme.look_events.changed.connect(self._renew)
+        self._server = server
+
+    _retired: ClassVar[list[SettingsDialog]] = []
+
+    def _renew(self):
+        """The look changed: colors, style sheets and icons are baked into the pages when they
+        are made, so make a new dialog in the new look, on the same page and spot."""
+        if type(self)._instance is not self:
+            return  # an older dialog that is kept alive (see below)
+        fresh = SettingsDialog(self._server)
+        fresh.setGeometry(self.geometry())
+        fresh._list.setCurrentRow(self._list.currentRow())
+        if (style := self.styles.current_style) is not None:
+            fresh.styles.current_style = style
+        if root.connection.client_if_connected:
+            fresh.styles.update_model_lists()
+            fresh._update_connection()
+            fresh._update_llms()
+        if self.isVisible():
+            fresh.show()
+            fresh._list.setCurrentRow(self._list.currentRow())
+        self.hide()
+        if root.server.state in _busy_server_states:
+            # A running install or start reports to the widgets of this dialog: keep them.
+            type(self)._retired.append(self)
+        else:
+            self.deleteLater()
 
     def read(self):
         self.connection.read()
