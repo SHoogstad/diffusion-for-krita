@@ -25,6 +25,7 @@ from typing import NamedTuple
 
 from ..qt.QtCore import QLocale, QPointF, QRectF, Qt
 from ..qt.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
+from ..util import client_logger as log
 
 
 class Country(NamedTuple):
@@ -203,14 +204,62 @@ countries: dict[str, Country] = {
 }  # fmt: skip
 
 
-def detect_country() -> str:
-    """Country of this computer, from the system locale (eg. "nl_NL" -> "NL"). Empty if the
-    locale names no country."""
-    name = QLocale.system().name()
-    parts = name.replace("-", "_").split("_")
+def _territory(locale_name: str) -> str:
+    """The country of a locale name ("nl_NL.UTF-8@euro", "en-NL" -> "NL"), "" if it has none."""
+    name = locale_name.split(".", 1)[0].split("@", 1)[0].replace("-", "_")
+    parts = name.split("_")
     if len(parts) >= 2 and len(parts[-1]) == 2 and parts[-1].isalpha():
         return parts[-1].upper()
     return ""
+
+
+def _windows_region() -> str:
+    """The "Country or region" of Windows. It is a setting of its own: the regional format
+    (what QLocale.system() reports) is often "English (United States)" anywhere."""
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    buffer = ctypes.create_unicode_buffer(16)
+    try:  # Windows 10 1709 and later
+        if kernel32.GetUserDefaultGeoName(buffer, len(buffer)) > 1:
+            return buffer.value
+    except AttributeError:
+        pass
+    geo_id = kernel32.GetUserGeoID(16)  # GEOCLASS_NATION
+    if geo_id != -1 and kernel32.GetGeoInfoW(geo_id, 4, buffer, len(buffer), 0) > 1:  # ISO2
+        return buffer.value
+    return ""
+
+
+# Linux: the categories that say most about where someone lives come first. LC_ALL overrides
+# everything, LANG is the default for all, often only the language (en_US with Dutch formats).
+_locale_variables = (
+    "LC_ALL", "LC_ADDRESS", "LC_TELEPHONE", "LC_MONETARY", "LC_PAPER", "LC_MEASUREMENT",
+    "LC_TIME", "LC_NUMERIC", "LANG",
+)  # fmt: skip
+
+
+def detect_country(platform: str | None = None, environ: dict[str, str] | None = None) -> str:
+    """Country of this computer as a two letter code ("NL"). Empty if the system names none.
+    Windows: its "Country or region" setting. Linux: the locale variables. macOS and the rest:
+    the system locale, which there includes the region (eg. "en_NL")."""
+    import os
+    import sys
+
+    platform = platform or sys.platform
+    if platform.startswith("win"):
+        try:
+            region = _windows_region().upper()
+            if len(region) == 2 and region.isalpha():
+                return region
+        except Exception as e:  # no ctypes or an old Windows: the system locale below
+            log.warning(f"Could not read the Windows region: {e}")
+    elif platform.startswith("linux"):
+        environ = os.environ if environ is None else environ
+        for variable in _locale_variables:
+            if code := _territory(environ.get(variable, "")):
+                return code
+    return _territory(QLocale.system().name())
 
 
 def resolve(code: str) -> Country | None:
