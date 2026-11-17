@@ -1,0 +1,9 @@
+{
+  "name": "Germany",
+  "bands": ["#000000", "#dd0000", "#ffcc00"],
+  "accent": "#dd0000",
+  "cool": "#ffcc00",
+  "flag": [
+    {"shape": "stripes", "colors": ["#000000", "#dd0000", "#ffcc00"]}
+  ]
+}

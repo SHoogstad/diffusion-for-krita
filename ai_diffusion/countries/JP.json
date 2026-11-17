@@ -1,0 +1,9 @@
+{
+  "name": "Japan",
+  "bands": ["#ffffff", "#bc002d", "#ffffff"],
+  "accent": "#bc002d",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff"]},
+    {"shape": "disc", "color": "#bc002d", "x": 0.5, "y": 0.5, "r": 0.3}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Hong Kong",
+  "bands": ["#de2910", "#ffffff"],
+  "accent": "#de2910",
+  "flag": [
+    {"shape": "stripes", "colors": ["#de2910"]},
+    {"shape": "star", "color": "#ffffff", "x": 0.5, "y": 0.5, "r": 0.3}
+  ]
+}

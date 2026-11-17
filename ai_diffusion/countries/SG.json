@@ -1,0 +1,9 @@
+{
+  "name": "Singapore",
+  "bands": ["#ef3340", "#ffffff"],
+  "accent": "#ef3340",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ef3340", "#ffffff"]},
+    {"shape": "crescent", "color": "#ffffff", "x": 0.17, "y": 0.25, "r": 0.17}
+  ]
+}

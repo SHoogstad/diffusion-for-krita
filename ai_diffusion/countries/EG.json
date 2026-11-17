@@ -1,0 +1,9 @@
+{
+  "name": "Egypt",
+  "bands": ["#ce1126", "#ffffff", "#000000"],
+  "accent": "#ce1126",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ce1126", "#ffffff", "#000000"]},
+    {"shape": "disc", "color": "#c09300", "x": 0.5, "y": 0.5, "r": 0.1}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Czechia",
+  "bands": ["#ffffff", "#d7141a", "#11457e"],
+  "accent": "#d7141a",
+  "cool": "#11457e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#d7141a"]},
+    {"shape": "triangle", "color": "#11457e", "depth": 0.5}
+  ]
+}

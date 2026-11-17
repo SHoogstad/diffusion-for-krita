@@ -1,0 +1,10 @@
+{
+  "name": "South Korea",
+  "bands": ["#cd2e3a", "#ffffff", "#0047a0"],
+  "accent": "#cd2e3a",
+  "cool": "#0047a0",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff"]},
+    {"shape": "taegeuk", "top": "#cd2e3a", "bottom": "#0047a0", "r": 0.25}
+  ]
+}

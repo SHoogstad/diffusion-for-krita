@@ -1,0 +1,15 @@
+{
+  "name": "Australia",
+  "bands": ["#e4002b", "#ffffff", "#012169"],
+  "accent": "#e4002b",
+  "cool": "#012169",
+  "flag": [
+    {"shape": "stripes", "colors": ["#012169"]},
+    {"shape": "union-jack", "x": 0, "y": 0, "w": 0.5, "h": 0.5},
+    {"shape": "star", "color": "#ffffff", "x": 0.25, "y": 0.75, "r": 0.13},
+    {"shape": "star", "color": "#ffffff", "x": 0.75, "y": 0.24, "r": 0.07},
+    {"shape": "star", "color": "#ffffff", "x": 0.63, "y": 0.47, "r": 0.07},
+    {"shape": "star", "color": "#ffffff", "x": 0.86, "y": 0.42, "r": 0.07},
+    {"shape": "star", "color": "#ffffff", "x": 0.75, "y": 0.82, "r": 0.08}
+  ]
+}

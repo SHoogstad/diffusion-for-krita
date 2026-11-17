@@ -1,0 +1,9 @@
+{
+  "name": "Luxembourg",
+  "bands": ["#ed2939", "#ffffff", "#00a1de"],
+  "accent": "#ed2939",
+  "cool": "#00a1de",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ed2939", "#ffffff", "#00a1de"]}
+  ]
+}

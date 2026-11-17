@@ -1,0 +1,9 @@
+{
+  "name": "Serbia",
+  "bands": ["#c6363c", "#0c4076", "#ffffff"],
+  "accent": "#c6363c",
+  "cool": "#0c4076",
+  "flag": [
+    {"shape": "stripes", "colors": ["#c6363c", "#0c4076", "#ffffff"]}
+  ]
+}

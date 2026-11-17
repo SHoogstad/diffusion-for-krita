@@ -1,0 +1,10 @@
+{
+  "name": "Portugal",
+  "bands": ["#046a38", "#da291c"],
+  "accent": "#da291c",
+  "cool": "#046a38",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#046a38", "#da291c"], "weights": [2, 3]},
+    {"shape": "disc", "color": "#ffe900", "x": 0.4, "y": 0.5, "r": 0.2}
+  ]
+}

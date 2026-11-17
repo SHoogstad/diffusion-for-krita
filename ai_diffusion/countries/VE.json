@@ -1,0 +1,9 @@
+{
+  "name": "Venezuela",
+  "bands": ["#ffcc00", "#00247d", "#cf142b"],
+  "accent": "#cf142b",
+  "cool": "#00247d",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffcc00", "#00247d", "#cf142b"]}
+  ]
+}

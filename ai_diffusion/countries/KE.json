@@ -1,0 +1,9 @@
+{
+  "name": "Kenya",
+  "bands": ["#000000", "#bb0000", "#006600"],
+  "accent": "#bb0000",
+  "cool": "#006600",
+  "flag": [
+    {"shape": "stripes", "colors": ["#000000", "#ffffff", "#bb0000", "#ffffff", "#006600"], "weights": [6, 1, 6, 1, 6]}
+  ]
+}

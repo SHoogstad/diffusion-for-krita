@@ -1,0 +1,11 @@
+{
+  "name": "Taiwan",
+  "bands": ["#fe0000", "#000095", "#ffffff"],
+  "accent": "#fe0000",
+  "cool": "#000095",
+  "flag": [
+    {"shape": "stripes", "colors": ["#fe0000"]},
+    {"shape": "rect", "color": "#000095", "x": 0, "y": 0, "w": 0.5, "h": 0.5},
+    {"shape": "disc", "color": "#ffffff", "x": 0.25, "y": 0.25, "r": 0.13}
+  ]
+}

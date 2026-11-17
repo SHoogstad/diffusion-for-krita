@@ -1,0 +1,12 @@
+{
+  "name": "Malaysia",
+  "bands": ["#cc0001", "#ffffff", "#010066"],
+  "accent": "#cc0001",
+  "cool": "#010066",
+  "flag": [
+    {"shape": "stripes", "colors": ["#cc0001", "#ffffff", "#cc0001", "#ffffff", "#cc0001", "#ffffff", "#cc0001", "#ffffff", "#cc0001", "#ffffff", "#cc0001", "#ffffff", "#cc0001", "#ffffff"]},
+    {"shape": "rect", "color": "#010066", "x": 0, "y": 0, "w": 0.5, "h": 0.5714},
+    {"shape": "crescent", "color": "#ffcc00", "x": 0.2, "y": 0.29, "r": 0.18},
+    {"shape": "star", "color": "#ffcc00", "x": 0.33, "y": 0.29, "r": 0.1}
+  ]
+}

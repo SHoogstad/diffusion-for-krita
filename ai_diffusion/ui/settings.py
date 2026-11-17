@@ -13,7 +13,7 @@ from ..model import prompt_enhance
 from ..model.connection import ConnectionState, apply_performance_preset
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
-from ..qt.QtCore import QSize, Qt, QUrl, pyqtSignal
+from ..qt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from ..qt.QtGui import (
     QColor,
     QCursor,
@@ -966,7 +966,18 @@ class InterfaceSettings(SettingsTab):
         self.add("interface_country", ComboBoxSetting(S._interface_country, parent=self))
         self.add("interface_color", ColorSetting(S._interface_color, parent=self))
         self._widgets["interface_country"].set_items(self._country_items())
-        cast(ComboBoxSetting, self._widgets["interface_country"])._combo.setIconSize(QSize(24, 16))
+        country = cast(ComboBoxSetting, self._widgets["interface_country"])
+        country._combo.setIconSize(QSize(24, 16))
+        country.add_button(
+            theme.krita_icon("refresh", "reload-preset"),
+            _("Look for new country files"),
+            self._update_countries,
+        )
+        country.add_button(
+            theme.krita_icon("folder", "document-open"),
+            _("Open the folder for your own country files (see the plugin docs for the format)"),
+            self._open_country_folder,
+        )
         self._widgets["interface_look"].value_changed.connect(self._update_look_widgets)
         for w in ("interface_country", "interface_color"):
             self._widgets[w].indent = 1
@@ -1039,6 +1050,16 @@ class InterfaceSettings(SettingsTab):
             for name, code in flags.country_items()
         ]
         return items
+
+    def _update_countries(self):
+        flags.reload()
+        # Restyles everything and makes the settings dialog again, which lists the new files.
+        # Later, not inside the click of a button that is rebuilt.
+        QTimer.singleShot(0, theme.refresh_look)
+
+    def _open_country_folder(self):
+        flags.user_dir.mkdir(exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(flags.user_dir)))
 
     def _update_look_widgets(self):
         look = self._widgets["interface_look"].value

@@ -57,7 +57,9 @@ The docker has its own look. Pick it in *Configure ▸ Interface ▸ Look*; a ch
 
 * **Plain** (default): one color, orange unless you pick another.
 * **Country**: the colors and flag of your country, from the region setting of your system
-  (Windows: *Country or region*) or picked from the list.
+  (Windows: *Country or region*) or picked from the list. Missing your flag? Add it yourself
+  with a small file, see [Country looks](ai_diffusion/countries/README.md), or open a
+  *Flag request* issue.
 * **Legacy**: the interface as it was before the redesign (v1.65.0 and earlier): Krita's own
   widgets, the workspace drop-down and the original icons.
 

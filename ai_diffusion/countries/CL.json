@@ -1,0 +1,11 @@
+{
+  "name": "Chile",
+  "bands": ["#0039a6", "#ffffff", "#d52b1e"],
+  "accent": "#d52b1e",
+  "cool": "#0039a6",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#d52b1e"]},
+    {"shape": "rect", "color": "#0039a6", "x": 0, "y": 0, "w": 0.3333, "h": 0.5},
+    {"shape": "star", "color": "#ffffff", "x": 0.1667, "y": 0.25, "r": 0.13}
+  ]
+}

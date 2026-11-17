@@ -1,0 +1,9 @@
+{
+  "name": "Vietnam",
+  "bands": ["#da251d", "#ffff00", "#da251d"],
+  "accent": "#da251d",
+  "flag": [
+    {"shape": "stripes", "colors": ["#da251d"]},
+    {"shape": "star", "color": "#ffff00", "x": 0.5, "y": 0.5, "r": 0.3}
+  ]
+}

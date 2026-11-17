@@ -1,0 +1,10 @@
+{
+  "name": "India",
+  "bands": ["#ff9933", "#ffffff", "#138808"],
+  "accent": "#ff9933",
+  "cool": "#138808",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ff9933", "#ffffff", "#138808"]},
+    {"shape": "ring", "color": "#000080", "x": 0.5, "y": 0.5, "r": 0.13}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Iceland",
+  "bands": ["#02529c", "#ffffff", "#dc1e35"],
+  "accent": "#dc1e35",
+  "cool": "#02529c",
+  "flag": [
+    {"shape": "stripes", "colors": ["#02529c"]},
+    {"shape": "nordic-cross", "color": "#ffffff", "thickness": 0.24},
+    {"shape": "nordic-cross", "color": "#dc1e35", "thickness": 0.11}
+  ]
+}

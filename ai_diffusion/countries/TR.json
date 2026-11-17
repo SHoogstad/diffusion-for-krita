@@ -1,0 +1,10 @@
+{
+  "name": "Turkey",
+  "bands": ["#e30a17", "#ffffff", "#e30a17"],
+  "accent": "#e30a17",
+  "flag": [
+    {"shape": "stripes", "colors": ["#e30a17"]},
+    {"shape": "crescent", "color": "#ffffff", "x": 0.36, "y": 0.5, "r": 0.25},
+    {"shape": "star", "color": "#ffffff", "x": 0.53, "y": 0.5, "r": 0.12}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Netherlands",
+  "bands": ["#ae1c28", "#ffffff", "#21468b"],
+  "accent": "#ae1c28",
+  "cool": "#21468b",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ae1c28", "#ffffff", "#21468b"]}
+  ]
+}

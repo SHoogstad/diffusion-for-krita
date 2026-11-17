@@ -1,0 +1,10 @@
+{
+  "name": "Bangladesh",
+  "bands": ["#006a4e", "#f42a41"],
+  "accent": "#f42a41",
+  "cool": "#006a4e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#006a4e"]},
+    {"shape": "disc", "color": "#f42a41", "x": 0.45, "y": 0.5, "r": 0.33}
+  ]
+}

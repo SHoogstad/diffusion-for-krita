@@ -1,0 +1,13 @@
+{
+  "name": "China",
+  "bands": ["#ee1c25", "#ffff00", "#ee1c25"],
+  "accent": "#ee1c25",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ee1c25"]},
+    {"shape": "star", "color": "#ffff00", "x": 0.17, "y": 0.25, "r": 0.15},
+    {"shape": "star", "color": "#ffff00", "x": 0.33, "y": 0.1, "r": 0.05},
+    {"shape": "star", "color": "#ffff00", "x": 0.4, "y": 0.2, "r": 0.05},
+    {"shape": "star", "color": "#ffff00", "x": 0.4, "y": 0.35, "r": 0.05},
+    {"shape": "star", "color": "#ffff00", "x": 0.33, "y": 0.45, "r": 0.05}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Denmark",
+  "bands": ["#c8102e", "#ffffff", "#c8102e"],
+  "accent": "#c8102e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#c8102e"]},
+    {"shape": "nordic-cross", "color": "#ffffff", "thickness": 0.14}
+  ]
+}

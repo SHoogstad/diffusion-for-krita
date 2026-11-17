@@ -1,0 +1,10 @@
+{
+  "name": "Pakistan",
+  "bands": ["#01411c", "#ffffff"],
+  "accent": "#01411c",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#ffffff", "#01411c"], "weights": [1, 3]},
+    {"shape": "crescent", "color": "#ffffff", "x": 0.6, "y": 0.5, "r": 0.27},
+    {"shape": "star", "color": "#ffffff", "x": 0.72, "y": 0.38, "r": 0.1}
+  ]
+}

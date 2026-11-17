@@ -1,0 +1,9 @@
+{
+  "name": "Lithuania",
+  "bands": ["#fdb913", "#006a44", "#c1272d"],
+  "accent": "#c1272d",
+  "cool": "#006a44",
+  "flag": [
+    {"shape": "stripes", "colors": ["#fdb913", "#006a44", "#c1272d"]}
+  ]
+}

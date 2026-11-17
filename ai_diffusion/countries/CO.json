@@ -1,0 +1,9 @@
+{
+  "name": "Colombia",
+  "bands": ["#fcd116", "#003893", "#ce1126"],
+  "accent": "#ce1126",
+  "cool": "#003893",
+  "flag": [
+    {"shape": "stripes", "colors": ["#fcd116", "#003893", "#ce1126"], "weights": [2, 1, 1]}
+  ]
+}

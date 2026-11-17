@@ -1,0 +1,9 @@
+{
+  "name": "Thailand",
+  "bands": ["#a51931", "#f4f5f8", "#2d2a4a"],
+  "accent": "#a51931",
+  "cool": "#2d2a4a",
+  "flag": [
+    {"shape": "stripes", "colors": ["#a51931", "#f4f5f8", "#2d2a4a", "#f4f5f8", "#a51931"], "weights": [1, 1, 2, 1, 1]}
+  ]
+}

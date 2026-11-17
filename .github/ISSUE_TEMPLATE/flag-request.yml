@@ -1,0 +1,43 @@
+name: Flag request
+description: Ask for a country look (flag and colors) that is missing or looks wrong.
+title: "Flag: "
+labels: ["flag"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Country looks are small JSON files, so you can also add one yourself: see
+        [ai_diffusion/countries/README.md](https://github.com/SHoogstad/diffusion-for-krita/blob/main/ai_diffusion/countries/README.md).
+        Otherwise, tell us about the flag here.
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      description: Name and two letter code, if you know it.
+      placeholder: Kosovo (XK)
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is it about?
+      options:
+        - A country that is missing
+        - A flag or its colors look wrong
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: |
+        A link to the flag (eg. Wikipedia), and anything that matters: which color should be
+        the Generate button, what is wrong now. A screenshot helps for a wrong flag.
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: Country file (optional)
+      description: If you already made a JSON file, paste it here.
+      render: json

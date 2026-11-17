@@ -1,0 +1,10 @@
+{
+  "name": "Sweden",
+  "bands": ["#006aa7", "#fecc02", "#006aa7"],
+  "accent": "#fecc02",
+  "cool": "#006aa7",
+  "flag": [
+    {"shape": "stripes", "colors": ["#006aa7"]},
+    {"shape": "nordic-cross", "color": "#fecc02", "thickness": 0.2}
+  ]
+}

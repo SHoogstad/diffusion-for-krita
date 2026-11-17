@@ -1,0 +1,10 @@
+{
+  "name": "Saudi Arabia",
+  "bands": ["#006c35", "#ffffff"],
+  "accent": "#006c35",
+  "flag": [
+    {"shape": "stripes", "colors": ["#006c35"]},
+    {"shape": "rect", "color": "#ffffff", "x": 0.25, "y": 0.62, "w": 0.5, "h": 0.06},
+    {"shape": "rect", "color": "#ffffff", "x": 0.3, "y": 0.3, "w": 0.4, "h": 0.14}
+  ]
+}
