@@ -16,12 +16,33 @@ import importlib
 import sys
 from typing import Any
 
-from .qt.QtCore import QTimer
+from .qt.QtCore import Qt, QTimer
+from .qt.QtWidgets import QApplication
 from .util import client_logger as log
 
 _flag = "_diffusion_for_krita_reloading"
 _package = __name__.rpartition(".")[0]
 _dock_classes: list[type] = []  # docker classes of earlier versions (set by take_over)
+
+
+class _Clock:
+    """Logs how long each step of a reload takes (Krita does not redraw meanwhile)."""
+
+    def __init__(self):
+        import time
+
+        self._time = time.perf_counter
+        self._start = self._last = self._time()
+        self._laps: list[str] = []
+
+    def lap(self, step: str):
+        now = self._time()
+        self._laps.append(f"{step} {now - self._last:.2f}s")
+        self._last = now
+
+    def done(self):
+        total = self._time() - self._start
+        log.info(f"Plugin update: loaded in {total:.2f}s ({', '.join(self._laps)})")
 
 
 def _busy():
@@ -38,13 +59,19 @@ def request(on_failure, wait_ms=2000):
         if _busy():
             QTimer.singleShot(wait_ms, attempt)
             return
+        # Krita can't redraw while the new version loads (a few seconds at most): show that
+        # it is busy, and let "Loading the new version" appear first.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
         try:
             reload_plugin()
         except Exception as e:
             log.exception(f"Could not load the plugin update without a restart: {e}")
             on_failure(e)
+        finally:
+            QApplication.restoreOverrideCursor()
 
-    QTimer.singleShot(0, attempt)
+    QTimer.singleShot(100, attempt)
 
 
 def _plugin_modules():
@@ -72,6 +99,7 @@ def reload_plugin():
     }
 
     # Import the new version first: if that fails, the old one keeps running as it is.
+    clock = _Clock()
     old_modules = _plugin_modules()
     for name in old_modules:
         del sys.modules[name]
@@ -87,6 +115,7 @@ def reload_plugin():
         raise
     finally:
         delattr(sys, _flag)
+    clock.lap("import the new version")
 
     log.info("Plugin update: stopping the old version")
     for dock in docks:  # the panels of the old version must not outlive its event loop
@@ -94,7 +123,10 @@ def reload_plugin():
             shutdown()
     if old_extension is not None:
         old_extension.retire()
+    clock.lap("stop the old version")
     new_reload.take_over(hand_over)
+    clock.lap("start the new version")
+    clock.done()
 
 
 def take_over(hand_over: dict[str, Any]):
@@ -105,10 +137,12 @@ def take_over(hand_over: dict[str, Any]):
     from .extension import AIToolsExtension
     from .ui.diffusion import DiffusionPanel
 
+    clock = _Clock()
     extension = AIToolsExtension(Krita.instance())
     if old := hand_over.get("extension"):
         old._successor = extension
     extension.take_over_actions(hand_over.get("actions", []))
+    clock.lap("settings and dialog")
 
     _dock_classes[:] = hand_over.get("dock_classes", [])
     for cls in _dock_classes:
@@ -116,8 +150,11 @@ def take_over(hand_over: dict[str, Any]):
     for dock in hand_over.get("docks", []):
         dock.set_panel(DiffusionPanel())
     extension.setup()
+    clock.lap("docker")
     for dock in hand_over.get("docks", []):
         if panel := dock.widget():
-            panel.update_content()
+            panel.update_content()  # the open image, with its history
+    clock.lap("image and history")
     log.info(f"Plugin update: version {__version__} is running")
+    clock.done()
     return extension
