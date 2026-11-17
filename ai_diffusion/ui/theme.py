@@ -156,7 +156,7 @@ def apply_look(look=None, country_code: str | None = None, color: str | None = N
     if color is None:
         color = values.get("interface_color", "") if values else settings_color()
     if not QColor(color).isValid():
-        color = "#3d7be0"
+        color = "#ef6c2f"
 
     country = flags.resolve(country_code) if look is InterfaceLook.country else None
     if country is not None:

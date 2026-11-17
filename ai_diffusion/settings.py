@@ -193,7 +193,7 @@ class Settings(QObject):
     interface_look: InterfaceLook
     _interface_look = Setting(
         _("Look"),
-        InterfaceLook.country,
+        InterfaceLook.plain,
         _("Colors of the plugin"),
     )
 
@@ -205,7 +205,7 @@ class Settings(QObject):
     )
 
     interface_color: str
-    _interface_color = Setting(_("Color"), "#3d7be0", _("The one color of the plain look"))
+    _interface_color = Setting(_("Color"), "#ef6c2f", _("The one color of the plain look"))
 
     auto_update: bool
     _auto_update = Setting(

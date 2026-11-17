@@ -504,7 +504,7 @@ class ColorSetting(SettingWidget):
     """A color: a row of preset chips and a button for any other color."""
 
     presets = (
-        "#3d7be0", "#1d9bb8", "#2e9e57", "#d9a21b", "#ef6c2f",
+        "#ef6c2f", "#3d7be0", "#1d9bb8", "#2e9e57", "#d9a21b",
         "#d9363e", "#d6458f", "#8257d9", "#6f7787",
     )  # fmt: skip
 
