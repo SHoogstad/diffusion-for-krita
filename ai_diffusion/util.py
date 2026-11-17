@@ -73,6 +73,9 @@ def _get_log_dir():
 def create_logger(name: str, path: Path):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
+    for old in list(logger.handlers):  # a plugin reload makes the logger again: one handler
+        logger.removeHandler(old)
+        old.close()
     if os.environ.get("AI_DIFFUSION_ENV") == "WORKER":
         handler = logging.StreamHandler(sys.stdout)
     else:

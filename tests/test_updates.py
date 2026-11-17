@@ -233,3 +233,16 @@ async def test_auto_update_from_prerelease(github: FakeGithub, tmp_path: Path):
     )
     await stable.check()
     assert stable.state is UpdateState.latest
+
+
+def test_precompile_new_version(tmp_path: Path):
+    from ai_diffusion.model.updates import _precompile
+
+    package = tmp_path / "ai_diffusion"
+    (package / "ui").mkdir(parents=True)
+    (package / "ui" / "page.py").write_text("x = 1\n")
+    (package / "tests").mkdir()
+    (package / "tests" / "skip.py").write_text("x = 1\n")
+    _precompile(package)
+    assert list((package / "ui" / "__pycache__").glob("page.*.pyc"))
+    assert not (package / "tests" / "__pycache__").exists()

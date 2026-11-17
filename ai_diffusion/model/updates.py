@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import re
@@ -27,6 +28,19 @@ class UpdateState(Enum):
     failed_check = 8
     failed_update = 9
     reloading = 10  # loading the new version without a restart
+
+
+def _precompile(package_dir: Path):
+    import compileall
+    import time
+
+    start = time.perf_counter()
+    try:
+        skip = re.compile(r"[/\\](debugpy|tests|docs|__pycache__)[/\\]")
+        compileall.compile_dir(str(package_dir), quiet=1, rx=skip)
+        log.info(f"Plugin update: compiled in {time.perf_counter() - start:.1f}s")
+    except Exception as e:  # only slower then
+        log.warning(f"Plugin update: could not compile the new version ahead: {e}")
 
 
 class UpdatePackage(NamedTuple):
@@ -164,6 +178,9 @@ class AutoUpdate(QObject, ObservableProperties):
             from .. import reload
 
             self.state = UpdateState.reloading
+            # Compile the new files now, in the background: loading them is then quicker,
+            # and that part blocks Krita.
+            await asyncio.to_thread(_precompile, self.plugin_dir / "ai_diffusion")
             reload.request(self._reload_failed)
         else:
             self.state = UpdateState.restart_required

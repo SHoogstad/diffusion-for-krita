@@ -92,6 +92,10 @@ panel = dock.widget()
 (plugin / "ui" / "diffusion.py").write_text("this is not python(")
 failures = []
 importlib.import_module("ai_diffusion.reload").request(failures.append)
+import time
+deadline = time.monotonic() + 5
+while not failures and time.monotonic() < deadline:  # request() waits a moment first
+    pump()
 pump()
 assert len(failures) == 1 and isinstance(failures[0], SyntaxError), failures
 import ai_diffusion
