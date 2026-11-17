@@ -120,7 +120,7 @@ class HistoryWidget(QListWidget):
 
     def __init__(self, parent: QWidget | None):
         super().__init__(parent)
-        self._model = root.active_model
+        self._model = root.null_model
         self._connections = []
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -619,7 +619,7 @@ class CustomInpaintWidget(QWidget):
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
-        self._model = root.active_model
+        self._model = root.null_model
         self._model_bindings = []
 
         self.use_inpaint_button = ChipToggle(self)
@@ -742,7 +742,7 @@ class CustomInpaintWidget(QWidget):
 class ProgressBar(AccentProgressBar):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
-        self._model = root.active_model
+        self._model = root.null_model
         self._model_bindings: list[QMetaObject.Connection] = []
         self._palette = self.palette()
         self.setMinimum(0)
@@ -785,7 +785,7 @@ class ProgressBar(AccentProgressBar):
 class GenerationWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self._model: DocumentModel = root.active_model
+        self._model: DocumentModel = root.null_model
         self._model_bindings: list[QMetaObject.Connection | Binding] = []
 
         layout = QVBoxLayout(self)

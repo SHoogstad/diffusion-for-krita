@@ -205,7 +205,7 @@ class QueuePopup(QMenu):
         cancel_layout.addWidget(self._cancel_all)
         self._layout.addLayout(cancel_layout, 5, 1)
 
-        self._model = root.active_model
+        self._model = root.null_model
 
     @property
     def model(self):
@@ -272,7 +272,7 @@ class QueuePopup(QMenu):
 class QueueButton(QToolButton):
     def __init__(self, supports_batch=True, parent: QWidget | None = None):
         super().__init__(parent)
-        self._model = root.active_model
+        self._model = root.null_model
 
         self._popup = QueuePopup(supports_batch)
         popup_action = QWidgetAction(self)

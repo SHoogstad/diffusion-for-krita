@@ -705,7 +705,7 @@ class RegionPromptWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._regions: RootRegion = root.active_model.regions
+        self._regions: RootRegion = root.null_model.regions
         self._inactive_regions: list[InactiveRegionWidget] = []
         self._bindings: list[QMetaObject.Connection] = []
 
