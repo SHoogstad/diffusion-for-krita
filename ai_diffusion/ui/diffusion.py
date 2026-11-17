@@ -347,8 +347,11 @@ _binding_lists = ("_model_bindings", "_bindings", "_connections", "_model_connec
 
 def _release_bindings(widget: QWidget):
     """Disconnect the widgets below `widget` from the models they show, so model signals don't
-    reach them once they are deleted (lambdas are not disconnected by Qt)."""
+    reach them once they are deleted (lambdas are not disconnected by Qt). Popups that a
+    QWidgetAction owns are not children: they are followed through `_popup`."""
     for w in [widget, *widget.findChildren(QWidget)]:
+        if isinstance(popup := getattr(w, "_popup", None), QWidget) and popup is not widget:
+            _release_bindings(popup)
         for name in _binding_lists:
             bindings = getattr(w, name, None)
             if isinstance(bindings, list):

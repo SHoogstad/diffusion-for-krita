@@ -109,6 +109,12 @@ class Root(QObject):
             return model
         return self._null_model
 
+    @property
+    def null_model(self):
+        """Model without a document. Widgets start with it, so the first real model they are
+        given always binds (also when they are made while a document is open)."""
+        return self._null_model
+
     async def autostart(self, signal_server_change: Callable):
         connection = self._connection
         try:

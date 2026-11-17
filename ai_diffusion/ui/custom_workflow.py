@@ -700,7 +700,7 @@ class CustomWorkflowWidget(QWidget):
     def __init__(self):
         super().__init__()
 
-        self._model = root.active_model
+        self._model = root.null_model
         self._model_bindings: list[QMetaObject.Connection | Binding] = []
 
         self._workspace_select = WorkspaceSelectWidget(self)

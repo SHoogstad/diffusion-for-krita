@@ -169,7 +169,7 @@ class LiveWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-        self._model = root.active_model
+        self._model = root.null_model
         self._model_bindings = []
 
         layout = QVBoxLayout(self)
