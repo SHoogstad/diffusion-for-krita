@@ -1,0 +1,10 @@
+{
+  "name": "Morocco",
+  "bands": ["#c1272d", "#006233"],
+  "accent": "#c1272d",
+  "cool": "#006233",
+  "flag": [
+    {"shape": "stripes", "colors": ["#c1272d"]},
+    {"shape": "star", "color": "#006233", "x": 0.5, "y": 0.5, "r": 0.26}
+  ]
+}

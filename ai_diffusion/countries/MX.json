@@ -1,0 +1,10 @@
+{
+  "name": "Mexico",
+  "bands": ["#006847", "#ffffff", "#ce1126"],
+  "accent": "#ce1126",
+  "cool": "#006847",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#006847", "#ffffff", "#ce1126"]},
+    {"shape": "disc", "color": "#8c6a2f", "x": 0.5, "y": 0.5, "r": 0.12}
+  ]
+}

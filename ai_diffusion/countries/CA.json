@@ -1,0 +1,9 @@
+{
+  "name": "Canada",
+  "bands": ["#d80621", "#ffffff", "#d80621"],
+  "accent": "#d80621",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#d80621", "#ffffff", "#d80621"], "weights": [1, 2, 1]},
+    {"shape": "star", "color": "#d80621", "x": 0.5, "y": 0.5, "r": 0.3}
+  ]
+}

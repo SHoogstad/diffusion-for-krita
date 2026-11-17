@@ -1,0 +1,9 @@
+{
+  "name": "Finland",
+  "bands": ["#ffffff", "#002f6c", "#ffffff"],
+  "accent": "#002f6c",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff"]},
+    {"shape": "nordic-cross", "color": "#002f6c", "thickness": 0.27}
+  ]
+}

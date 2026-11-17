@@ -1,0 +1,8 @@
+{
+  "name": "Poland",
+  "bands": ["#ffffff", "#dc143c"],
+  "accent": "#dc143c",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#dc143c"]}
+  ]
+}

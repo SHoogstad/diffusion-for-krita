@@ -111,7 +111,8 @@ The easiest way to run a development version of the plugin is to create symlinks
 ### Look and icons
 
 The plugin has its own look. It lives in `ai_diffusion/ui/theme.py`, and `apply_look()` sets
-it from the Look setting: **Country** (colors and flag of a country, `ui/flags.py`), **Plain**
+it from the Look setting: **Country** (colors and flag of a country: one JSON file per country in
+`ai_diffusion/countries`, see its README; drawn by `ui/flags.py`), **Plain**
 (one color) or **Legacy** (the interface before the redesign). A change applies without a
 restart: `theme.look_events.changed` rebuilds the docker and the settings dialog, so read theme
 values when a widget is made or painted, never at import (no class attributes with colors,

@@ -1,0 +1,9 @@
+{
+  "name": "Russia",
+  "bands": ["#ffffff", "#0039a6", "#d52b1e"],
+  "accent": "#d52b1e",
+  "cool": "#0039a6",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#0039a6", "#d52b1e"]}
+  ]
+}

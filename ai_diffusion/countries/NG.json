@@ -1,0 +1,8 @@
+{
+  "name": "Nigeria",
+  "bands": ["#008751", "#ffffff", "#008751"],
+  "accent": "#008751",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#008751", "#ffffff", "#008751"]}
+  ]
+}

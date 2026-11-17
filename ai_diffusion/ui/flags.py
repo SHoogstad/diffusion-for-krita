@@ -1,207 +1,182 @@
 """Country looks: the flag of a country, drawn small, and the colors the interface takes from it.
 
-Every country has
-- `bands`: two or three flag colors, top to bottom, for the brand stripes, the halftone and
-  the logo strokes,
-- `accent`: the color of the primary action (Generate),
-- `cool`: the color for state that is on, focus and selection (None = a deeper `accent`),
-- `layers`: how to draw the flag, simplified so it still reads at 16 pixels.
-
-Layers (coordinates are fractions of the flag rectangle):
-    ("h", colors[, weights])  horizontal bands      ("v", colors[, weights])  vertical bands
-    ("rect", color, x, y, w, h)                     ("star", color, cx, cy, r)  r: of height
-    ("disc", color, cx, cy, r)                      ("crescent", color, cx, cy, r)
-    ("nordic", color, thickness[, x])               ("triangle", color, depth)
-    ("diamond", color)                              ("union", x, y, w, h)  (Union Jack)
-    ("taegeuk", top, bottom, r)
-    ("dots", color, x, y, w, h, cols, rows)         ("ring", color, cx, cy, r)
+Every country is a JSON file named after its two letter code (ISO 3166-1 alpha-2), eg. `NL.json`.
+The plugin ships them in `ai_diffusion/countries`. Files in the `countries` folder of the user
+data folder add countries or replace built-in ones. See `ai_diffusion/countries/README.md` for
+the format and `scripts/flag_preview.py` to see a flag before using it.
 """
 
 from __future__ import annotations
 
+import json
 import math
+import re
 from collections.abc import Callable
-from typing import NamedTuple
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..qt.QtCore import QLocale, QPointF, QRectF, Qt
 from ..qt.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
 from ..util import client_logger as log
+from ..util import plugin_dir, user_data_dir
 
 
-class Country(NamedTuple):
+@dataclass(frozen=True)
+class Country:
     code: str
     name: str
-    bands: tuple[str, ...]
-    accent: str
-    cool: str | None
-    layers: tuple
+    bands: tuple[str, ...]  # two or three flag colors, top to bottom: stripes, halftone, logo
+    accent: str  # the primary action (Generate)
+    cool: str | None  # state that is on, focus and selection (None = a deeper `accent`)
+    flag: tuple[dict, ...] = field(default=(), compare=False)  # shapes, drawn in order
+    source: str = field(default="", compare=False)  # file it was read from
 
 
-def _c(code, name, bands, accent, cool, *layers):
-    return Country(code, name, tuple(bands), accent, cool, tuple(layers))
+builtin_dir = plugin_dir / "countries"
+user_dir = user_data_dir / "countries"
 
-
-_red_us, _blue_us = "#b22234", "#3c3b6e"
-_navy_uk, _red_uk = "#012169", "#c8102e"
-_southern_cross = [(0.75, 0.24, 0.07), (0.63, 0.47, 0.07), (0.86, 0.42, 0.07), (0.75, 0.82, 0.08)]
-
-countries: dict[str, Country] = {
-    c.code: c
-    for c in [
-        _c("NL", "Netherlands", ["#ae1c28", "#ffffff", "#21468b"], "#ae1c28", "#21468b",
-           ("h", ["#ae1c28", "#ffffff", "#21468b"])),
-        _c("BE", "Belgium", ["#000000", "#fdda24", "#ef3340"], "#ef3340", "#fdda24",
-           ("v", ["#000000", "#fdda24", "#ef3340"])),
-        _c("LU", "Luxembourg", ["#ed2939", "#ffffff", "#00a1de"], "#ed2939", "#00a1de",
-           ("h", ["#ed2939", "#ffffff", "#00a1de"])),
-        _c("FR", "France", ["#002654", "#ffffff", "#ce1126"], "#ce1126", "#002654",
-           ("v", ["#002654", "#ffffff", "#ce1126"])),
-        _c("DE", "Germany", ["#000000", "#dd0000", "#ffcc00"], "#dd0000", "#ffcc00",
-           ("h", ["#000000", "#dd0000", "#ffcc00"])),
-        _c("AT", "Austria", ["#c8102e", "#ffffff", "#c8102e"], "#c8102e", None,
-           ("h", ["#c8102e", "#ffffff", "#c8102e"])),
-        _c("CH", "Switzerland", ["#da291c", "#ffffff"], "#da291c", None,
-           ("h", ["#da291c"]), ("rect", "#ffffff", 0.43, 0.2, 0.14, 0.6),
-           ("rect", "#ffffff", 0.31, 0.4, 0.38, 0.2)),
-        _c("IT", "Italy", ["#009246", "#ffffff", "#ce2b37"], "#ce2b37", "#009246",
-           ("v", ["#009246", "#ffffff", "#ce2b37"])),
-        _c("ES", "Spain", ["#aa151b", "#f1bf00", "#aa151b"], "#aa151b", "#f1bf00",
-           ("h", ["#aa151b", "#f1bf00", "#aa151b"], [1, 2, 1])),
-        _c("PT", "Portugal", ["#046a38", "#da291c"], "#da291c", "#046a38",
-           ("v", ["#046a38", "#da291c"], [2, 3]), ("disc", "#ffe900", 0.4, 0.5, 0.2)),
-        _c("IE", "Ireland", ["#169b62", "#ffffff", "#ff883e"], "#ff883e", "#169b62",
-           ("v", ["#169b62", "#ffffff", "#ff883e"])),
-        _c("GB", "United Kingdom", [_red_uk, "#ffffff", _navy_uk], _red_uk, _navy_uk,
-           ("union", 0, 0, 1, 1)),
-        _c("US", "United States", [_red_us, "#ffffff", _blue_us], _red_us, _blue_us,
-           ("h", [_red_us, "#ffffff"] * 6 + [_red_us]), ("rect", _blue_us, 0, 0, 0.4, 7 / 13),
-           ("dots", "#ffffff", 0, 0, 0.4, 7 / 13, 6, 5)),
-        _c("CA", "Canada", ["#d80621", "#ffffff", "#d80621"], "#d80621", None,
-           ("v", ["#d80621", "#ffffff", "#d80621"], [1, 2, 1]), ("star", "#d80621", 0.5, 0.5, 0.3)),
-        _c("AU", "Australia", ["#e4002b", "#ffffff", "#012169"], "#e4002b", "#012169",
-           ("h", ["#012169"]), ("union", 0, 0, 0.5, 0.5), ("star", "#ffffff", 0.25, 0.75, 0.13),
-           *[("star", "#ffffff", x, y, r) for x, y, r in _southern_cross]),
-        _c("NZ", "New Zealand", ["#c8102e", "#ffffff", "#012169"], "#c8102e", "#012169",
-           ("h", ["#012169"]), ("union", 0, 0, 0.5, 0.5),
-           *[("star", "#c8102e", x, y, r) for x, y, r in _southern_cross]),
-        _c("SE", "Sweden", ["#006aa7", "#fecc02", "#006aa7"], "#fecc02", "#006aa7",
-           ("h", ["#006aa7"]), ("nordic", "#fecc02", 0.2)),
-        _c("NO", "Norway", ["#ba0c2f", "#ffffff", "#00205b"], "#ba0c2f", "#00205b",
-           ("h", ["#ba0c2f"]), ("nordic", "#ffffff", 0.25), ("nordic", "#00205b", 0.125)),
-        _c("DK", "Denmark", ["#c8102e", "#ffffff", "#c8102e"], "#c8102e", None,
-           ("h", ["#c8102e"]), ("nordic", "#ffffff", 0.14)),
-        _c("FI", "Finland", ["#ffffff", "#002f6c", "#ffffff"], "#002f6c", None,
-           ("h", ["#ffffff"]), ("nordic", "#002f6c", 0.27)),
-        _c("IS", "Iceland", ["#02529c", "#ffffff", "#dc1e35"], "#dc1e35", "#02529c",
-           ("h", ["#02529c"]), ("nordic", "#ffffff", 0.24), ("nordic", "#dc1e35", 0.11)),
-        _c("PL", "Poland", ["#ffffff", "#dc143c"], "#dc143c", None,
-           ("h", ["#ffffff", "#dc143c"])),
-        _c("CZ", "Czechia", ["#ffffff", "#d7141a", "#11457e"], "#d7141a", "#11457e",
-           ("h", ["#ffffff", "#d7141a"]), ("triangle", "#11457e", 0.5)),
-        _c("SK", "Slovakia", ["#ffffff", "#0b4ea2", "#ee1c25"], "#ee1c25", "#0b4ea2",
-           ("h", ["#ffffff", "#0b4ea2", "#ee1c25"])),
-        _c("HU", "Hungary", ["#ce2939", "#ffffff", "#477050"], "#ce2939", "#477050",
-           ("h", ["#ce2939", "#ffffff", "#477050"])),
-        _c("SI", "Slovenia", ["#ffffff", "#005da4", "#ed1c24"], "#ed1c24", "#005da4",
-           ("h", ["#ffffff", "#005da4", "#ed1c24"])),
-        _c("HR", "Croatia", ["#ff0000", "#ffffff", "#171796"], "#ff0000", "#171796",
-           ("h", ["#ff0000", "#ffffff", "#171796"])),
-        _c("RS", "Serbia", ["#c6363c", "#0c4076", "#ffffff"], "#c6363c", "#0c4076",
-           ("h", ["#c6363c", "#0c4076", "#ffffff"])),
-        _c("RO", "Romania", ["#002b7f", "#fcd116", "#ce1126"], "#ce1126", "#002b7f",
-           ("v", ["#002b7f", "#fcd116", "#ce1126"])),
-        _c("BG", "Bulgaria", ["#ffffff", "#00966e", "#d62612"], "#d62612", "#00966e",
-           ("h", ["#ffffff", "#00966e", "#d62612"])),
-        _c("GR", "Greece", ["#0d5eaf", "#ffffff", "#0d5eaf"], "#0d5eaf", None,
-           ("h", ["#0d5eaf", "#ffffff"] * 4 + ["#0d5eaf"]), ("rect", "#0d5eaf", 0, 0, 0.37, 5 / 9),
-           ("rect", "#ffffff", 0.148, 0, 0.074, 5 / 9), ("rect", "#ffffff", 0, 2 / 9, 0.37, 1 / 9)),
-        _c("UA", "Ukraine", ["#0057b7", "#ffd700"], "#ffd700", "#0057b7",
-           ("h", ["#0057b7", "#ffd700"])),
-        _c("RU", "Russia", ["#ffffff", "#0039a6", "#d52b1e"], "#d52b1e", "#0039a6",
-           ("h", ["#ffffff", "#0039a6", "#d52b1e"])),
-        _c("LT", "Lithuania", ["#fdb913", "#006a44", "#c1272d"], "#c1272d", "#006a44",
-           ("h", ["#fdb913", "#006a44", "#c1272d"])),
-        _c("LV", "Latvia", ["#9e3039", "#ffffff", "#9e3039"], "#9e3039", None,
-           ("h", ["#9e3039", "#ffffff", "#9e3039"], [2, 1, 2])),
-        _c("EE", "Estonia", ["#0072ce", "#000000", "#ffffff"], "#0072ce", None,
-           ("h", ["#0072ce", "#000000", "#ffffff"])),
-        _c("TR", "Turkey", ["#e30a17", "#ffffff", "#e30a17"], "#e30a17", None,
-           ("h", ["#e30a17"]), ("crescent", "#ffffff", 0.36, 0.5, 0.25),
-           ("star", "#ffffff", 0.53, 0.5, 0.12)),
-        _c("IL", "Israel", ["#0038b8", "#ffffff", "#0038b8"], "#0038b8", None,
-           ("h", ["#ffffff", "#0038b8", "#ffffff", "#0038b8", "#ffffff"], [1.5, 1.5, 7, 1.5, 1.5]),
-           ("ring", "#0038b8", 0.5, 0.5, 0.2)),
-        _c("EG", "Egypt", ["#ce1126", "#ffffff", "#000000"], "#ce1126", None,
-           ("h", ["#ce1126", "#ffffff", "#000000"]), ("disc", "#c09300", 0.5, 0.5, 0.1)),
-        _c("AE", "United Arab Emirates", ["#00732f", "#ffffff", "#000000"], "#ff0000", "#00732f",
-           ("h", ["#00732f", "#ffffff", "#000000"]), ("rect", "#ff0000", 0, 0, 0.25, 1)),
-        _c("SA", "Saudi Arabia", ["#006c35", "#ffffff"], "#006c35", None,
-           ("h", ["#006c35"]), ("rect", "#ffffff", 0.25, 0.62, 0.5, 0.06),
-           ("rect", "#ffffff", 0.3, 0.3, 0.4, 0.14)),
-        _c("ZA", "South Africa", ["#e03c31", "#007749", "#001489"], "#e03c31", "#007749",
-           ("h", ["#e03c31", "#ffffff", "#007749", "#ffffff", "#001489"], [4, 1, 3, 1, 4]),
-           ("triangle", "#ffffff", 0.42), ("triangle", "#007749", 0.36),
-           ("triangle", "#ffb612", 0.3), ("triangle", "#000000", 0.25)),
-        _c("NG", "Nigeria", ["#008751", "#ffffff", "#008751"], "#008751", None,
-           ("v", ["#008751", "#ffffff", "#008751"])),
-        _c("KE", "Kenya", ["#000000", "#bb0000", "#006600"], "#bb0000", "#006600",
-           ("h", ["#000000", "#ffffff", "#bb0000", "#ffffff", "#006600"], [6, 1, 6, 1, 6])),
-        _c("MA", "Morocco", ["#c1272d", "#006233"], "#c1272d", "#006233",
-           ("h", ["#c1272d"]), ("star", "#006233", 0.5, 0.5, 0.26)),
-        _c("JP", "Japan", ["#ffffff", "#bc002d", "#ffffff"], "#bc002d", None,
-           ("h", ["#ffffff"]), ("disc", "#bc002d", 0.5, 0.5, 0.3)),
-        _c("KR", "South Korea", ["#cd2e3a", "#ffffff", "#0047a0"], "#cd2e3a", "#0047a0",
-           ("h", ["#ffffff"]), ("taegeuk", "#cd2e3a", "#0047a0", 0.25)),
-        _c("CN", "China", ["#ee1c25", "#ffff00", "#ee1c25"], "#ee1c25", None,
-           ("h", ["#ee1c25"]), ("star", "#ffff00", 0.17, 0.25, 0.15),
-           ("star", "#ffff00", 0.33, 0.1, 0.05), ("star", "#ffff00", 0.4, 0.2, 0.05),
-           ("star", "#ffff00", 0.4, 0.35, 0.05), ("star", "#ffff00", 0.33, 0.45, 0.05)),
-        _c("TW", "Taiwan", ["#fe0000", "#000095", "#ffffff"], "#fe0000", "#000095",
-           ("h", ["#fe0000"]), ("rect", "#000095", 0, 0, 0.5, 0.5),
-           ("disc", "#ffffff", 0.25, 0.25, 0.13)),
-        _c("HK", "Hong Kong", ["#de2910", "#ffffff"], "#de2910", None,
-           ("h", ["#de2910"]), ("star", "#ffffff", 0.5, 0.5, 0.3)),
-        _c("VN", "Vietnam", ["#da251d", "#ffff00", "#da251d"], "#da251d", None,
-           ("h", ["#da251d"]), ("star", "#ffff00", 0.5, 0.5, 0.3)),
-        _c("TH", "Thailand", ["#a51931", "#f4f5f8", "#2d2a4a"], "#a51931", "#2d2a4a",
-           ("h", ["#a51931", "#f4f5f8", "#2d2a4a", "#f4f5f8", "#a51931"], [1, 1, 2, 1, 1])),
-        _c("ID", "Indonesia", ["#ff0000", "#ffffff"], "#ff0000", None,
-           ("h", ["#ff0000", "#ffffff"])),
-        _c("MY", "Malaysia", ["#cc0001", "#ffffff", "#010066"], "#cc0001", "#010066",
-           ("h", ["#cc0001", "#ffffff"] * 7), ("rect", "#010066", 0, 0, 0.5, 8 / 14),
-           ("crescent", "#ffcc00", 0.2, 0.29, 0.18), ("star", "#ffcc00", 0.33, 0.29, 0.1)),
-        _c("SG", "Singapore", ["#ef3340", "#ffffff"], "#ef3340", None,
-           ("h", ["#ef3340", "#ffffff"]), ("crescent", "#ffffff", 0.17, 0.25, 0.17)),
-        _c("PH", "Philippines", ["#0038a8", "#ffffff", "#ce1126"], "#ce1126", "#0038a8",
-           ("h", ["#0038a8", "#ce1126"]), ("triangle", "#ffffff", 0.43),
-           ("disc", "#fcd116", 0.14, 0.5, 0.1)),
-        _c("IN", "India", ["#ff9933", "#ffffff", "#138808"], "#ff9933", "#138808",
-           ("h", ["#ff9933", "#ffffff", "#138808"]), ("ring", "#000080", 0.5, 0.5, 0.13)),
-        _c("PK", "Pakistan", ["#01411c", "#ffffff"], "#01411c", None,
-           ("v", ["#ffffff", "#01411c"], [1, 3]), ("crescent", "#ffffff", 0.6, 0.5, 0.27),
-           ("star", "#ffffff", 0.72, 0.38, 0.1)),
-        _c("BD", "Bangladesh", ["#006a4e", "#f42a41"], "#f42a41", "#006a4e",
-           ("h", ["#006a4e"]), ("disc", "#f42a41", 0.45, 0.5, 0.33)),
-        _c("BR", "Brazil", ["#009c3b", "#ffdf00", "#002776"], "#009c3b", "#002776",
-           ("h", ["#009c3b"]), ("diamond", "#ffdf00"), ("disc", "#002776", 0.5, 0.5, 0.25)),
-        _c("AR", "Argentina", ["#74acdf", "#ffffff", "#74acdf"], "#74acdf", "#f6b40e",
-           ("h", ["#74acdf", "#ffffff", "#74acdf"]), ("disc", "#f6b40e", 0.5, 0.5, 0.1)),
-        _c("CL", "Chile", ["#0039a6", "#ffffff", "#d52b1e"], "#d52b1e", "#0039a6",
-           ("h", ["#ffffff", "#d52b1e"]), ("rect", "#0039a6", 0, 0, 1 / 3, 0.5),
-           ("star", "#ffffff", 1 / 6, 0.25, 0.13)),
-        _c("CO", "Colombia", ["#fcd116", "#003893", "#ce1126"], "#ce1126", "#003893",
-           ("h", ["#fcd116", "#003893", "#ce1126"], [2, 1, 1])),
-        _c("PE", "Peru", ["#d91023", "#ffffff", "#d91023"], "#d91023", None,
-           ("v", ["#d91023", "#ffffff", "#d91023"])),
-        _c("VE", "Venezuela", ["#ffcc00", "#00247d", "#cf142b"], "#cf142b", "#00247d",
-           ("h", ["#ffcc00", "#00247d", "#cf142b"])),
-        _c("MX", "Mexico", ["#006847", "#ffffff", "#ce1126"], "#ce1126", "#006847",
-           ("v", ["#006847", "#ffffff", "#ce1126"]), ("disc", "#8c6a2f", 0.5, 0.5, 0.12)),
-        _c("CU", "Cuba", ["#002a8f", "#ffffff", "#cf142b"], "#cf142b", "#002a8f",
-           ("h", ["#002a8f", "#ffffff"] * 2 + ["#002a8f"]), ("triangle", "#cf142b", 0.42),
-           ("star", "#ffffff", 0.14, 0.5, 0.11)),
-    ]
+# Shapes of a flag. Coordinates are fractions of the flag: x, y from the top left, w, h of the
+# width and height. A radius `r` is a fraction of the height. Fields with a default are optional.
+_number, _color, _colors = "number", "color", "colors"
+_required = None  # a field without a default
+shapes: dict[str, dict[str, tuple[str, object]]] = {
+    "stripes": {"colors": (_colors, _required), "weights": ("numbers", ()), "vertical": ("bool", False)},
+    "rect": {"color": (_color, _required), "x": (_number, 0), "y": (_number, 0), "w": (_number, 1), "h": (_number, 1)},
+    "star": {"color": (_color, _required), "x": (_number, 0.5), "y": (_number, 0.5), "r": (_number, _required)},
+    "disc": {"color": (_color, _required), "x": (_number, 0.5), "y": (_number, 0.5), "r": (_number, _required)},
+    "ring": {"color": (_color, _required), "x": (_number, 0.5), "y": (_number, 0.5), "r": (_number, _required)},
+    "crescent": {"color": (_color, _required), "x": (_number, 0.5), "y": (_number, 0.5), "r": (_number, _required)},
+    "nordic-cross": {"color": (_color, _required), "thickness": (_number, _required), "x": (_number, 0.36)},
+    "triangle": {"color": (_color, _required), "depth": (_number, _required)},
+    "diamond": {"color": (_color, _required)},
+    "union-jack": {"x": (_number, 0), "y": (_number, 0), "w": (_number, 1), "h": (_number, 1)},
+    "taegeuk": {"top": (_color, _required), "bottom": (_color, _required), "r": (_number, _required)},
+    "star-grid": {
+        "color": (_color, _required), "x": (_number, 0), "y": (_number, 0), "w": (_number, 1),
+        "h": (_number, 1), "columns": ("count", _required), "rows": ("count", _required),
+    },
 }  # fmt: skip
+
+_hex_color = re.compile(r"^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+
+def _value_error(kind: str, value) -> str | None:
+    if kind == _color:
+        ok = isinstance(value, str) and _hex_color.match(value)
+        return None if ok else f'{value!r} is not a color like "#ae1c28"'
+    if kind == _colors:
+        if not isinstance(value, list) or not value:
+            return "needs a list of colors"
+        return next((e for v in value if (e := _value_error(_color, v))), None)
+    if kind == _number:
+        ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        return None if ok else f"{value!r} is not a number"
+    if kind == "numbers":
+        if not isinstance(value, list) or not value:
+            return "needs a list of numbers"
+        return next((e for v in value if (e := _value_error(_number, v))), None)
+    if kind == "count":
+        ok = isinstance(value, int) and not isinstance(value, bool) and value > 0
+        return None if ok else f"{value!r} is not a whole number above 0"
+    if kind == "bool":
+        return None if isinstance(value, bool) else f"{value!r} is not true or false"
+    return f"unknown kind {kind}"
+
+
+def check(code: str, data) -> list[str]:
+    """Everything wrong with the contents of a country file, empty if it is fine."""
+    errors: list[str] = []
+    if not (len(code) == 2 and code.isalpha() and code.isupper()):
+        errors.append(f"file name: '{code}' is not a two letter country code in capitals (NL)")
+    if not isinstance(data, dict):
+        return errors + ["the file must contain one JSON object { ... }"]
+    if not isinstance(data.get("name"), str) or not data["name"].strip():
+        errors.append("name: missing")
+    bands = data.get("bands")
+    if e := _value_error(_colors, bands):
+        errors.append(f"bands: {e}")
+    elif not 2 <= len(bands) <= 3:
+        errors.append("bands: needs two or three colors")
+    if e := _value_error(_color, data.get("accent")):
+        errors.append(f"accent: {e}")
+    if data.get("cool") is not None and (e := _value_error(_color, data["cool"])):
+        errors.append(f"cool: {e}")
+    known = {"name", "bands", "accent", "cool", "flag", "comment"}
+    errors += [f"{key}: unknown field" for key in data if key not in known]
+    flag = data.get("flag")
+    if not isinstance(flag, list) or not flag:
+        return errors + ["flag: needs a list of shapes"]
+    for i, layer in enumerate(flag, 1):
+        where = f"flag, shape {i}"
+        if not isinstance(layer, dict) or layer.get("shape") not in shapes:
+            got = layer.get("shape") if isinstance(layer, dict) else layer
+            errors.append(f"{where}: {got!r} is not one of {', '.join(shapes)}")
+            continue
+        spec = shapes[layer["shape"]]
+        where += f" ({layer['shape']})"
+        for key, (kind, default) in spec.items():
+            if key not in layer:
+                if default is _required:
+                    errors.append(f"{where}: {key} is missing")
+            elif e := _value_error(kind, layer[key]):
+                errors.append(f"{where}: {key}: {e}")
+        errors += [f"{where}: {k}: unknown field" for k in layer if k not in spec and k != "shape"]
+        weights = layer.get("weights")
+        if isinstance(weights, list) and weights and len(weights) != len(layer.get("colors") or []):
+            errors.append(f"{where}: weights needs one number per color")
+    return errors
+
+
+def _complete(layer: dict) -> dict:
+    """The layer with the defaults of its shape filled in."""
+    spec = shapes[layer["shape"]]
+    return {"shape": layer["shape"], **{k: d for k, (_, d) in spec.items()}, **layer}
+
+
+def load_file(path: Path) -> Country:
+    """The country in a file, raises ValueError with every problem if it is not valid."""
+    code = path.stem
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"{path.name}: {e}") from e
+    if errors := check(code, data):
+        raise ValueError(f"{path.name}: " + "; ".join(errors))
+    return Country(
+        code=code,
+        name=data["name"].strip(),
+        bands=tuple(data["bands"]),
+        accent=data["accent"],
+        cool=data.get("cool"),
+        flag=tuple(_complete(layer) for layer in data["flag"]),
+        source=str(path),
+    )
+
+
+def load(folders: list[Path] | None = None) -> dict[str, Country]:
+    """All countries: the built-in ones, then the user's, which replace a built-in one with the
+    same code. A file that is not valid is skipped with a warning in the log."""
+    result: dict[str, Country] = {}
+    for folder in folders if folders is not None else [builtin_dir, user_dir]:
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            try:
+                country = load_file(path)
+            except ValueError as e:
+                log.warning(f"Country look skipped, {folder}/{e}")
+                continue
+            result[country.code] = country
+    return result
+
+
+countries: dict[str, Country] = load()
+
+
+def reload():
+    """Read the country files again, eg. after the user added one."""
+    global countries
+    countries = load()
 
 
 def _territory(locale_name: str) -> str:
@@ -304,6 +279,9 @@ def _bands(painter: QPainter, r: QRectF, colors, weights, vertical: bool, col):
         pos += w
 
 
+_navy_uk, _red_uk = "#012169", "#c8102e"
+
+
 def _union(painter: QPainter, r: QRectF, col):
     painter.save()
     painter.setClipRect(r)
@@ -349,71 +327,66 @@ def paint_flag(
     def sub(x, y, ww, hh):
         return QRectF(x0 + x * w, y0 + y * h, ww * w, hh * h)
 
-    for layer in country.layers:
-        kind = layer[0]
-        if kind in ("h", "v"):
-            weights = layer[2] if len(layer) > 2 else None
-            _bands(painter, rect, layer[1], weights, kind == "v", col)
-        elif kind == "rect":
-            painter.fillRect(sub(*layer[2:6]), col(layer[1]))
-        elif kind == "star":
-            _, color, cx, cy, r = layer
-            painter.setBrush(col(color))
-            painter.drawPolygon(_star(x0 + cx * w, y0 + cy * h, r * h))
-        elif kind == "disc":
-            _, color, cx, cy, r = layer
-            if r > 0:
-                painter.setBrush(col(color))
-                painter.drawEllipse(QPointF(x0 + cx * w, y0 + cy * h), r * h, r * h)
-        elif kind == "ring":
-            _, color, cx, cy, r = layer
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(col(color), max(0.8, r * h * 0.3)))
-            painter.drawEllipse(QPointF(x0 + cx * w, y0 + cy * h), r * h, r * h)
-            painter.setPen(Qt.PenStyle.NoPen)
-        elif kind == "crescent":
-            _, color, cx, cy, r = layer
-            outer = QPainterPath()
-            outer.addEllipse(QPointF(x0 + cx * w, y0 + cy * h), r * h, r * h)
-            inner = QPainterPath()
-            inner.addEllipse(
-                QPointF(x0 + cx * w + r * h * 0.3, y0 + cy * h), r * h * 0.8, r * h * 0.8
+    for layer in country.flag:
+        shape = layer["shape"]
+        if shape == "stripes":
+            _bands(painter, rect, layer["colors"], layer["weights"], layer["vertical"], col)
+        elif shape == "rect":
+            painter.fillRect(
+                sub(layer["x"], layer["y"], layer["w"], layer["h"]), col(layer["color"])
             )
-            painter.fillPath(outer.subtracted(inner), col(color))
-        elif kind == "nordic":
-            color, t = layer[1], layer[2]
-            cx = layer[3] if len(layer) > 3 else 0.36
-            th = t * h
-            painter.fillRect(QRectF(x0 + cx * w - th / 2, y0, th, h), col(color))
-            painter.fillRect(QRectF(x0, y0 + h / 2 - th / 2, w, th), col(color))
-        elif kind == "triangle":
-            _, color, depth = layer
+        elif shape in ("star", "disc", "ring", "crescent"):
+            cx, cy, r = x0 + layer["x"] * w, y0 + layer["y"] * h, layer["r"] * h
+            color = col(layer["color"])
+            if shape == "star":
+                painter.setBrush(color)
+                painter.drawPolygon(_star(cx, cy, r))
+            elif shape == "disc" and r > 0:
+                painter.setBrush(color)
+                painter.drawEllipse(QPointF(cx, cy), r, r)
+            elif shape == "ring":
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(color, max(0.8, r * 0.3)))
+                painter.drawEllipse(QPointF(cx, cy), r, r)
+                painter.setPen(Qt.PenStyle.NoPen)
+            elif shape == "crescent":
+                outer = QPainterPath()
+                outer.addEllipse(QPointF(cx, cy), r, r)
+                inner = QPainterPath()
+                inner.addEllipse(QPointF(cx + r * 0.3, cy), r * 0.8, r * 0.8)
+                painter.fillPath(outer.subtracted(inner), color)
+        elif shape == "nordic-cross":
+            th = layer["thickness"] * h
+            color = col(layer["color"])
+            painter.fillRect(QRectF(x0 + layer["x"] * w - th / 2, y0, th, h), color)
+            painter.fillRect(QRectF(x0, y0 + h / 2 - th / 2, w, th), color)
+        elif shape == "triangle":
             tri = QPolygonF([
                 QPointF(x0, y0),
-                QPointF(x0 + depth * w, y0 + h / 2),
+                QPointF(x0 + layer["depth"] * w, y0 + h / 2),
                 QPointF(x0, y0 + h),
             ])
-            painter.setBrush(col(color))
+            painter.setBrush(col(layer["color"]))
             painter.drawPolygon(tri)
-        elif kind == "diamond":
+        elif shape == "diamond":
             m = 0.08
             pts = [(0.5, m), (1 - m, 0.5), (0.5, 1 - m), (m, 0.5)]
-            painter.setBrush(col(layer[1]))
+            painter.setBrush(col(layer["color"]))
             painter.drawPolygon(QPolygonF([QPointF(x0 + px * w, y0 + py * h) for px, py in pts]))
-        elif kind == "taegeuk":
-            _, top, bottom, r = layer
-            box = QRectF(x0 + w / 2 - r * h, y0 + h / 2 - r * h, 2 * r * h, 2 * r * h)
-            painter.setBrush(col(top))
+        elif shape == "taegeuk":
+            r = layer["r"] * h
+            box = QRectF(x0 + w / 2 - r, y0 + h / 2 - r, 2 * r, 2 * r)
+            painter.setBrush(col(layer["top"]))
             painter.drawPie(box, 0, 180 * 16)
-            painter.setBrush(col(bottom))
+            painter.setBrush(col(layer["bottom"]))
             painter.drawPie(box, 180 * 16, 180 * 16)
-        elif kind == "union":
-            _union(painter, sub(*layer[1:5]), col)
-        elif kind == "dots":
-            _, color, x, y, ww, hh, cols, rows = layer
-            area = sub(x, y, ww, hh)
+        elif shape == "union-jack":
+            _union(painter, sub(layer["x"], layer["y"], layer["w"], layer["h"]), col)
+        elif shape == "star-grid":
+            area = sub(layer["x"], layer["y"], layer["w"], layer["h"])
+            cols, rows = layer["columns"], layer["rows"]
             r = min(area.width() / cols, area.height() / rows) * 0.22
-            painter.setBrush(col(color))
+            painter.setBrush(col(layer["color"]))
             for j in range(rows):
                 for i in range(cols):
                     px = area.left() + (i + 0.5 + (0.5 if j % 2 else 0) * 0.5) * area.width() / cols

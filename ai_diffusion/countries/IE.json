@@ -1,0 +1,9 @@
+{
+  "name": "Ireland",
+  "bands": ["#169b62", "#ffffff", "#ff883e"],
+  "accent": "#ff883e",
+  "cool": "#169b62",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#169b62", "#ffffff", "#ff883e"]}
+  ]
+}

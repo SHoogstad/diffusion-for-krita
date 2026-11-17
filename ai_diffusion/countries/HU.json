@@ -1,0 +1,9 @@
+{
+  "name": "Hungary",
+  "bands": ["#ce2939", "#ffffff", "#477050"],
+  "accent": "#ce2939",
+  "cool": "#477050",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ce2939", "#ffffff", "#477050"]}
+  ]
+}

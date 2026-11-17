@@ -1,0 +1,9 @@
+{
+  "name": "Israel",
+  "bands": ["#0038b8", "#ffffff", "#0038b8"],
+  "accent": "#0038b8",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#0038b8", "#ffffff", "#0038b8", "#ffffff"], "weights": [1.5, 1.5, 7, 1.5, 1.5]},
+    {"shape": "ring", "color": "#0038b8", "x": 0.5, "y": 0.5, "r": 0.2}
+  ]
+}

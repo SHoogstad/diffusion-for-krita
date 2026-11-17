@@ -1,0 +1,9 @@
+{
+  "name": "Spain",
+  "bands": ["#aa151b", "#f1bf00", "#aa151b"],
+  "accent": "#aa151b",
+  "cool": "#f1bf00",
+  "flag": [
+    {"shape": "stripes", "colors": ["#aa151b", "#f1bf00", "#aa151b"], "weights": [1, 2, 1]}
+  ]
+}

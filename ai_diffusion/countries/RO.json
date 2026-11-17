@@ -1,0 +1,9 @@
+{
+  "name": "Romania",
+  "bands": ["#002b7f", "#fcd116", "#ce1126"],
+  "accent": "#ce1126",
+  "cool": "#002b7f",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#002b7f", "#fcd116", "#ce1126"]}
+  ]
+}

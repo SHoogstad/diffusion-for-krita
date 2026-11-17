@@ -1,0 +1,10 @@
+{
+  "name": "United Arab Emirates",
+  "bands": ["#00732f", "#ffffff", "#000000"],
+  "accent": "#ff0000",
+  "cool": "#00732f",
+  "flag": [
+    {"shape": "stripes", "colors": ["#00732f", "#ffffff", "#000000"]},
+    {"shape": "rect", "color": "#ff0000", "x": 0, "y": 0, "w": 0.25, "h": 1}
+  ]
+}

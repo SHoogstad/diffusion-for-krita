@@ -1,0 +1,11 @@
+{
+  "name": "Brazil",
+  "bands": ["#009c3b", "#ffdf00", "#002776"],
+  "accent": "#009c3b",
+  "cool": "#002776",
+  "flag": [
+    {"shape": "stripes", "colors": ["#009c3b"]},
+    {"shape": "diamond", "color": "#ffdf00"},
+    {"shape": "disc", "color": "#002776", "x": 0.5, "y": 0.5, "r": 0.25}
+  ]
+}

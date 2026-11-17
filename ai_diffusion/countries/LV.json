@@ -1,0 +1,8 @@
+{
+  "name": "Latvia",
+  "bands": ["#9e3039", "#ffffff", "#9e3039"],
+  "accent": "#9e3039",
+  "flag": [
+    {"shape": "stripes", "colors": ["#9e3039", "#ffffff", "#9e3039"], "weights": [2, 1, 2]}
+  ]
+}

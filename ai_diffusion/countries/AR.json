@@ -1,0 +1,10 @@
+{
+  "name": "Argentina",
+  "bands": ["#74acdf", "#ffffff", "#74acdf"],
+  "accent": "#74acdf",
+  "cool": "#f6b40e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#74acdf", "#ffffff", "#74acdf"]},
+    {"shape": "disc", "color": "#f6b40e", "x": 0.5, "y": 0.5, "r": 0.1}
+  ]
+}

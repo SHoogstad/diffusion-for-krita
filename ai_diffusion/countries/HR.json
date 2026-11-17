@@ -1,0 +1,9 @@
+{
+  "name": "Croatia",
+  "bands": ["#ff0000", "#ffffff", "#171796"],
+  "accent": "#ff0000",
+  "cool": "#171796",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ff0000", "#ffffff", "#171796"]}
+  ]
+}

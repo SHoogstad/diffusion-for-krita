@@ -1,0 +1,14 @@
+{
+  "name": "New Zealand",
+  "bands": ["#c8102e", "#ffffff", "#012169"],
+  "accent": "#c8102e",
+  "cool": "#012169",
+  "flag": [
+    {"shape": "stripes", "colors": ["#012169"]},
+    {"shape": "union-jack", "x": 0, "y": 0, "w": 0.5, "h": 0.5},
+    {"shape": "star", "color": "#c8102e", "x": 0.75, "y": 0.24, "r": 0.07},
+    {"shape": "star", "color": "#c8102e", "x": 0.63, "y": 0.47, "r": 0.07},
+    {"shape": "star", "color": "#c8102e", "x": 0.86, "y": 0.42, "r": 0.07},
+    {"shape": "star", "color": "#c8102e", "x": 0.75, "y": 0.82, "r": 0.08}
+  ]
+}

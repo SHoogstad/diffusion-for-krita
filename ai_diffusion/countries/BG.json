@@ -1,0 +1,9 @@
+{
+  "name": "Bulgaria",
+  "bands": ["#ffffff", "#00966e", "#d62612"],
+  "accent": "#d62612",
+  "cool": "#00966e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#00966e", "#d62612"]}
+  ]
+}

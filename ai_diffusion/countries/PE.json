@@ -1,0 +1,8 @@
+{
+  "name": "Peru",
+  "bands": ["#d91023", "#ffffff", "#d91023"],
+  "accent": "#d91023",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#d91023", "#ffffff", "#d91023"]}
+  ]
+}

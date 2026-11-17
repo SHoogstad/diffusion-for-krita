@@ -1,0 +1,9 @@
+{
+  "name": "United Kingdom",
+  "bands": ["#c8102e", "#ffffff", "#012169"],
+  "accent": "#c8102e",
+  "cool": "#012169",
+  "flag": [
+    {"shape": "union-jack"}
+  ]
+}

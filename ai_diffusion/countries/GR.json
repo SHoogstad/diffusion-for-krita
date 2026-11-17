@@ -1,0 +1,11 @@
+{
+  "name": "Greece",
+  "bands": ["#0d5eaf", "#ffffff", "#0d5eaf"],
+  "accent": "#0d5eaf",
+  "flag": [
+    {"shape": "stripes", "colors": ["#0d5eaf", "#ffffff", "#0d5eaf", "#ffffff", "#0d5eaf", "#ffffff", "#0d5eaf", "#ffffff", "#0d5eaf"]},
+    {"shape": "rect", "color": "#0d5eaf", "x": 0, "y": 0, "w": 0.37, "h": 0.5556},
+    {"shape": "rect", "color": "#ffffff", "x": 0.148, "y": 0, "w": 0.074, "h": 0.5556},
+    {"shape": "rect", "color": "#ffffff", "x": 0, "y": 0.2222, "w": 0.37, "h": 0.1111}
+  ]
+}

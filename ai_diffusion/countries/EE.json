@@ -1,0 +1,8 @@
+{
+  "name": "Estonia",
+  "bands": ["#0072ce", "#000000", "#ffffff"],
+  "accent": "#0072ce",
+  "flag": [
+    {"shape": "stripes", "colors": ["#0072ce", "#000000", "#ffffff"]}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Philippines",
+  "bands": ["#0038a8", "#ffffff", "#ce1126"],
+  "accent": "#ce1126",
+  "cool": "#0038a8",
+  "flag": [
+    {"shape": "stripes", "colors": ["#0038a8", "#ce1126"]},
+    {"shape": "triangle", "color": "#ffffff", "depth": 0.43},
+    {"shape": "disc", "color": "#fcd116", "x": 0.14, "y": 0.5, "r": 0.1}
+  ]
+}

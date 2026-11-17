@@ -1,0 +1,11 @@
+{
+  "name": "Norway",
+  "bands": ["#ba0c2f", "#ffffff", "#00205b"],
+  "accent": "#ba0c2f",
+  "cool": "#00205b",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ba0c2f"]},
+    {"shape": "nordic-cross", "color": "#ffffff", "thickness": 0.25},
+    {"shape": "nordic-cross", "color": "#00205b", "thickness": 0.125}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "United States",
+  "bands": ["#b22234", "#ffffff", "#3c3b6e"],
+  "accent": "#b22234",
+  "cool": "#3c3b6e",
+  "flag": [
+    {"shape": "stripes", "colors": ["#b22234", "#ffffff", "#b22234", "#ffffff", "#b22234", "#ffffff", "#b22234", "#ffffff", "#b22234", "#ffffff", "#b22234", "#ffffff", "#b22234"]},
+    {"shape": "rect", "color": "#3c3b6e", "x": 0, "y": 0, "w": 0.4, "h": 0.5385},
+    {"shape": "star-grid", "color": "#ffffff", "x": 0, "y": 0, "w": 0.4, "h": 0.5385, "columns": 6, "rows": 5}
+  ]
+}

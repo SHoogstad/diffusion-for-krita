@@ -1,0 +1,9 @@
+{
+  "name": "Belgium",
+  "bands": ["#000000", "#fdda24", "#ef3340"],
+  "accent": "#ef3340",
+  "cool": "#fdda24",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#000000", "#fdda24", "#ef3340"]}
+  ]
+}

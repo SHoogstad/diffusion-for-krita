@@ -1,0 +1,11 @@
+{
+  "name": "Cuba",
+  "bands": ["#002a8f", "#ffffff", "#cf142b"],
+  "accent": "#cf142b",
+  "cool": "#002a8f",
+  "flag": [
+    {"shape": "stripes", "colors": ["#002a8f", "#ffffff", "#002a8f", "#ffffff", "#002a8f"]},
+    {"shape": "triangle", "color": "#cf142b", "depth": 0.42},
+    {"shape": "star", "color": "#ffffff", "x": 0.14, "y": 0.5, "r": 0.11}
+  ]
+}

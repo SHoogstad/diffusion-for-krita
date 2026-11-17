@@ -1,0 +1,9 @@
+{
+  "name": "France",
+  "bands": ["#002654", "#ffffff", "#ce1126"],
+  "accent": "#ce1126",
+  "cool": "#002654",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#002654", "#ffffff", "#ce1126"]}
+  ]
+}

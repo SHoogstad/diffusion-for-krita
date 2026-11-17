@@ -1,0 +1,9 @@
+{
+  "name": "Ukraine",
+  "bands": ["#0057b7", "#ffd700"],
+  "accent": "#ffd700",
+  "cool": "#0057b7",
+  "flag": [
+    {"shape": "stripes", "colors": ["#0057b7", "#ffd700"]}
+  ]
+}

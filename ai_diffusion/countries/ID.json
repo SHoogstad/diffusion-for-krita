@@ -1,0 +1,8 @@
+{
+  "name": "Indonesia",
+  "bands": ["#ff0000", "#ffffff"],
+  "accent": "#ff0000",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ff0000", "#ffffff"]}
+  ]
+}

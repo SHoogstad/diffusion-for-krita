@@ -1,0 +1,9 @@
+{
+  "name": "Slovakia",
+  "bands": ["#ffffff", "#0b4ea2", "#ee1c25"],
+  "accent": "#ee1c25",
+  "cool": "#0b4ea2",
+  "flag": [
+    {"shape": "stripes", "colors": ["#ffffff", "#0b4ea2", "#ee1c25"]}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Switzerland",
+  "bands": ["#da291c", "#ffffff"],
+  "accent": "#da291c",
+  "flag": [
+    {"shape": "stripes", "colors": ["#da291c"]},
+    {"shape": "rect", "color": "#ffffff", "x": 0.43, "y": 0.2, "w": 0.14, "h": 0.6},
+    {"shape": "rect", "color": "#ffffff", "x": 0.31, "y": 0.4, "w": 0.38, "h": 0.2}
+  ]
+}

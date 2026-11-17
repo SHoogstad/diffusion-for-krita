@@ -1,0 +1,9 @@
+{
+  "name": "Italy",
+  "bands": ["#009246", "#ffffff", "#ce2b37"],
+  "accent": "#ce2b37",
+  "cool": "#009246",
+  "flag": [
+    {"shape": "stripes", "vertical": true, "colors": ["#009246", "#ffffff", "#ce2b37"]}
+  ]
+}
