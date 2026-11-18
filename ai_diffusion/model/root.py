@@ -85,6 +85,11 @@ class Root(QObject):
 
     @property
     def connection(self) -> Connection:
+        if "_connection" not in self.__dict__:
+            # Not started yet. During a plugin update the old version (1.66.1 and earlier)
+            # stops after the new modules are imported: its control layers then look up the
+            # connection here. A disconnected one answers them; init() makes the real one.
+            self._connection = Connection()
         return self._connection
 
     @property
