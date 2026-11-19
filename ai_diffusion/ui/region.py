@@ -14,6 +14,7 @@ from ..model.prompt_enhance import improve_prompt
 from ..model.properties import Binding, bind
 from ..model.region import Region, RegionLink, RootRegion, translate_prompt
 from ..model.root import root
+from ..qt import sip
 from ..qt.QtCore import QEvent, QMetaObject, QObject, QPoint, QRectF, QSize, Qt, QUrl, pyqtSignal
 from ..qt.QtGui import (
     QColor,
@@ -596,7 +597,9 @@ class ActiveRegionWidget(QFrame):
             result = await improve_prompt(
                 original, model.active_style, client, model.is_editing, extent, context
             )
-            if self.region is region and region.positive == original:
+            if sip.isdeleted(self):  # the page was rebuilt meanwhile (look switch)
+                region.positive = result
+            elif self.region is region and region.positive == original:
                 self._replace_positive(result)
             else:
                 region.positive = result
@@ -604,8 +607,9 @@ class ActiveRegionWidget(QFrame):
             model.error = Error.from_string(_("Improve Prompt failed") + f": {e!s}")
         finally:
             self._is_improving = False
-            self._improve_button.setEnabled(True)
-            self._update_improve_tooltip()
+            if not sip.isdeleted(self):
+                self._improve_button.setEnabled(True)
+                self._update_improve_tooltip()
 
     def _replace_positive(self, text: str):
         """Replace the text as one edit, so that Ctrl+Z restores the original prompt."""

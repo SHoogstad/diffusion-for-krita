@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any
 
 from ..localization import translate as _
+from ..qt import sip
 from ..qt.QtCore import QAbstractItemModel, QRectF, QSize, Qt, pyqtSignal
 from ..qt.QtGui import QColor, QConicalGradient, QIcon, QPainter, QPen
 from ..qt.QtWidgets import (
@@ -598,6 +599,8 @@ class SettingsTab(QWidget):
     def write(self, *ignored):
         if not self._write_guard:
             for name, widget in self._widgets.items():
+                if sip.isdeleted(widget):
+                    return  # an error dialog let a look switch renew the dialog meanwhile
                 if widget.enabled:
                     setattr(settings, name, widget.value)
             self._write()
