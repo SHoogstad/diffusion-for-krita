@@ -762,6 +762,7 @@ class StrengthWidget(DoubleSliderSpinBox):
     def __init__(self, range: tuple[float, float] = (0.01, 1.0), prefix=True):
         super().__init__()
         self._model: DocumentModel | None = None
+        self._released = False
         self._value = 100
         self._range = (range[0] * 100, range[1] * 100)
 
@@ -781,6 +782,15 @@ class StrengthWidget(DoubleSliderSpinBox):
         w.valueChanged.connect(self.notify_changed)
         self.draggingFinished.connect(self._complete_drag)
         settings.changed.connect(self._update_suffix)
+        # This object is not a widget: it outlives its spinbox when the page is rebuilt (look
+        # switch). Stop listening to settings and model then, the spinbox is gone.
+        w.destroyed.connect(self._release)
+
+    def _release(self):
+        self._released = True
+        _disconnect(settings.changed, self._update_suffix)
+        if self._model:
+            self._disconnect_model(self._model)
 
     def notify_changed(self, value: float):
         value = int(value)
@@ -826,14 +836,19 @@ class StrengthWidget(DoubleSliderSpinBox):
     @model.setter
     def model(self, model: DocumentModel):
         if self._model:
-            self._model.style_changed.disconnect(self._update_suffix)
-            self._model.edit_mode_changed.disconnect(self._update_suffix)
-            self._model.animation.sampling_quality_changed.disconnect(self._update_suffix)
+            self._disconnect_model(self._model)
         self._model = model
+        if self._released:
+            return
         self._model.style_changed.connect(self._update_suffix)
         self._model.edit_mode_changed.connect(self._update_suffix)
         self._model.animation.sampling_quality_changed.connect(self._update_suffix)
         self._update_suffix()
+
+    def _disconnect_model(self, model: DocumentModel):
+        _disconnect(model.style_changed, self._update_suffix)
+        _disconnect(model.edit_mode_changed, self._update_suffix)
+        _disconnect(model.animation.sampling_quality_changed, self._update_suffix)
 
     @property
     def value(self):
@@ -844,6 +859,8 @@ class StrengthWidget(DoubleSliderSpinBox):
         self.setValue(value)
 
     def _change_suffix(self, value: int):
+        if self._released:
+            return
         if not self._model or not settings.show_steps:
             self.widget().setSuffix("%")
             return
@@ -865,6 +882,13 @@ class StrengthWidget(DoubleSliderSpinBox):
 
     def setToolTip(self, tooltip: str):
         self.widget().setToolTip(tooltip)
+
+
+def _disconnect(signal, slot):
+    try:
+        signal.disconnect(slot)
+    except (TypeError, RuntimeError):  # not connected, or the sender is gone
+        pass
 
 
 def _get_steps(model: DocumentModel) -> tuple[int, int]:

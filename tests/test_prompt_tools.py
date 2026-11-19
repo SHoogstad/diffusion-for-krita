@@ -313,3 +313,39 @@ def test_can_see():
     enhancer = ensure(prompt_templates.options(Arch.ph3, False).enhancer)
     assert not prompt_enhance._can_see(llm._replace(enhancer=enhancer), client)
     assert prompt_enhance._can_see(None, None)  # OpenAI-compatible server
+
+
+def test_openai_chat_with_pictures(qtapp, monkeypatch):
+    """The pictures go into the message, the request still goes to the server's URL."""
+    from ai_diffusion.settings import settings
+
+    calls = []
+
+    class Requests:
+        async def http(self, method, url, data, timeout=None, bearer=None):
+            calls.append((method, url, data))
+            return {"choices": [{"message": {"content": "a fox"}}]}
+
+    monkeypatch.setattr(prompt_enhance, "_requests", Requests())
+    monkeypatch.setattr(settings, "prompt_enhancer_url", "http://localhost:8089/v1")
+    request = prompt_enhance.build_request(Arch.h3, "make it red", True, "", Extent(512, 512), True)
+    images = [Image.create(Extent(64, 64)), Image.create(Extent(64, 32))]
+    labels = ["<Picture 1>", "<Picture 2>"]
+    result = qtapp.run(prompt_enhance._openai_chat(request, images, labels))
+    assert result == "a fox"
+
+    method, url, data = calls[0]
+    assert method == "POST" and url == "http://localhost:8089/v1/chat/completions"
+    content = data["messages"][-1]["content"]
+    assert [c["type"] for c in content] == ["text", "image_url", "text", "image_url", "text"]
+    assert content[0]["text"] == "<Picture 1>" and content[2]["text"] == "<Picture 2>"
+    assert all(
+        c["image_url"]["url"].startswith("data:image/jpeg;base64,")
+        for c in content
+        if c["type"] == "image_url"
+    )
+    assert content[-1]["text"] == request.user
+
+    # without pictures the message is plain text
+    qtapp.run(prompt_enhance._openai_chat(request, [], []))
+    assert calls[1][1] == url and calls[1][2]["messages"][-1]["content"] == request.user

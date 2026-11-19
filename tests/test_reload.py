@@ -41,6 +41,17 @@ first.createActions(window)
 actions = dict(first._actions)
 dock = ImageDiffusionWidget()
 old_panel = dock.widget()
+
+# A control layer reacts to the disconnect while the old version stops: it must find the old
+# version's connection, not the new version's root which isn't started yet.
+from PyQt6.QtCore import QUuid
+from ai_diffusion.backend.resources import ControlMode
+from ai_diffusion.model.connection import ConnectionState
+from ai_diffusion.model.control import ControlLayer
+from ai_diffusion.model.root import root as old_root
+control = ControlLayer(old_root.null_model, ControlMode.scribble, QUuid.createUuid(), 0)
+old_root.connection.error = "test"
+old_root.connection.state = ConnectionState.error
 pump()
 
 def update(version):

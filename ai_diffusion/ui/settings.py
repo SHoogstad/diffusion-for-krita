@@ -13,6 +13,7 @@ from ..model import prompt_enhance
 from ..model.connection import ConnectionState, apply_performance_preset
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
+from ..qt import sip
 from ..qt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from ..qt.QtGui import (
     QColor,
@@ -396,15 +397,18 @@ class RunpodWidget(QWidget):
             self._load_button.setEnabled(False)
             try:
                 api = runpod.RunpodApi(settings.runpod_api_key)
-                self._gpus = await api.gpus(settings.runpod_mode)
-                self._volume_data_centers = await api.volume_data_centers()
+                gpus = await api.gpus(settings.runpod_mode)
+                volume_data_centers = await api.volume_data_centers()
+                if sip.isdeleted(self):  # the dialog was renewed meanwhile (look switch)
+                    return
+                self._gpus, self._volume_data_centers = gpus, volume_data_centers
                 self._fill_gpus()
             except Exception as e:
-                self._status.setText(f"<b>{_('Error')}</b>: {e}")
-                self._status.setStyleSheet(f"color: {red}")
+                self._show_error(e)
             finally:
                 self._loading = False
-                self._load_button.setEnabled(True)
+                if not sip.isdeleted(self):
+                    self._load_button.setEnabled(True)
 
         eventloop.run(load())
 
@@ -474,14 +478,23 @@ class RunpodWidget(QWidget):
         async def delete():
             try:
                 await root.connection.delete_serverless_endpoint()
-                self._status.setText(_("Endpoint deleted."))
-                self._status.setStyleSheet(f"color: {grey}")
+                self._show_status(_("Endpoint deleted."))
             except Exception as e:
-                self._status.setText(f"<b>{_('Error')}</b>: {e}")
-                self._status.setStyleSheet(f"color: {red}")
-            self.update_state()
+                self._show_error(e)
+            if not sip.isdeleted(self):  # the dialog was renewed meanwhile (look switch)
+                self.update_state()
 
         eventloop.run(delete())
+
+    def _show_status(self, text: str):
+        if not sip.isdeleted(self):
+            self._status.setText(text)
+            self._status.setStyleSheet(f"color: {grey}")
+
+    def _show_error(self, error: Exception):
+        if not sip.isdeleted(self):
+            self._status.setText(f"<b>{_('Error')}</b>: {error}")
+            self._status.setStyleSheet(f"color: {red}")
 
     def _start_or_stop(self):
         connection = root.connection
@@ -509,12 +522,11 @@ class RunpodWidget(QWidget):
                 )
                 settings.runpod_volume_id = ""
                 settings.save()
-                self._status.setText(_("Network volume deleted."))
-                self._status.setStyleSheet(f"color: {grey}")
+                self._show_status(_("Network volume deleted."))
             except Exception as e:
-                self._status.setText(f"<b>{_('Error')}</b>: {e}")
-                self._status.setStyleSheet(f"color: {red}")
-            self.update_state()
+                self._show_error(e)
+            if not sip.isdeleted(self):  # the dialog was renewed meanwhile (look switch)
+                self.update_state()
 
         eventloop.run(delete())
 

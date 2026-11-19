@@ -118,11 +118,20 @@ def reload_plugin():
     clock.lap("import the new version")
 
     log.info("Plugin update: stopping the old version")
-    for dock in docks:  # the panels of the old version must not outlive its event loop
-        if shutdown := getattr(dock.widget(), "shutdown", None):
-            shutdown()
-    if old_extension is not None:
-        old_extension.retire()
+    # The old version stops with its own modules: code of it that imports late (like control
+    # layers reacting to the disconnect) must not get the new version, which isn't started yet.
+    new_modules = _plugin_modules()
+    sys.modules.update(old_modules)
+    try:
+        for dock in docks:  # the panels of the old version must not outlive its event loop
+            if shutdown := getattr(dock.widget(), "shutdown", None):
+                shutdown()
+        if old_extension is not None:
+            old_extension.retire()
+    finally:
+        for name in old_modules:
+            sys.modules.pop(name, None)
+        sys.modules.update(new_modules)
     clock.lap("stop the old version")
     new_reload.take_over(hand_over)
     clock.lap("start the new version")
