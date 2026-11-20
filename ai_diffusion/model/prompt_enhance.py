@@ -448,24 +448,20 @@ max_planned_boxes = 6
 
 
 def plan_rules(extent: Extent):
-    """The language model decides if the picture needs a layout (from MOSS's own enhancer skill:
-    a caption for ordinary scenes, boxes for text placement, posters, panels, set positions)."""
+    """Answer format for a picture which needs a layout (needs_layout said so)."""
     w, h = extent.width, extent.height
     return (
-        "First decide whether this picture needs a layout with bounding boxes. Most pictures do "
-        "not: ordinary scenes, portraits, photographs and illustrations get only a caption. Use "
-        "boxes only when placement really matters: text that must sit in a specific place, "
-        "posters, covers and other designed images, several panels, or several subjects whose "
-        "positions or relations the request controls.\n"
-        "Without boxes, answer with the caption only.\n"
-        "With boxes, answer in exactly this form, nothing else: first the caption of the whole "
-        "picture (scene, setting, composition, light and style as a whole, saying in words where "
-        "the boxed parts are). Then a line that is exactly 'Boxes:', followed by one line per "
-        "box formatted as 'index | [x0, y0, x1, y1] | English description': absolute pixel "
-        f"coordinates (top-left, bottom-right) on the {w}x{h} canvas, x from 0 to {w}, y from 0 "
-        f"to {h}. At most {max_planned_boxes} boxes, each a coherent visible unit large enough to "
-        "read; describe each following the bounding box rules, text boxes with the exact words "
-        "in double quotes."
+        "This picture needs a layout: you plan the bounding boxes yourself, so the rule against "
+        "inventing coordinates does not apply here.\n"
+        "Answer in exactly this form, nothing else: first the caption of the whole picture "
+        "(scene, setting, composition, light and style as a whole, saying in words where the "
+        "boxed parts are). Then a line that is exactly 'Boxes:', followed by one line per box: "
+        "'index | [x0, y0, x1, y1] | English description', with absolute pixel coordinates "
+        f"(top-left, bottom-right) on the {w}x{h} canvas, x from 0 to {w}, y from 0 to {h}. "
+        f"Example line: 1 | [{w // 8}, {h // 16}, {w * 7 // 8}, {h // 5}] | description. "
+        f"Use at most {max_planned_boxes} boxes: one per text block, panel or subject whose "
+        "place the request sets, each large enough to read; describe each following the "
+        "bounding box rules, text boxes with the exact words in double quotes."
     )
 
 
@@ -501,13 +497,46 @@ def parse_plan(text: str, extent: Extent) -> tuple[str, list[LayoutBox]]:
     return clean_output(caption.strip()), boxes
 
 
+_layout_question = (
+    "Request: {prompt}\n\n"
+    "Does this request put text or subjects at specific places in the picture (for example a "
+    "title at the top, text in a corner, a sign or speech bubble with given words, something "
+    "on the left or right), or ask for a poster, cover, flyer, comic page or several panels? "
+    "A single subject or an ordinary scene without positions is NO. Answer only YES or NO."
+)
+
+
+async def needs_layout(prompt: str, style: Style, client: Client | None):
+    """A short yes/no question first: small language models decide this badly while they also
+    follow the long enhancer template."""
+    arch = resolve_arch(style, client)
+    opts = prompt_templates.Options(max_tokens=16, temperature=0.0, sampling=False)
+    system = "You sort requests for an image generator. Answer only YES or NO."
+    question = _layout_question.format(prompt=prompt.strip())
+    request = prompt_templates.Request(system, question, opts, "builtin")
+    if settings.prompt_enhancer is PromptEnhancer.openai:
+        answer = await _openai_chat(request, [], [])
+    else:
+        if client is None:
+            raise RuntimeError(_("Not connected to a server."))
+        source = prompt_templates.get(arch, False, templates_dir())[1]
+        template_opts = prompt_templates.options(arch, False)
+        llm = select_llm(arch, style, client, template_opts, source, settings.prompt_enhancer_llm)
+        answer = await _comfy_generate(request, "", None, llm, [], [], client, keep_loaded=True)
+    answer = clean_output(answer).strip().upper()
+    log.info(f"Improve Prompt: needs a layout? {answer[:20]!r}")
+    return answer.startswith("YES")
+
+
 async def plan_layout(
     prompt: str, style: Style, client: Client | None, extent: Extent
 ) -> tuple[str, list[LayoutBox]]:
-    """Improve a prompt which has no regions yet, and let the language model decide whether
-    the picture needs a layout. Returns the caption and the boxes (empty: no layout needed)."""
+    """Improve a prompt which has no regions yet. The language model first decides whether the
+    picture needs a layout; returns the caption and the boxes (empty: no layout needed)."""
     if not prompt.strip():
         raise ValueError(_("Write a prompt first, then click Improve Prompt."))
+    if not await needs_layout(prompt, style, client):
+        return await improve_prompt(prompt, style, client, False, extent), []
     request = f"{prompt.strip()}\n\nCanvas: {extent.width}x{extent.height} pixels."
     answer = await improve_prompt(request, style, client, False, extent, rules=plan_rules(extent))
     caption, boxes = parse_plan(answer, extent)
@@ -565,11 +594,12 @@ async def _comfy_generate(
     images: list[Image],
     labels: list[str],
     client: Client | None,
+    keep_loaded=False,
 ):
     assert client is not None
     opts = request.options
     seed = random.randint(0, 2**31 - 1)
-    unload = settings.prompt_enhancer_unload
+    unload = settings.prompt_enhancer_unload and not keep_loaded
 
     # Dedicated prompt enhancer of the model (eg. P-H3-Image's upsampler)
     if enhancer := llm.enhancer:

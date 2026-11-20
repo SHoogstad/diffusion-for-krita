@@ -13,7 +13,7 @@ from ai_diffusion.files import FileFormat
 from ai_diffusion.image import Bounds, Extent, Image
 from ai_diffusion.model import prompt_enhance, prompt_templates
 from ai_diffusion.qt.QtCore import Qt
-from ai_diffusion.settings import settings
+from ai_diffusion.settings import PromptEnhancer, settings
 from ai_diffusion.style import Arch, Style, StyleSettings
 from ai_diffusion.util import ensure
 
@@ -456,8 +456,21 @@ def test_plan_layout(qtapp, monkeypatch):
         return "A poster.\nBoxes:\n1 | [0, 0, 64, 32] | A title."
 
     monkeypatch.setattr(prompt_enhance, "improve_prompt", fake_improve)
+    answers = ["YES"]
+
+    async def fake_chat(request, images, labels):
+        assert "Answer only YES or NO" in request.user
+        return answers.pop(0)
+
+    monkeypatch.setattr(prompt_enhance, "_openai_chat", fake_chat)
+    monkeypatch.setattr(settings, "prompt_enhancer", PromptEnhancer.openai)
     style = Style(Path("default.json"))
     caption, boxes = qtapp.run(prompt_enhance.plan_layout("poster", style, None, Extent(64, 64)))
     assert caption == "A poster." and boxes[0].bounds == Bounds(0, 0, 64, 32)
     assert calls[0][0] == "poster\n\nCanvas: 64x64 pixels."
     assert "64x64 canvas" in calls[0][1]
+
+    # the language model says the picture needs no layout: a plain improve, no boxes
+    answers.append("No.")
+    caption, boxes = qtapp.run(prompt_enhance.plan_layout("a cat", style, None, Extent(64, 64)))
+    assert boxes == [] and calls[-1] == ("a cat", "")
