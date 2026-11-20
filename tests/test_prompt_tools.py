@@ -349,3 +349,70 @@ def test_openai_chat_with_pictures(qtapp, monkeypatch):
     # without pictures the message is plain text
     qtapp.run(prompt_enhance._openai_chat(request, [], []))
     assert calls[1][1] == url and calls[1][2]["messages"][-1]["content"] == request.user
+
+
+def test_uses_layout():
+    assert prompt_enhance.uses_layout(Arch.moss)
+    assert not prompt_enhance.uses_layout(Arch.flux2_4b)
+
+
+def test_layout_request():
+    from ai_diffusion.image import Bounds
+
+    boxes = [
+        prompt_enhance.LayoutBox("a red  fox\nsitting", Bounds(10, 20, 100, 200)),
+        prompt_enhance.LayoutBox("", Bounds(0, 0, 50, 50)),
+    ]
+    text = prompt_enhance.layout_request("forest at dawn", boxes, Extent(1024, 768))
+    assert text.startswith("forest at dawn\n")
+    assert "Canvas: 1024x768 pixels." in text
+    assert "1 | [10, 20, 110, 220] | a red fox sitting" in text
+    assert "2 | [0, 0, 50, 50] | (empty" in text
+    assert "2 boxes" in prompt_enhance.layout_rules(2)
+
+
+def test_parse_layout():
+    answer = (
+        "Photograph of a misty forest at dawn.\n\nA fox sits on the left.\n"
+        "Boxes:\n1 | A red fox with a bushy tail.\n2 | [0, 0, 50, 50] | A pale sun.\n"
+    )
+    caption, boxes = prompt_enhance.parse_layout(answer, 2)
+    assert caption == "Photograph of a misty forest at dawn.\n\nA fox sits on the left."
+    assert boxes == ["A red fox with a bushy tail.", "A pale sun."]
+
+    # missing header, missing and extra lines
+    caption, boxes = prompt_enhance.parse_layout("A forest.\n2. A pale sun.\n7 | nope", 3)
+    assert caption == "A forest.\n7 | nope"
+    assert boxes == ["", "A pale sun.", ""]
+
+    caption, boxes = prompt_enhance.parse_layout("**Boxes:**\n1 | fox", 1)
+    assert caption == "" and boxes == ["fox"]
+
+
+def test_improve_layout(qtapp, monkeypatch):
+    from ai_diffusion.image import Bounds
+
+    calls = []
+
+    async def fake_improve(
+        prompt, style, client, editing=False, extent=None, context=None, rules=""
+    ):
+        calls.append((prompt, rules))
+        if "exactly one bounding box" in rules:
+            return "2 | A pale sun low over the trees."
+        return "A forest.\nBoxes:\n1 | A fox.\n2 | A sun."
+
+    monkeypatch.setattr(prompt_enhance, "improve_prompt", fake_improve)
+    style = Style(Path("default.json"))
+    boxes = [
+        prompt_enhance.LayoutBox("fox", Bounds(0, 0, 10, 10)),
+        prompt_enhance.LayoutBox("sun", Bounds(10, 0, 10, 10)),
+    ]
+    extent = Extent(64, 64)
+    result = qtapp.run(prompt_enhance.improve_layout("forest", boxes, style, None, extent))
+    assert result == ("A forest.", ["A fox.", "A sun."])
+    assert "1 | [0, 0, 10, 10] | fox" in calls[0][0]
+
+    one = qtapp.run(prompt_enhance.improve_box("forest", boxes[1], style, None, extent))
+    assert "1 | [10, 0, 20, 10] | sun" in calls[1][0] and "fox" not in calls[1][0]
+    assert one == "A pale sun low over the trees."

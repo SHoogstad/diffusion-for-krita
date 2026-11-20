@@ -1012,6 +1012,30 @@ class DocumentModel(QObject, ObservableProperties):
         cond.edit_reference = self.is_editing
         return cond, layers
 
+    def prompt_layout_boxes(self) -> list[tuple[Region, Bounds]]:
+        """The regions of a MOSS-Image layout prompt and their boxes in canvas pixels, for
+        Improve Prompt. Same masks as the generation uses (workflow.apply_layout_prompt): no
+        boxes when one region covers (almost) everything, one box per region around its layers."""
+        extent = self._doc.extent
+        conditioning, job_regions = process_regions(self.active_regions, Bounds(0, 0, *extent))
+        boxes: dict[int, tuple[Region, Bounds]] = {}
+        for region_input, job in zip(conditioning.regions, job_regions):
+            if job.is_background or region_input.mask is None:
+                continue
+            layer = self.layers.find(QUuid(job.layer_id))
+            region = self.regions.find_linked(layer, RegionLink.direct) if layer else None
+            rel = workflow.mask_bounds(region_input.mask) if region else None
+            if region is None or rel is None:
+                continue
+            x0, y0 = int(rel[0] * extent.width), int(rel[1] * extent.height)
+            x1, y1 = round(rel[2] * extent.width), round(rel[3] * extent.height)
+            if previous := boxes.get(id(region)):  # several layers linked to one region
+                b = previous[1]
+                x0, y0 = min(x0, b.x), min(y0, b.y)
+                x1, y1 = max(x1, b.x + b.width), max(y1, b.y + b.height)
+            boxes[id(region)] = (region, Bounds(x0, y0, x1 - x0, y1 - y0))
+        return list(boxes.values())
+
     def prompt_enhance_context(self, prompt: str, images=True):
         """The pictures which the next job gets along with `prompt`, numbered like the model sees
         them: the canvas if it is edited, then control layers and <layer:name> references.

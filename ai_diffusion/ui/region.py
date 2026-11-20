@@ -594,9 +594,17 @@ class ActiveRegionWidget(QFrame):
                 vision = settings.prompt_enhancer_vision
                 context = model.prompt_enhance_context(original, images=vision)
             extent = model.document.extent
-            result = await improve_prompt(
-                original, model.active_style, client, model.is_editing, extent, context
-            )
+            layout = []
+            if prompt_enhance.uses_layout(model.arch):
+                layout = model.prompt_layout_boxes()
+            if layout:
+                result = await self._improve_layout(region, layout, extent)
+            else:
+                result = await improve_prompt(
+                    original, model.active_style, client, model.is_editing, extent, context
+                )
+            if not result:  # the language model only wrote the region prompts
+                return
             if sip.isdeleted(self):  # the page was rebuilt meanwhile (look switch)
                 region.positive = result
             elif self.region is region and region.positive == original:
@@ -610,6 +618,30 @@ class ActiveRegionWidget(QFrame):
             if not sip.isdeleted(self):
                 self._improve_button.setEnabled(True)
                 self._update_improve_tooltip()
+
+    async def _improve_layout(
+        self, region: RootRegion | Region, layout: list[tuple[Region, Bounds]], extent
+    ):
+        """MOSS-Image: the regions are boxes of a layout. The root prompt improves the caption
+        and every region prompt, a region prompt only its own box."""
+        model = self._root._model
+        client = root.connection.client_if_connected
+        style = model.active_style
+        boxes = [prompt_enhance.LayoutBox(r.positive, b) for r, b in layout]
+        if isinstance(region, Region):
+            index = next((i for i, (r, __) in enumerate(layout) if r is region), None)
+            if index is None:  # the region has no box (eg. covers everything)
+                return await improve_prompt(region.positive, style, client, False, extent)
+            prompt = region.root.positive
+            return await prompt_enhance.improve_box(prompt, boxes[index], style, client, extent)
+
+        caption, descriptions = await prompt_enhance.improve_layout(
+            region.positive, boxes, style, client, extent
+        )
+        for (r, __), text in zip(layout, descriptions):
+            if text and not sip.isdeleted(r):
+                r.positive = text
+        return caption
 
     def _replace_positive(self, text: str):
         """Replace the text as one edit, so that Ctrl+Z restores the original prompt."""

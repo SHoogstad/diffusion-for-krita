@@ -811,3 +811,35 @@ async def test_apply_region_group(workflows_dir: Path):
         assert isinstance(r2_right, tuple) and r2_right[3] == 0, (
             "result2: right side must be transparent"
         )
+
+
+@qtapp
+async def test_prompt_layout_boxes(workflows_dir: Path):
+    """MOSS-Image Improve Prompt: each region gets the pixel box around its layer content."""
+    krita_doc = Krita.instance().openDocument("test")
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)
+        w, h = _DOC_EXTENT
+        left = Bounds(0, 0, w // 2, h)
+        corner = Bounds(w * 3 // 4, 0, w // 4, h // 4)
+
+        def content(area: Bounds, color: int):  # the mock layers ignore their offset
+            image = Image.create(_DOC_EXTENT, fill=0)
+            image.draw_image(Image.create(area.extent, fill=color), area.offset)
+            return image
+
+        layer1 = model.layers.create("Left", content(left, _RED), _DOC_BOUNDS)
+        layer2 = model.layers.create("Corner", content(corner, _GREEN), _DOC_BOUNDS)
+        region1 = model.regions.emplace()
+        region1.link(layer1)
+        region1.positive = "a fox"
+        region2 = model.regions.emplace()
+        region2.link(layer2)
+        region2.positive = "the sun"
+
+        boxes = model.prompt_layout_boxes()
+        assert [r for r, __ in boxes] == [region1, region2]
+        for (__, box), expected in zip(boxes, [left, corner]):
+            assert abs(box.x - expected.x) <= w // 64 and abs(box.y - expected.y) <= h // 64
+            assert abs(box.width - expected.width) <= w // 32
+            assert abs(box.height - expected.height) <= h // 32
