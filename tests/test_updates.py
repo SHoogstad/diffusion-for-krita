@@ -246,3 +246,55 @@ def test_precompile_new_version(tmp_path: Path):
     _precompile(package)
     assert list((package / "ui" / "__pycache__").glob("page.*.pyc"))
     assert not (package / "tests" / "__pycache__").exists()
+
+
+@qtapp
+async def test_auto_update_prerelease_made_final(github: FakeGithub, tmp_path: Path):
+    """A pre-release build gets the full release of the same version (eg. v1.66.2 was a
+    pre-release, then fixes went in and the release was made final with a new zip)."""
+
+    def updater(prerelease: bool, include=False):
+        return AutoUpdate(
+            current_version="v1.66.2",
+            plugin_dir=tmp_path,
+            api_url=github.url,
+            include_prereleases=include,
+            current_prerelease=prerelease,
+        )
+
+    github.publish("v1.66.1", b"old")
+    github.publish("v1.66.2", b"preview", prerelease=True)
+    on_preview = updater(prerelease=True)
+    await on_preview.check()
+    assert on_preview.state is UpdateState.latest  # the same pre-release
+
+    github.releases[-1] = {**github.releases[-1], "prerelease": False}  # made the full release
+    github.archive = b"final"
+    github.releases[-1]["assets"][0]["digest"] = "sha256:" + hashlib.sha256(b"final").hexdigest()
+    await on_preview.check()
+    assert on_preview.state is UpdateState.available
+    assert on_preview.latest_version == "v1.66.2"
+    assert on_preview._package is not None and not on_preview._package.prerelease
+    installed = updater(prerelease=False)  # after the update: a full build
+    await installed.check()
+    assert installed.state is UpdateState.latest
+
+    # A full build of the same version doesn't take its own pre-release, or go back to it
+    final = updater(prerelease=False, include=True)
+    github.publish("v1.66.2.1", b"next preview", prerelease=True)
+    await final.check()
+    assert final.latest_version == "v1.66.2.1"  # newer version: pre-release offered (option on)
+    github.releases.pop()
+    await final.check()
+    assert final.state is UpdateState.latest
+
+
+def test_release_order():
+    from ai_diffusion.model.updates import _release_key
+
+    pre = {"tag_name": "v1.66.3", "prerelease": True}
+    final = {"tag_name": "v1.66.3", "prerelease": False}
+    hotfix_pre = {"tag_name": "v1.66.3.1", "prerelease": True}
+    older = {"tag_name": "v1.66.2.92", "prerelease": True}
+    order = sorted([final, hotfix_pre, older, pre], key=_release_key)
+    assert order == [older, pre, final, hotfix_pre]

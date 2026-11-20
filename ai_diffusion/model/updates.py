@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import NamedTuple
 
-from .. import __release__, eventloop
+from .. import __prerelease__, __release__, eventloop
 from ..backend.network import RequestManager
 from ..platform_tools import ZipFile
 from ..qt.QtCore import QObject, pyqtSignal
@@ -47,6 +47,7 @@ class UpdatePackage(NamedTuple):
     version: str
     url: str
     sha256: str
+    prerelease: bool = False
 
 
 def parse_release_tag(tag: str) -> tuple[int, ...] | None:
@@ -57,6 +58,13 @@ def parse_release_tag(tag: str) -> tuple[int, ...] | None:
     if m is None:
         return None
     return tuple(int(x) for x in m.groups() if x is not None)
+
+
+def _release_key(release: dict):
+    """Order of releases: by version, and a full release after a pre-release of the same
+    version (eg. a pre-release which was later made the full release with more fixes)."""
+    version = parse_release_tag(release.get("tag_name", "")) or ()
+    return (version, not release.get("prerelease"))
 
 
 class AutoUpdate(QObject, ObservableProperties):
@@ -79,10 +87,15 @@ class AutoUpdate(QObject, ObservableProperties):
         current_version: str | None = None,
         api_url: str | None = None,
         include_prereleases: bool | None = None,
+        current_prerelease: bool | None = None,
     ):
         super().__init__()
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent.parent
         self.current_version = current_version or __release__
+        # A pre-release build: the full release with the same version number is newer
+        if current_prerelease is None:
+            current_prerelease = __prerelease__ if current_version is None else False
+        self.current_prerelease = current_prerelease
         self.api_url = api_url or self.default_api_url
         self._include_prereleases = include_prereleases
         self._package: UpdatePackage | None = None
@@ -109,12 +122,12 @@ class AutoUpdate(QObject, ObservableProperties):
             if not r.get("draft") and parse_release_tag(r.get("tag_name", "")) is not None
         ]
         # Installs of a pre-release keep following pre-releases, even with the option off
-        on_prerelease = any(
+        on_prerelease = self.current_prerelease or any(
             r["tag_name"] == self.current_version and r.get("prerelease") for r in releases
         )
         if not (self.include_prereleases or on_prerelease):
             releases = [r for r in releases if not r.get("prerelease")]
-        result = max(releases, key=lambda r: parse_release_tag(r["tag_name"]) or (), default={})
+        result = max(releases, key=_release_key, default={})
         tag = result.get("tag_name", "")
         latest = parse_release_tag(tag)
         current = parse_release_tag(self.current_version)
@@ -129,7 +142,8 @@ class AutoUpdate(QObject, ObservableProperties):
             return
 
         self.latest_version = tag
-        if current is not None and latest <= current:
+        is_final = not result.get("prerelease")
+        if current is not None and (latest, is_final) <= (current, not on_prerelease):
             log.info("Plugin is up to date!")
             self.state = UpdateState.latest
         elif asset is None or not digest.startswith("sha256:"):
@@ -142,6 +156,7 @@ class AutoUpdate(QObject, ObservableProperties):
                 version=tag,
                 url=asset["browser_download_url"],
                 sha256=digest.removeprefix("sha256:"),
+                prerelease=not is_final,
             )
             self.state = UpdateState.available
 
@@ -174,6 +189,7 @@ class AutoUpdate(QObject, ObservableProperties):
         log.info(f"Installing new plugin version to {self.plugin_dir}")
         shutil.copytree(source_dir, self.plugin_dir, dirs_exist_ok=True)
         self.current_version = self.latest_version
+        self.current_prerelease = self._package.prerelease
         if self.reload_after_install:
             from .. import reload
 
