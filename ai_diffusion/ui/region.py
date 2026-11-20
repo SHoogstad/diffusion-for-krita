@@ -50,6 +50,9 @@ from .control import ControlListWidget
 from .settings import settings
 from .widget import TextPromptWidget
 
+# Region layers planned by Improve Prompt, opaque so the masks are solid
+_box_colors = [0xFF5B8DEF, 0xFFEF8B5B, 0xFF6BC77A, 0xFFC76BC0, 0xFFE3C94F, 0xFF4FC9C9]
+
 
 class InactiveRegionWidget(QFrame):
     activated = pyqtSignal(Region)
@@ -513,6 +516,10 @@ class ActiveRegionWidget(QFrame):
             _("Unload the language model afterwards"), "prompt_enhancer_unload"
         )
         arch = model.arch
+        if prompt_enhance.uses_layout(arch):
+            self._add_setting_action(
+                _("Add regions when the picture needs a layout"), "prompt_enhancer_layout"
+            )
         if any(prompt_templates.has_official(arch, editing) for editing in (False, True)):
             text = _("Model maker's own instructions (thinks, ~2 min)")
             self._add_setting_action(text, "prompt_enhancer_official")
@@ -594,9 +601,19 @@ class ActiveRegionWidget(QFrame):
                 vision = settings.prompt_enhancer_vision
                 context = model.prompt_enhance_context(original, images=vision)
             extent = model.document.extent
-            result = await improve_prompt(
-                original, model.active_style, client, model.is_editing, extent, context
-            )
+            layout = []
+            if prompt_enhance.uses_layout(model.arch):
+                layout = model.prompt_layout_boxes()
+            if layout:
+                result = await self._improve_layout(region, layout, extent)
+            elif self._can_plan_layout(region):
+                result = await self._plan_layout(region, extent)
+            else:
+                result = await improve_prompt(
+                    original, model.active_style, client, model.is_editing, extent, context
+                )
+            if not result:  # the language model only wrote the region prompts
+                return
             if sip.isdeleted(self):  # the page was rebuilt meanwhile (look switch)
                 region.positive = result
             elif self.region is region and region.positive == original:
@@ -610,6 +627,53 @@ class ActiveRegionWidget(QFrame):
             if not sip.isdeleted(self):
                 self._improve_button.setEnabled(True)
                 self._update_improve_tooltip()
+
+    async def _improve_layout(
+        self, region: RootRegion | Region, layout: list[tuple[Region, Bounds]], extent
+    ):
+        """MOSS-Image: the regions are boxes of a layout. The root prompt improves the caption
+        and every region prompt, a region prompt only its own box."""
+        model = self._root._model
+        client = root.connection.client_if_connected
+        style = model.active_style
+        boxes = [prompt_enhance.LayoutBox(r.positive, b) for r, b in layout]
+        if isinstance(region, Region):
+            index = next((i for i, (r, __) in enumerate(layout) if r is region), None)
+            if index is None:  # the region has no box (eg. covers everything)
+                return await improve_prompt(region.positive, style, client, False, extent)
+            prompt = region.root.positive
+            return await prompt_enhance.improve_box(prompt, boxes[index], style, client, extent)
+
+        caption, descriptions = await prompt_enhance.improve_layout(
+            region.positive, boxes, style, client, extent
+        )
+        for (r, __), text in zip(layout, descriptions):
+            if text and not sip.isdeleted(r):
+                r.positive = text
+        return caption
+
+    def _can_plan_layout(self, region: RootRegion | Region):
+        """MOSS-Image without regions: the language model may add some."""
+        model = self._root._model
+        return (
+            isinstance(region, RootRegion)
+            and settings.prompt_enhancer_layout
+            and prompt_enhance.uses_layout(model.arch)
+            and not model.is_editing
+            and len(model.active_regions) == 0
+        )
+
+    async def _plan_layout(self, region: RootRegion, extent):
+        model = self._root._model
+        client = root.connection.client_if_connected
+        caption, boxes = await prompt_enhance.plan_layout(
+            region.positive, model.active_style, client, extent
+        )
+        if boxes and not sip.isdeleted(region) and len(region) == 0:
+            for i, box in enumerate(boxes):
+                color = _box_colors[i % len(_box_colors)]
+                region.create_box_region(box.prompt, box.bounds, color)
+        return caption
 
     def _replace_positive(self, text: str):
         """Replace the text as one edit, so that Ctrl+Z restores the original prompt."""

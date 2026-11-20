@@ -58,6 +58,7 @@ class Options(NamedTuple):
     enhancer: Enhancer | None = None
     vision: bool = False  # the language model gets the pictures the prompt refers to
     llms: tuple[str, ...] = ()  # preferred language models (parts of file names), fastest first
+    layout: bool = False  # the template describes bounding boxes: regions get improved too
 
 
 class Request(NamedTuple):
@@ -316,7 +317,7 @@ _options: dict[str, Options] = {
     "qwen2": Options(thinking=True, max_tokens=4096, temperature=1.0),
     "qwen2-edit": Options(thinking=True, max_tokens=4096, temperature=1.0),
     "krea2": Options(thinking=True, max_tokens=2048),
-    "moss": Options(max_tokens=4096),
+    "moss": Options(max_tokens=4096, layout=True),
     "zimage": Options(max_tokens=2048),
     "ernie": Options(
         max_tokens=2048,

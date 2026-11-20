@@ -225,6 +225,14 @@ with a language model, the way the style's model wants it:
   server, or for edits, it follows the rules from the P-H3-Image model card
   (`Edit <Picture 1>. ... Keep ... exactly as it is.`). ERNIE-Image also uses its own enhancer model
   (`ernie-image-prompt-enhancer`) if the server has it.
+* **MOSS-Image regions**: MOSS gets regions as boxes of a layout prompt, and its enhancer knows boxes too. With
+  regions, Improve Prompt on the main prompt sends the boxes along (pixel position and region prompt) and fills
+  in the main prompt and every region prompt in one go; empty regions get a description that fits the scene.
+  The wand on a region prompt improves just that region, with the main prompt as context.
+  Without regions, the language model decides whether the picture needs a layout (text in a set place, posters,
+  panels, subjects in set positions). If it does, it adds region layers (filled boxes, up to 6) with their prompts;
+  ordinary scenes just get the improved prompt. Turn this off in the wand's menu ("Add regions when the picture
+  needs a layout").
 * **The other models** get templates written from the makers' prompting guides: FLUX.2 [klein] prose ending in
   `Style: ... Mood: ...`, Kontext edits that only describe the change, Anima tags in the official order with `@`
   for artists plus two sentences, Danbooru tags for Illustrious, keywords for SD 1.5 / XL, and so on.
