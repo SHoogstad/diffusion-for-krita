@@ -444,6 +444,78 @@ async def improve_layout(
     return caption, descriptions
 
 
+max_planned_boxes = 6
+
+
+def plan_rules(extent: Extent):
+    """The language model decides if the picture needs a layout (from MOSS's own enhancer skill:
+    a caption for ordinary scenes, boxes for text placement, posters, panels, set positions)."""
+    w, h = extent.width, extent.height
+    return (
+        "First decide whether this picture needs a layout with bounding boxes. Most pictures do "
+        "not: ordinary scenes, portraits, photographs and illustrations get only a caption. Use "
+        "boxes only when placement really matters: text that must sit in a specific place, "
+        "posters, covers and other designed images, several panels, or several subjects whose "
+        "positions or relations the request controls.\n"
+        "Without boxes, answer with the caption only.\n"
+        "With boxes, answer in exactly this form, nothing else: first the caption of the whole "
+        "picture (scene, setting, composition, light and style as a whole, saying in words where "
+        "the boxed parts are). Then a line that is exactly 'Boxes:', followed by one line per "
+        "box formatted as 'index | [x0, y0, x1, y1] | English description': absolute pixel "
+        f"coordinates (top-left, bottom-right) on the {w}x{h} canvas, x from 0 to {w}, y from 0 "
+        f"to {h}. At most {max_planned_boxes} boxes, each a coherent visible unit large enough to "
+        "read; describe each following the bounding box rules, text boxes with the exact words "
+        "in double quotes."
+    )
+
+
+_planned_box = re.compile(
+    r"^\s*(?:box\s*)?\[?\d+\]?\s*[|:.)]\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,"
+    r"\s*(-?[\d.]+)\s*\]\s*\|?\s*(.*\S)\s*$",
+    re.IGNORECASE,
+)
+
+
+def parse_plan(text: str, extent: Extent) -> tuple[str, list[LayoutBox]]:
+    """The caption and the boxes the language model planned (none if it chose a caption)."""
+    header = _boxes_header.search(text)
+    if header is None:
+        lines = text.splitlines()
+        matches = [_planned_box.match(l) for l in lines]
+        caption = "\n".join(l for l, m in zip(lines, matches) if not m)
+    else:
+        caption = text[: header.start()]
+        matches = [_planned_box.match(l) for l in text[header.end() :].splitlines()]
+    boxes: list[LayoutBox] = []
+    min_size = max(16, min(extent.width, extent.height) // 32)
+    for m in matches:
+        if not m or len(boxes) >= max_planned_boxes:
+            continue
+        x0, y0, x1, y1 = (float(m[i]) for i in range(1, 5))
+        x0, x1 = sorted((min(max(x0, 0), extent.width), min(max(x1, 0), extent.width)))
+        y0, y1 = sorted((min(max(y0, 0), extent.height), min(max(y1, 0), extent.height)))
+        if x1 - x0 < min_size or y1 - y0 < min_size:
+            continue
+        bounds = Bounds(int(x0), int(y0), math.ceil(x1) - int(x0), math.ceil(y1) - int(y0))
+        boxes.append(LayoutBox(m[5].strip(), bounds))
+    return clean_output(caption.strip()), boxes
+
+
+async def plan_layout(
+    prompt: str, style: Style, client: Client | None, extent: Extent
+) -> tuple[str, list[LayoutBox]]:
+    """Improve a prompt which has no regions yet, and let the language model decide whether
+    the picture needs a layout. Returns the caption and the boxes (empty: no layout needed)."""
+    if not prompt.strip():
+        raise ValueError(_("Write a prompt first, then click Improve Prompt."))
+    request = f"{prompt.strip()}\n\nCanvas: {extent.width}x{extent.height} pixels."
+    answer = await improve_prompt(request, style, client, False, extent, rules=plan_rules(extent))
+    caption, boxes = parse_plan(answer, extent)
+    if not caption:
+        raise RuntimeError(_("The language model returned an empty prompt."))
+    return caption, boxes
+
+
 async def improve_box(
     prompt: str, box: LayoutBox, style: Style, client: Client | None, extent: Extent
 ):

@@ -843,3 +843,16 @@ async def test_prompt_layout_boxes(workflows_dir: Path):
             assert abs(box.x - expected.x) <= w // 64 and abs(box.y - expected.y) <= h // 64
             assert abs(box.width - expected.width) <= w // 32
             assert abs(box.height - expected.height) <= h // 32
+
+
+@qtapp
+async def test_create_box_region(workflows_dir: Path):
+    krita_doc = Krita.instance().openDocument("test")
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)
+        box = Bounds(0, 0, 128, 64)
+        region = model.regions.create_box_region('a sign "OPEN"', box, _RED)
+        assert region in list(model.regions) and region.positive == 'a sign "OPEN"'
+        layer = region.first_layer
+        assert layer is not None and layer.name == "Region 0"
+        assert layer.compute_bounds() == box

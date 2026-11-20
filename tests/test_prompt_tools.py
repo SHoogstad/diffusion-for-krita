@@ -10,7 +10,7 @@ from ai_diffusion.backend.comfy_client import text_generate_node
 from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo, ComfyWorkflow
 from ai_diffusion.backend.resources import ResourceKind, resource_id
 from ai_diffusion.files import FileFormat
-from ai_diffusion.image import Extent, Image
+from ai_diffusion.image import Bounds, Extent, Image
 from ai_diffusion.model import prompt_enhance, prompt_templates
 from ai_diffusion.qt.QtCore import Qt
 from ai_diffusion.settings import settings
@@ -416,3 +416,48 @@ def test_improve_layout(qtapp, monkeypatch):
     one = qtapp.run(prompt_enhance.improve_box("forest", boxes[1], style, None, extent))
     assert "1 | [10, 0, 20, 10] | sun" in calls[1][0] and "fox" not in calls[1][0]
     assert one == "A pale sun low over the trees."
+
+
+def test_parse_plan():
+    extent = Extent(1024, 768)
+    caption, boxes = prompt_enhance.parse_plan("A quiet forest at dawn.", extent)
+    assert caption == "A quiet forest at dawn." and boxes == []
+
+    answer = (
+        "A travel poster.\nBoxes:\n"
+        '1 | [100, 50, 900, 200] | Large title "EXPLORE".\n'
+        "2 | [-20, 300, 2000, 900] | A blue mountain.\n"
+        "3 | [10, 10, 12, 12] | too small\n"
+        "4 | [500, 400, 300, 200] | swapped corners\n"
+    )
+    caption, boxes = prompt_enhance.parse_plan(answer, extent)
+    assert caption == "A travel poster."
+    assert [b.prompt for b in boxes] == [
+        'Large title "EXPLORE".',
+        "A blue mountain.",
+        "swapped corners",
+    ]
+    assert boxes[0].bounds == Bounds(100, 50, 800, 150)
+    assert boxes[1].bounds == Bounds(0, 300, 1024, 468)  # clamped to the canvas
+    assert boxes[2].bounds == Bounds(300, 200, 200, 200)
+
+    # no header
+    caption, boxes = prompt_enhance.parse_plan("A poster.\n1 | [0, 0, 512, 384] | sun", extent)
+    assert caption == "A poster." and len(boxes) == 1
+
+
+def test_plan_layout(qtapp, monkeypatch):
+    calls = []
+
+    async def fake_improve(
+        prompt, style, client, editing=False, extent=None, context=None, rules=""
+    ):
+        calls.append((prompt, rules))
+        return "A poster.\nBoxes:\n1 | [0, 0, 64, 32] | A title."
+
+    monkeypatch.setattr(prompt_enhance, "improve_prompt", fake_improve)
+    style = Style(Path("default.json"))
+    caption, boxes = qtapp.run(prompt_enhance.plan_layout("poster", style, None, Extent(64, 64)))
+    assert caption == "A poster." and boxes[0].bounds == Bounds(0, 0, 64, 32)
+    assert calls[0][0] == "poster\n\nCanvas: 64x64 pixels."
+    assert "64x64 canvas" in calls[0][1]

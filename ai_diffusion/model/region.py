@@ -237,6 +237,16 @@ class RootRegion(QObject, ObservableProperties):
     def create_region_group(self):
         self.create_region(group=True)
 
+    def create_box_region(self, prompt: str, bounds: Bounds, color: int):
+        """A region whose layer is a filled box, eg. one planned by Improve Prompt. New boxes
+        go on top, so later ones win where they overlap."""
+        layers = self._model.layers
+        name = f"Region {len(self)}"
+        layer = layers.create(name, Image.create(bounds.extent, fill=color), bounds, False)
+        region = self._add(layer)
+        region.positive = prompt
+        return region
+
     def create_region(self, group=True):
         """Create a new region. This action depends on context:
         If the active layer can be linked to a group it will be used as the initial link

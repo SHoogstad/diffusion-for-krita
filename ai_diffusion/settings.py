@@ -404,6 +404,15 @@ class Settings(QObject):
         ),
     )
 
+    prompt_enhancer_layout: bool
+    _prompt_enhancer_layout = Setting(
+        _("Language Model Adds Regions"),
+        True,
+        _(
+            "MOSS-Image: when there are no regions yet, the language model decides if the picture needs a layout (eg. text placement, posters, subjects in set places) and adds region layers with their prompts."
+        ),
+    )
+
     prompt_enhancer_unload: bool
     _prompt_enhancer_unload = Setting(
         _("Unload Language Model"),
