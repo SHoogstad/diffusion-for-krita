@@ -427,6 +427,13 @@ Before that, the project was the Krita 5 only port
 [krita-ai-diffusion-qt5](https://github.com/SHoogstad/krita-ai-diffusion-qt5) (1.54.1 to 1.55.3, tagged
 `v<version>-krita5.3`). The updater still understands those tags, so those installs update to newer releases.
 
+## Sponsors
+
+Thank you to the people who sponsor Diffusion for Krita on [GitHub Sponsors](https://github.com/sponsors/SHoogstad):
+
+<a href="https://github.com/XInmortalX"><img src="https://github.com/XInmortalX.png" width="48px" alt="XInmortalX"></a>
+[XInmortalX](https://github.com/XInmortalX)
+
 ## Contributing
 
 Contributions are welcome. See the [contributing guide](CONTRIBUTING.md).
