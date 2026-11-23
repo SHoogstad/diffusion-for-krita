@@ -431,8 +431,13 @@ Before that, the project was the Krita 5 only port
 
 Thank you to the people who sponsor Diffusion for Krita on [GitHub Sponsors](https://github.com/sponsors/SHoogstad):
 
-<a href="https://github.com/XInmortalX"><img src="https://github.com/XInmortalX.png" width="48px" alt="XInmortalX"></a>
-[XInmortalX](https://github.com/XInmortalX)
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/XInmortalX"><img src="https://github.com/XInmortalX.png?size=128" width="64" alt=""><br><sub><b>XInmortalX</b></sub></a>
+    </td>
+  </tr>
+</table>
 
 ## Contributing
 
