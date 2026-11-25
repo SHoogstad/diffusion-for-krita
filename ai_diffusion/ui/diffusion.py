@@ -451,12 +451,20 @@ class DiffusionPanel(QWidget):
             _release_bindings(self._frame)
 
     def canvas_changed(self, canvas: krita.Canvas):
-        if canvas is not None and canvas.view() is not None:
-            eventloop.run(self._update_active_document())
+        if canvas is not None and (view := canvas.view()) is not None:
+            eventloop.run(self._update_active_document(view.document()))
 
-    async def _update_active_document(self):
-        if not KritaDocument.active():
-            await asyncio.sleep(0.1)  # wait until fully opened/initialized
+    async def _update_active_document(self, target: krita.Document | None = None):
+        # When an image is opened or created, the canvas changes before Krita reports the new
+        # document as active (activeDocument() still returns the previous one), and the new
+        # document may not be initialized yet. Wait for both, otherwise the docker stays bound
+        # to the previous image and results get applied there.
+        for _attempt in range(50):  # up to ~5 s
+            active = Krita.instance().activeDocument()
+            ready = KritaDocument.active() is not None
+            if ready and (target is None or active == target):
+                break
+            await asyncio.sleep(0.1)
         self.update_content()
 
     def register_model(self, model: DocumentModel):
